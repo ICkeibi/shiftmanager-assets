@@ -17,8 +17,8 @@
       --border: #cccccc;
       --primary: #4A86E8;
       --primary-active: #3a6fc0;
-      --badge-day: #333333;
-      --badge-night: #0000FF;
+      --badge-day: #F5A623;
+      --badge-night: #3F51B5;
       --shadow: rgba(0,0,0,0.1);
       --alert: #FF0000;
     }
@@ -31,8 +31,8 @@
         --border: #444444;
         --primary: #6fa0f5;
         --primary-active: #5688dd;
-        --badge-day: #555555;
-        --badge-night: #4d79ff;
+        --badge-day: #FFB74D;
+        --badge-night: #7986CB;
         --shadow: rgba(0,0,0,0.5);
         --alert: #ff6b6b;
       }
@@ -78,6 +78,7 @@
     }
     .count-box .label { font-size: 12px; color: var(--text-secondary); }
     .count-box .num { font-size: 22px; font-weight: bold; }
+    .count-box.day .num { color: var(--badge-day); }
     .count-box.night .num { color: var(--badge-night); }
     .last-updated { text-align: center; font-size: 11px; color: var(--text-secondary); margin-bottom: 12px; min-height: 14px; }
     .card {
@@ -130,7 +131,7 @@
   <button id="searchBtn">検索</button>
 
   <div class="counts">
-    <div class="count-box">
+    <div class="count-box day">
       <div class="label">日勤</div>
       <div class="num" id="dayCount">0</div>
     </div>
