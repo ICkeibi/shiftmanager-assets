@@ -8,52 +8,100 @@
   <link rel="icon" type="image/png" href="icon.png">
   <link rel="manifest" href="manifest.json">
   <style>
+    :root {
+      --bg: #f5f5f5;
+      --card-bg: #ffffff;
+      --text: #222222;
+      --text-secondary: #666666;
+      --border: #cccccc;
+      --primary: #4A86E8;
+      --primary-active: #3a6fc0;
+      --badge-day: #333333;
+      --badge-night: #0000FF;
+      --shadow: rgba(0,0,0,0.1);
+      --alert: #FF0000;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #121212;
+        --card-bg: #1e1e1e;
+        --text: #eeeeee;
+        --text-secondary: #aaaaaa;
+        --border: #444444;
+        --primary: #6fa0f5;
+        --primary-active: #5688dd;
+        --badge-day: #555555;
+        --badge-night: #4d79ff;
+        --shadow: rgba(0,0,0,0.5);
+        --alert: #ff6b6b;
+      }
+    }
     * { box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
-      margin: 0; padding: 16px; background: #f5f5f5; color: #222;
+      margin: 0; padding: 16px; background: var(--bg); color: var(--text);
     }
-    h1 { font-size: 20px; margin: 0 0 4px; text-align: center; }
-    .subtitle { text-align: center; font-size: 13px; color: #666; margin-bottom: 16px; }
+    .header-row { display: flex; align-items: center; justify-content: center; position: relative; margin-bottom: 4px; }
+    h1 { font-size: 20px; margin: 0; text-align: center; }
+    .refresh-btn {
+      position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+      background: none; border: none; color: var(--primary); font-size: 24px;
+      padding: 4px 8px; cursor: pointer; line-height: 1;
+    }
+    .refresh-btn:disabled { opacity: 0.5; }
+    .refresh-btn.spinning { animation: spin 0.8s linear infinite; }
+    @keyframes spin {
+      from { transform: translateY(-50%) rotate(0deg); }
+      to { transform: translateY(-50%) rotate(360deg); }
+    }
+    .subtitle { text-align: center; font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; }
     .field { margin-bottom: 12px; }
-    label { display: block; font-size: 13px; color: #555; margin-bottom: 4px; }
+    label { display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 4px; }
     select {
       width: 100%; padding: 10px; font-size: 16px;
-      border-radius: 8px; border: 1px solid #ccc; background: #fff;
+      border-radius: 8px; border: 1px solid var(--border); background: var(--card-bg); color: var(--text);
     }
-    button {
+    .period-info {
+      text-align: center; font-size: 13px; font-weight: bold; color: var(--primary);
+      min-height: 18px; margin: -4px 0 12px;
+    }
+    button#searchBtn {
       width: 100%; padding: 12px; font-size: 16px; font-weight: bold;
-      color: #fff; background: #4A86E8; border: none; border-radius: 8px; margin-top: 4px;
+      color: #fff; background: var(--primary); border: none; border-radius: 8px; margin-top: 4px;
     }
-    button:active { background: #3a6fc0; }
-    .counts { display: flex; gap: 8px; margin: 16px 0; }
+    button#searchBtn:active { background: var(--primary-active); }
+    .counts { display: flex; gap: 8px; margin: 16px 0 8px; }
     .count-box {
-      flex: 1; background: #fff; border-radius: 8px; padding: 10px;
-      text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      flex: 1; background: var(--card-bg); border-radius: 8px; padding: 10px;
+      text-align: center; box-shadow: 0 1px 3px var(--shadow);
     }
-    .count-box .label { font-size: 12px; color: #666; }
+    .count-box .label { font-size: 12px; color: var(--text-secondary); }
     .count-box .num { font-size: 22px; font-weight: bold; }
-    .count-box.night .num { color: #0000FF; }
+    .count-box.night .num { color: var(--badge-night); }
+    .last-updated { text-align: center; font-size: 11px; color: var(--text-secondary); margin-bottom: 12px; min-height: 14px; }
     .card {
-      background: #fff; border-radius: 8px; padding: 12px; margin-bottom: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      background: var(--card-bg); border-radius: 8px; padding: 12px; margin-bottom: 8px;
+      box-shadow: 0 1px 3px var(--shadow);
       display: flex; align-items: center; gap: 10px;
     }
     .badge {
       display: inline-block; padding: 4px 10px; border-radius: 12px;
       font-size: 13px; font-weight: bold; color: #fff; flex-shrink: 0;
     }
-    .badge.day { background: #333; }
-    .badge.night { background: #0000FF; }
+    .badge.day { background: var(--badge-day); }
+    .badge.night { background: var(--badge-night); }
     .card .info { flex: 1; }
     .card .date { font-size: 14px; font-weight: bold; }
-    .card .address { font-size: 13px; color: #555; margin-top: 2px; }
-    .address.alert { color: #FF0000; font-weight: bold; }
-    .empty, .loading { text-align: center; color: #888; padding: 20px 0; font-size: 14px; }
+    .card .address { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+    .address.alert { color: var(--alert); font-weight: bold; }
+    .empty, .loading { text-align: center; color: var(--text-secondary); padding: 20px 0; font-size: 14px; }
   </style>
 </head>
 <body>
-  <h1>出勤確認</h1>
+  <div class="header-row">
+    <h1>出勤確認</h1>
+    <button id="refreshBtn" class="refresh-btn" title="更新" aria-label="更新">⟳</button>
+  </div>
   <div class="subtitle" id="subtitle">年月を選択してください</div>
 
   <div class="field">
@@ -76,10 +124,11 @@
       <option value="全">全</option>
     </select>
   </div>
+  <div class="period-info" id="periodInfo"></div>
 
   <button id="searchBtn">検索</button>
 
-   <div class="counts">
+  <div class="counts">
     <div class="count-box">
       <div class="label">日勤</div>
       <div class="num" id="dayCount">0</div>
@@ -93,46 +142,47 @@
       <div class="num" id="totalCount">0</div>
     </div>
   </div>
+  <div class="last-updated" id="lastUpdated"></div>
 
   <div id="resultsArea"></div>
 
   <script>
     var API_URL = "https://script.google.com/macros/s/AKfycbwaakQiOZkfCQaPa6gdRa0qWEpOrnmW_HdDtY4nrzulSVaraO_4tgMQTvUYhjTDoA5a/exec";
 
-  var jsonpCounter = 0;
-function jsonp(params) {
-  return new Promise(function (resolve, reject) {
-    var callbackName = 'jsonp_cb_' + (jsonpCounter++);
-    var allParams = Object.assign({}, params, { callback: callbackName });
-    var qs = Object.keys(allParams).map(function (k) {
-      return encodeURIComponent(k) + '=' + encodeURIComponent(allParams[k]);
-    }).join('&');
+    var jsonpCounter = 0;
+    function jsonp(params) {
+      return new Promise(function (resolve, reject) {
+        var callbackName = 'jsonp_cb_' + (jsonpCounter++);
+        var allParams = Object.assign({}, params, { callback: callbackName });
+        var qs = Object.keys(allParams).map(function (k) {
+          return encodeURIComponent(k) + '=' + encodeURIComponent(allParams[k]);
+        }).join('&');
 
-    var script = document.createElement('script');
-    var timeoutId = setTimeout(function () {
-      cleanup();
-      reject(new Error('タイムアウトしました'));
-    }, 15000);
+        var script = document.createElement('script');
+        var timeoutId = setTimeout(function () {
+          cleanup();
+          reject(new Error('タイムアウトしました'));
+        }, 15000);
 
-    function cleanup() {
-      delete window[callbackName];
-      if (script.parentNode) script.parentNode.removeChild(script);
-      clearTimeout(timeoutId);
+        function cleanup() {
+          delete window[callbackName];
+          if (script.parentNode) script.parentNode.removeChild(script);
+          clearTimeout(timeoutId);
+        }
+
+        window[callbackName] = function (data) {
+          cleanup();
+          resolve(data);
+        };
+
+        script.src = API_URL + '?' + qs;
+        script.onerror = function () {
+          cleanup();
+          reject(new Error('通信エラーが発生しました'));
+        };
+        document.body.appendChild(script);
+      });
     }
-
-    window[callbackName] = function (data) {
-      cleanup();
-      resolve(data);
-    };
-
-    script.src = API_URL + '?' + qs;
-    script.onerror = function () {
-      cleanup();
-      reject(new Error('通信エラーが発生しました'));
-    };
-    document.body.appendChild(script);
-  });
-}
 
     function formatToday() {
       var d = new Date();
@@ -173,6 +223,11 @@ function jsonp(params) {
       });
     }
 
+    function updatePeriodInfo() {
+      var val = document.getElementById('periodSelect').value;
+      document.getElementById('periodInfo').textContent = val ? ('表示期間: ' + val) : '';
+    }
+
     function onMonthChange() {
       var monthSel = document.getElementById('monthSelect');
       var monthId = monthSel.value;
@@ -183,6 +238,9 @@ function jsonp(params) {
       document.getElementById('dayCount').textContent = 0;
       document.getElementById('nightCount').textContent = 0;
       document.getElementById('totalCount').textContent = 0;
+      document.getElementById('periodInfo').textContent = '';
+      document.getElementById('lastUpdated').textContent = '';
+
       if (!monthId) {
         nameSel.disabled = true;
         periodSel.disabled = true;
@@ -218,12 +276,20 @@ function jsonp(params) {
           periodSel.appendChild(opt);
         });
         periodSel.disabled = false;
+        updatePeriodInfo();
       }).catch(function (err) {
         periodSel.innerHTML = '<option value="">エラー: ' + err.message + '</option>';
       });
     }
 
-    function doSearch() {
+    function updateLastUpdated() {
+      var d = new Date();
+      var hh = ('0' + d.getHours()).slice(-2);
+      var mm = ('0' + d.getMinutes()).slice(-2);
+      document.getElementById('lastUpdated').textContent = '最終更新: ' + hh + ':' + mm;
+    }
+
+    function doSearch(forceRefresh) {
       var monthId = document.getElementById('monthSelect').value;
       var name = document.getElementById('nameSelect').value;
       var period = document.getElementById('periodSelect').value;
@@ -231,22 +297,29 @@ function jsonp(params) {
 
       if (!monthId) {
         resultsArea.innerHTML = '<div class="empty">年月を選択してください</div>';
-        return;
+        return Promise.resolve();
       }
       if (!name) {
         resultsArea.innerHTML = '<div class="empty">名前を選択してください</div>';
         document.getElementById('dayCount').textContent = 0;
         document.getElementById('nightCount').textContent = 0;
         document.getElementById('totalCount').textContent = 0;
-        return;
+        return Promise.resolve();
       }
 
       resultsArea.innerHTML = '<div class="loading">検索中...</div>';
 
-      jsonp({ action: 'search', month: monthId, name: name, period: period }).then(function (data) {
+      return jsonp({
+        action: 'search',
+        month: monthId,
+        name: name,
+        period: period,
+        refresh: forceRefresh ? '1' : '0'
+      }).then(function (data) {
         document.getElementById('dayCount').textContent = data.dayCount;
         document.getElementById('nightCount').textContent = data.nightCount;
         document.getElementById('totalCount').textContent = data.dayCount + data.nightCount;
+        updateLastUpdated();
 
         if (data.results.length === 0) {
           resultsArea.innerHTML = '<div class="empty">該当するデータがありません</div>';
@@ -271,8 +344,21 @@ function jsonp(params) {
       });
     }
 
+    function doRefresh() {
+      var btn = document.getElementById('refreshBtn');
+      if (btn.disabled) return;
+      btn.disabled = true;
+      btn.classList.add('spinning');
+      doSearch(true).then(function () {
+        btn.classList.remove('spinning');
+        btn.disabled = false;
+      });
+    }
+
     document.getElementById('monthSelect').addEventListener('change', onMonthChange);
-    document.getElementById('searchBtn').addEventListener('click', doSearch);
+    document.getElementById('periodSelect').addEventListener('change', updatePeriodInfo);
+    document.getElementById('searchBtn').addEventListener('click', function () { doSearch(false); });
+    document.getElementById('refreshBtn').addEventListener('click', doRefresh);
     document.getElementById('subtitle').textContent = formatToday();
     loadMonths();
   </script>
