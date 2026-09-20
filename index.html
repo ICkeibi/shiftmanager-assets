@@ -351,6 +351,10 @@
               '<div class="' + addressClass + '"' + alertStyle + '>' + address + '</div>' +
             '</div></div>';
         });
+        resultsArea.innerHTML = html;
+      }).catch(function (err) {
+        resultsArea.innerHTML = '<div class="empty">エラー: ' + err.message + '</div>';
+      });
     }
 
     function doRefresh() {
