@@ -340,20 +340,17 @@
 
         var html = '';
         data.results.forEach(function (row) {
-          var date = row[0], shift = row[1], address = row[2], isAlert = row[3];
+          var date = row[0], shift = row[1], address = row[2], isAlert = row[3], alertColor = row[4];
           var badgeClass = shift === '夜' ? 'night' : 'day';
           var addressClass = isAlert ? 'address alert' : 'address';
+          var alertStyle = isAlert && alertColor ? ' style="color:' + alertColor + '"' : '';
           html += '<div class="card">' +
             '<span class="badge ' + badgeClass + '">' + shift + '</span>' +
             '<div class="info">' +
               '<div class="date">' + date + '</div>' +
-              '<div class="' + addressClass + '">' + address + '</div>' +
+              '<div class="' + addressClass + '"' + alertStyle + '>' + address + '</div>' +
             '</div></div>';
         });
-        resultsArea.innerHTML = html;
-      }).catch(function (err) {
-        resultsArea.innerHTML = '<div class="empty">エラー: ' + err.message + '</div>';
-      });
     }
 
     function doRefresh() {
