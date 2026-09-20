@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>出勤確認</title>
+  <link rel="apple-touch-icon" href="icon.png">
+  <link rel="icon" type="image/png" href="icon.png">
+  <link rel="manifest" href="manifest.json">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+      margin: 0; padding: 16px; background: #f5f5f5; color: #222;
+    }
+    h1 { font-size: 20px; margin: 0 0 4px; text-align: center; }
+    .subtitle { text-align: center; font-size: 13px; color: #666; margin-bottom: 16px; }
+    .field { margin-bottom: 12px; }
+    label { display: block; font-size: 13px; color: #555; margin-bottom: 4px; }
+    select {
+      width: 100%; padding: 10px; font-size: 16px;
+      border-radius: 8px; border: 1px solid #ccc; background: #fff;
+    }
+    button {
+      width: 100%; padding: 12px; font-size: 16px; font-weight: bold;
+      color: #fff; background: #4A86E8; border: none; border-radius: 8px; margin-top: 4px;
+    }
+    button:active { background: #3a6fc0; }
+    .counts { display: flex; gap: 8px; margin: 16px 0; }
+    .count-box {
+      flex: 1; background: #fff; border-radius: 8px; padding: 10px;
+      text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .count-box .label { font-size: 12px; color: #666; }
+    .count-box .num { font-size: 22px; font-weight: bold; }
+    .count-box.night .num { color: #0000FF; }
+    .card {
+      background: #fff; border-radius: 8px; padding: 12px; margin-bottom: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .badge {
+      display: inline-block; padding: 4px 10px; border-radius: 12px;
+      font-size: 13px; font-weight: bold; color: #fff; flex-shrink: 0;
+    }
+    .badge.day { background: #333; }
+    .badge.night { background: #0000FF; }
+    .card .info { flex: 1; }
+    .card .date { font-size: 14px; font-weight: bold; }
+    .card .address { font-size: 13px; color: #555; margin-top: 2px; }
+    .address.alert { color: #FF0000; font-weight: bold; }
+    .empty, .loading { text-align: center; color: #888; padding: 20px 0; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <h1>出勤確認</h1>
+  <div class="subtitle" id="subtitle">年月を選択してください</div>
+
+  <div class="field">
+    <label>年月</label>
+    <select id="monthSelect">
+      <option value="">選択してください</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <label>名前</label>
+    <select id="nameSelect" disabled>
+      <option value="">先に年月を選択</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <label>期間</label>
+    <select id="periodSelect" disabled>
+      <option value="全">全</option>
+    </select>
+  </div>
+
+  <button id="searchBtn">検索</button>
+
+  <div class="counts">
+    <div class="count-box">
+      <div class="label">日勤</div>
+      <div class="num" id="dayCount">0</div>
+    </div>
+    <div class="count-box night">
+      <div class="label">夜勤</div>
+      <div class="num" id="nightCount">0</div>
+    </div>
+  </div>
+
+  <div id="resultsArea"></div>
+
+  <script>
+    var API_URL = "https://script.google.com/macros/s/AKfycbw8H-GT-mMHjynDoK3ZSjyvLVrNrAmcWFJA97ieT-aRQMlGaBXPeaInYo6M4ACuwP-H/exec";
+
+    function apiGet(params) {
+      var qs = Object.keys(params).map(function (k) {
+        return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+      }).join('&');
+      return fetch(API_URL + '?' + qs).then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      });
+    }
+
+    function formatToday() {
+      var d = new Date();
+      var youbi = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
+      var mm = ('0' + (d.getMonth() + 1)).slice(-2);
+      var dd = ('0' + d.getDate()).slice(-2);
+      return d.getFullYear() + '年' + mm + '月' + dd + '日(' + youbi + ')';
+    }
+
+    function loadMonths() {
+      apiGet({ action: 'months' }).then(function (months) {
+        var sel = document.getElementById('monthSelect');
+        if (!months || months.length === 0) {
+          sel.innerHTML = '<option value="">月一覧が空です</option>';
+          return;
+        }
+        months.forEach(function (m) {
+          var opt = document.createElement('option');
+          opt.value = m.id;
+          opt.textContent = m.label;
+          sel.appendChild(opt);
+        });
+      }).catch(function (err) {
+        document.getElementById('monthSelect').innerHTML =
+          '<option value="">エラー: ' + err.message + '</option>';
+      });
+    }
+
+    function onMonthChange() {
+      var monthSel = document.getElementById('monthSelect');
+      var monthId = monthSel.value;
+      var nameSel = document.getElementById('nameSelect');
+      var periodSel = document.getElementById('periodSelect');
+
+      document.getElementById('resultsArea').innerHTML = '';
+      document.getElementById('dayCount').textContent = 0;
+      document.getElementById('nightCount').textContent = 0;
+
+      if (!monthId) {
+        nameSel.disabled = true;
+        periodSel.disabled = true;
+        nameSel.innerHTML = '<option value="">先に年月を選択</option>';
+        return;
+      }
+
+      nameSel.innerHTML = '<option value="">読み込み中...</option>';
+      periodSel.innerHTML = '<option value="全">全</option>';
+      nameSel.disabled = true;
+      periodSel.disabled = true;
+
+      apiGet({ action: 'names', month: monthId }).then(function (names) {
+        nameSel.innerHTML = '<option value="">選択してください</option>';
+        names.forEach(function (n) {
+          var opt = document.createElement('option');
+          opt.value = n;
+          opt.textContent = n;
+          nameSel.appendChild(opt);
+        });
+        nameSel.disabled = false;
+      }).catch(function (err) {
+        nameSel.innerHTML = '<option value="">エラー: ' + err.message + '</option>';
+      });
+
+      apiGet({ action: 'periods', month: monthId }).then(function (periods) {
+        periodSel.innerHTML = '';
+        periods.forEach(function (p) {
+          var opt = document.createElement('option');
+          opt.value = p;
+          opt.textContent = p;
+          if (p === '全') opt.selected = true;
+          periodSel.appendChild(opt);
+        });
+        periodSel.disabled = false;
+      }).catch(function (err) {
+        periodSel.innerHTML = '<option value="">エラー: ' + err.message + '</option>';
+      });
+    }
+
+    function doSearch() {
+      var monthId = document.getElementById('monthSelect').value;
+      var name = document.getElementById('nameSelect').value;
+      var period = document.getElementById('periodSelect').value;
+      var resultsArea = document.getElementById('resultsArea');
+
+      if (!monthId) {
+        resultsArea.innerHTML = '<div class="empty">年月を選択してください</div>';
+        return;
+      }
+      if (!name) {
+        resultsArea.innerHTML = '<div class="empty">名前を選択してください</div>';
+        document.getElementById('dayCount').textContent = 0;
+        document.getElementById('nightCount').textContent = 0;
+        return;
+      }
+
+      resultsArea.innerHTML = '<div class="loading">検索中...</div>';
+
+      apiGet({ action: 'search', month: monthId, name: name, period: period }).then(function (data) {
+        document.getElementById('dayCount').textContent = data.dayCount;
+        document.getElementById('nightCount').textContent = data.nightCount;
+
+        if (data.results.length === 0) {
+          resultsArea.innerHTML = '<div class="empty">該当するデータがありません</div>';
+          return;
+        }
+
+        var html = '';
+        data.results.forEach(function (row) {
+          var date = row[0], shift = row[1], address = row[2], isAlert = row[3];
+          var badgeClass = shift === '夜' ? 'night' : 'day';
+          var addressClass = isAlert ? 'address alert' : 'address';
+          html += '<div class="card">' +
+            '<span class="badge ' + badgeClass + '">' + shift + '</span>' +
+            '<div class="info">' +
+              '<div class="date">' + date + '</div>' +
+              '<div class="' + addressClass + '">' + address + '</div>' +
+            '</div></div>';
+        });
+        resultsArea.innerHTML = html;
+      }).catch(function (err) {
+        resultsArea.innerHTML = '<div class="empty">エラー: ' + err.message + '</div>';
+      });
+    }
+
+    document.getElementById('monthSelect').addEventListener('change', onMonthChange);
+    document.getElementById('searchBtn').addEventListener('click', doSearch);
+    document.getElementById('subtitle').textContent = formatToday();
+    loadMonths();
+  </script>
+</body>
+</html>
