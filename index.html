@@ -142,6 +142,11 @@ function jsonp(params) {
       return d.getFullYear() + '年' + mm + '月' + dd + '日(' + youbi + ')';
     }
 
+    function getCurrentYm() {
+      var d = new Date();
+      return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2);
+    }
+
     function loadMonths() {
       jsonp({ action: 'months' }).then(function (months) {
         var sel = document.getElementById('monthSelect');
@@ -149,12 +154,19 @@ function jsonp(params) {
           sel.innerHTML = '<option value="">月一覧が空です</option>';
           return;
         }
+        var currentYm = getCurrentYm();
+        var matchId = '';
         months.forEach(function (m) {
           var opt = document.createElement('option');
           opt.value = m.id;
           opt.textContent = m.label;
           sel.appendChild(opt);
+          if (m.ym === currentYm) matchId = m.id;
         });
+        if (matchId) {
+          sel.value = matchId;
+          onMonthChange();
+        }
       }).catch(function (err) {
         document.getElementById('monthSelect').innerHTML =
           '<option value="">エラー: ' + err.message + '</option>';
