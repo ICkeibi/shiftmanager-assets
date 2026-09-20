@@ -43,11 +43,11 @@
     }
     .header-row { display: flex; align-items: center; justify-content: center; position: relative; margin-bottom: 4px; }
     h1 { font-size: 20px; margin: 0; text-align: center; }
-    .refresh-btn {
-      position: absolute; right: 0; top: 50%; transform: translateY(-50%);
-      background: none; border: none; color: var(--primary); font-size: 24px;
-      padding: 4px 8px; cursor: pointer; line-height: 1;
-    }
+ .refresh-btn {
+  position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  background: none; border: none; color: var(--primary); font-size: 24px;
+  padding: 4px 8px; cursor: pointer; line-height: 1;
+}
     .refresh-btn:disabled { opacity: 0.5; }
     .refresh-btn.spinning { animation: spin 0.8s linear infinite; }
     @keyframes spin {
