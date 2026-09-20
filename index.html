@@ -79,7 +79,7 @@
 
   <button id="searchBtn">検索</button>
 
-  <div class="counts">
+   <div class="counts">
     <div class="count-box">
       <div class="label">日勤</div>
       <div class="num" id="dayCount">0</div>
@@ -87,6 +87,10 @@
     <div class="count-box night">
       <div class="label">夜勤</div>
       <div class="num" id="nightCount">0</div>
+    </div>
+    <div class="count-box">
+      <div class="label">合計</div>
+      <div class="num" id="totalCount">0</div>
     </div>
   </div>
 
@@ -166,7 +170,7 @@ function jsonp(params) {
       document.getElementById('resultsArea').innerHTML = '';
       document.getElementById('dayCount').textContent = 0;
       document.getElementById('nightCount').textContent = 0;
-
+      document.getElementById('totalCount').textContent = 0;
       if (!monthId) {
         nameSel.disabled = true;
         periodSel.disabled = true;
@@ -221,6 +225,7 @@ function jsonp(params) {
         resultsArea.innerHTML = '<div class="empty">名前を選択してください</div>';
         document.getElementById('dayCount').textContent = 0;
         document.getElementById('nightCount').textContent = 0;
+        document.getElementById('totalCount').textContent = 0;
         return;
       }
 
@@ -229,6 +234,7 @@ function jsonp(params) {
       jsonp({ action: 'search', month: monthId, name: name, period: period }).then(function (data) {
         document.getElementById('dayCount').textContent = data.dayCount;
         document.getElementById('nightCount').textContent = data.nightCount;
+        document.getElementById('totalCount').textContent = data.dayCount + data.nightCount;
 
         if (data.results.length === 0) {
           resultsArea.innerHTML = '<div class="empty">該当するデータがありません</div>';
