@@ -1,7 +1,7 @@
 {
   "name": "出勤確認",
   "short_name": "出勤確認",
-  "start_url": "https://script.google.com/macros/s/AKfycbw8H-GT-mMHjynDoK3ZSjyvLVrNrAmcWFJA97ieT-aRQMlGaBXPeaInYo6M4ACuwP-H/exec",
+ "start_url": "https://script.google.com/macros/s/AKfycbwaakQiOZkfCQaPa6gdRa0qWEpOrnmW_HdDtY4nrzulSVaraO_4tgMQTvUYhjTDoA5a/exec",
   "display": "standalone",
   "background_color": "#f5f5f5",
   "theme_color": "#4A86E8",
