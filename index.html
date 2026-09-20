@@ -95,15 +95,40 @@
   <script>
     var API_URL = "https://script.google.com/macros/s/AKfycbw8H-GT-mMHjynDoK3ZSjyvLVrNrAmcWFJA97ieT-aRQMlGaBXPeaInYo6M4ACuwP-H/exec";
 
-    function apiGet(params) {
-      var qs = Object.keys(params).map(function (k) {
-        return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
-      }).join('&');
-      return fetch(API_URL + '?' + qs).then(function (res) {
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        return res.json();
-      });
+  var jsonpCounter = 0;
+function jsonp(params) {
+  return new Promise(function (resolve, reject) {
+    var callbackName = 'jsonp_cb_' + (jsonpCounter++);
+    var allParams = Object.assign({}, params, { callback: callbackName });
+    var qs = Object.keys(allParams).map(function (k) {
+      return encodeURIComponent(k) + '=' + encodeURIComponent(allParams[k]);
+    }).join('&');
+
+    var script = document.createElement('script');
+    var timeoutId = setTimeout(function () {
+      cleanup();
+      reject(new Error('タイムアウトしました'));
+    }, 15000);
+
+    function cleanup() {
+      delete window[callbackName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+      clearTimeout(timeoutId);
     }
+
+    window[callbackName] = function (data) {
+      cleanup();
+      resolve(data);
+    };
+
+    script.src = API_URL + '?' + qs;
+    script.onerror = function () {
+      cleanup();
+      reject(new Error('通信エラーが発生しました'));
+    };
+    document.body.appendChild(script);
+  });
+}
 
     function formatToday() {
       var d = new Date();
@@ -114,7 +139,7 @@
     }
 
     function loadMonths() {
-      apiGet({ action: 'months' }).then(function (months) {
+      jsonp({ action: 'months' }).then(function (months) {
         var sel = document.getElementById('monthSelect');
         if (!months || months.length === 0) {
           sel.innerHTML = '<option value="">月一覧が空です</option>';
@@ -154,7 +179,7 @@
       nameSel.disabled = true;
       periodSel.disabled = true;
 
-      apiGet({ action: 'names', month: monthId }).then(function (names) {
+      jsonp({ action: 'names', month: monthId }).then(function (names) {
         nameSel.innerHTML = '<option value="">選択してください</option>';
         names.forEach(function (n) {
           var opt = document.createElement('option');
@@ -167,7 +192,7 @@
         nameSel.innerHTML = '<option value="">エラー: ' + err.message + '</option>';
       });
 
-      apiGet({ action: 'periods', month: monthId }).then(function (periods) {
+      jsonp({ action: 'periods', month: monthId }).then(function (periods) {
         periodSel.innerHTML = '';
         periods.forEach(function (p) {
           var opt = document.createElement('option');
@@ -201,7 +226,7 @@
 
       resultsArea.innerHTML = '<div class="loading">検索中...</div>';
 
-      apiGet({ action: 'search', month: monthId, name: name, period: period }).then(function (data) {
+      jsonp({ action: 'search', month: monthId, name: name, period: period }).then(function (data) {
         document.getElementById('dayCount').textContent = data.dayCount;
         document.getElementById('nightCount').textContent = data.nightCount;
 
