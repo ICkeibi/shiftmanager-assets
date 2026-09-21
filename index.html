@@ -62,10 +62,6 @@
       width: 100%; padding: 10px; font-size: 16px;
       border-radius: 8px; border: 1px solid var(--border); background: var(--card-bg); color: var(--text);
     }
-    .selected-name {
-      text-align: center; font-size: 15px; font-weight: bold;
-      min-height: 18px; margin: -6px 0 12px; color: var(--text);
-    }
     .period-info {
       text-align: center; font-size: 13px; font-weight: bold; color: var(--primary);
       min-height: 18px; margin: -4px 0 12px;
@@ -123,7 +119,6 @@
       <option value="">先に年月を選択</option>
     </select>
   </div>
-  <div class="selected-name" id="selectedNameLabel"></div>
 
   <div class="field">
     <label>期間</label>
@@ -243,21 +238,6 @@
       document.getElementById('periodInfo').textContent = '表示期間: ' + text;
     }
 
-    function updateSelectedNameLabel() {
-      var nameSel = document.getElementById('nameSelect');
-      var label = document.getElementById('selectedNameLabel');
-      var name = nameSel.value;
-      if (!name) {
-        label.textContent = '';
-        label.style.color = '';
-        return;
-      }
-      var opt = nameSel.options[nameSel.selectedIndex];
-      var color = opt ? opt.dataset.color : '';
-      label.textContent = name;
-      label.style.color = color || '';
-    }
-
     function onMonthChange() {
       var monthSel = document.getElementById('monthSelect');
       var monthId = monthSel.value;
@@ -270,8 +250,6 @@
       document.getElementById('totalCount').textContent = 0;
       document.getElementById('periodInfo').textContent = '';
       document.getElementById('lastUpdated').textContent = '';
-      document.getElementById('selectedNameLabel').textContent = '';
-      document.getElementById('selectedNameLabel').style.color = '';
 
       if (!monthId) {
         nameSel.disabled = true;
@@ -289,13 +267,11 @@
         nameSel.innerHTML = '<option value="">選択してください</option>';
         names.forEach(function (n) {
           var opt = document.createElement('option');
-          opt.value = n.name;
-          opt.textContent = n.name;
-          if (n.color) opt.dataset.color = n.color;
+          opt.value = n;
+          opt.textContent = n;
           nameSel.appendChild(opt);
         });
         nameSel.disabled = false;
-        updateSelectedNameLabel();
       }).catch(function (err) {
         nameSel.innerHTML = '<option value="">エラー: ' + err.message + '</option>';
       });
@@ -393,7 +369,6 @@
     }
 
     document.getElementById('monthSelect').addEventListener('change', onMonthChange);
-    document.getElementById('nameSelect').addEventListener('change', updateSelectedNameLabel);
     document.getElementById('periodSelect').addEventListener('change', updatePeriodInfo);
     document.getElementById('searchBtn').addEventListener('click', function () { doSearch(false); });
     document.getElementById('refreshBtn').addEventListener('click', doRefresh);
