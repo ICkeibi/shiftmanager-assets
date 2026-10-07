@@ -55,7 +55,14 @@
       from { transform: translateY(-50%) rotate(0deg); }
       to { transform: translateY(-50%) rotate(360deg); }
     }
-    .subtitle { text-align: center; font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; }
+    .subtitle { text-align: center; font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; }
+    .mode-toggle { display: flex; gap: 8px; margin-bottom: 16px; }
+    .mode-toggle button {
+      flex: 1; padding: 10px; font-size: 15px; font-weight: bold;
+      border-radius: 8px; border: 1px solid var(--primary);
+      background: var(--card-bg); color: var(--primary); cursor: pointer;
+    }
+    .mode-toggle button.active { background: var(--primary); color: #fff; }
     .field { margin-bottom: 12px; }
     label { display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 4px; }
     select {
@@ -80,7 +87,7 @@
     .count-box .num { font-size: 22px; font-weight: bold; }
     .count-box.day .num { color: var(--badge-day); }
     .count-box.night .num { color: var(--badge-night); }
-    .last-updated { text-align: center; font-size: 11px; color: var(--text-secondary); margin-bottom: 12px; min-height: 14px; }
+    .last-updated { text-align: center; font-size: 11px; color: var(--text-secondary); margin: 12px 0; min-height: 14px; }
     .card {
       background: var(--card-bg); border-radius: 8px; padding: 12px; margin-bottom: 8px;
       box-shadow: 0 1px 3px var(--shadow);
@@ -97,6 +104,21 @@
     .card .address { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
     .address.alert { color: var(--alert); font-weight: bold; }
     .empty, .loading { text-align: center; color: var(--text-secondary); padding: 20px 0; font-size: 14px; }
+    .sum-head, .sum-row { display: flex; align-items: center; gap: 6px; }
+    .sum-head { font-size: 12px; color: var(--text-secondary); padding: 0 12px 4px; }
+    .sum-row {
+      background: var(--card-bg); border-radius: 8px; padding: 10px 12px; margin-bottom: 6px;
+      box-shadow: 0 1px 3px var(--shadow);
+    }
+    .sum-row.paid { opacity: 0.55; }
+    .sum-name { flex: 1; min-width: 0; font-size: 15px; font-weight: bold; overflow-wrap: anywhere; }
+    .sum-head .sum-name { font-size: 12px; font-weight: normal; }
+    .sum-num { width: 40px; text-align: center; font-size: 16px; font-weight: bold; }
+    .sum-head .sum-num { font-size: 12px; font-weight: normal; }
+    .sum-num.day { color: var(--badge-day); }
+    .sum-num.night { color: var(--badge-night); }
+    .sum-check { width: 44px; text-align: center; }
+    .sum-check input { width: 24px; height: 24px; accent-color: var(--primary); }
   </style>
 </head>
 <body>
@@ -106,6 +128,11 @@
   </div>
   <div class="subtitle" id="subtitle">年月を選択してください</div>
 
+  <div class="mode-toggle">
+    <button id="modePersonal" class="active">個人検索</button>
+    <button id="modeWeekly">週払い</button>
+  </div>
+
   <div class="field">
     <label>年月</label>
     <select id="monthSelect">
@@ -113,7 +140,7 @@
     </select>
   </div>
 
-  <div class="field">
+  <div class="field" id="nameField">
     <label>名前</label>
     <select id="nameSelect" disabled>
       <option value="">先に年月を選択</option>
@@ -130,7 +157,7 @@
 
   <button id="searchBtn">検索</button>
 
-  <div class="counts">
+  <div class="counts" id="counts">
     <div class="count-box day">
       <div class="label">日勤</div>
       <div class="num" id="dayCount">0</div>
@@ -226,6 +253,7 @@
     }
 
     var periodMeta = {};
+    var currentMode = 'personal';
 
     function updatePeriodInfo() {
       var val = document.getElementById('periodSelect').value;
@@ -238,18 +266,31 @@
       document.getElementById('periodInfo').textContent = '表示期間: ' + text;
     }
 
+    function resetResults() {
+      document.getElementById('resultsArea').innerHTML = '';
+      document.getElementById('dayCount').textContent = 0;
+      document.getElementById('nightCount').textContent = 0;
+      document.getElementById('totalCount').textContent = 0;
+      document.getElementById('lastUpdated').textContent = '';
+    }
+
+    function setMode(mode) {
+      currentMode = mode;
+      document.getElementById('modePersonal').classList.toggle('active', mode === 'personal');
+      document.getElementById('modeWeekly').classList.toggle('active', mode === 'weekly');
+      document.getElementById('nameField').style.display = mode === 'personal' ? '' : 'none';
+      document.getElementById('counts').style.display = mode === 'personal' ? '' : 'none';
+      resetResults();
+    }
+
     function onMonthChange() {
       var monthSel = document.getElementById('monthSelect');
       var monthId = monthSel.value;
       var nameSel = document.getElementById('nameSelect');
       var periodSel = document.getElementById('periodSelect');
 
-      document.getElementById('resultsArea').innerHTML = '';
-      document.getElementById('dayCount').textContent = 0;
-      document.getElementById('nightCount').textContent = 0;
-      document.getElementById('totalCount').textContent = 0;
+      resetResults();
       document.getElementById('periodInfo').textContent = '';
-      document.getElementById('lastUpdated').textContent = '';
 
       if (!monthId) {
         nameSel.disabled = true;
@@ -357,20 +398,127 @@
       });
     }
 
+    var PAID_STORAGE_KEY = 'weeklyPaidChecks';
+
+    function loadPaid() {
+      try {
+        return JSON.parse(localStorage.getItem(PAID_STORAGE_KEY) || '{}') || {};
+      } catch (e) {
+        return {};
+      }
+    }
+
+    function savePaid(obj) {
+      try {
+        localStorage.setItem(PAID_STORAGE_KEY, JSON.stringify(obj));
+      } catch (e) {}
+    }
+
+    function paidKey(monthId, period, name) {
+      return monthId + '|' + period + '|' + name;
+    }
+
+    function makeSpan(className, text) {
+      var el = document.createElement('span');
+      el.className = className;
+      el.textContent = text;
+      return el;
+    }
+
+    function renderSummary(rows, monthId, period) {
+      var resultsArea = document.getElementById('resultsArea');
+      resultsArea.innerHTML = '';
+
+      if (!rows || rows.length === 0) {
+        resultsArea.innerHTML = '<div class="empty">該当するデータがありません</div>';
+        return;
+      }
+
+      var paid = loadPaid();
+
+      var head = document.createElement('div');
+      head.className = 'sum-head';
+      head.appendChild(makeSpan('sum-name', '名前'));
+      head.appendChild(makeSpan('sum-num', '日勤'));
+      head.appendChild(makeSpan('sum-num', '夜勤'));
+      head.appendChild(makeSpan('sum-num', '合計'));
+      head.appendChild(makeSpan('sum-check', '済'));
+      resultsArea.appendChild(head);
+
+      rows.forEach(function (r) {
+        var key = paidKey(monthId, period, r.name);
+        var row = document.createElement('div');
+        row.className = 'sum-row' + (paid[key] ? ' paid' : '');
+
+        row.appendChild(makeSpan('sum-name', r.name));
+        row.appendChild(makeSpan('sum-num day', r.day));
+        row.appendChild(makeSpan('sum-num night', r.night));
+        row.appendChild(makeSpan('sum-num', r.total));
+
+        var checkWrap = document.createElement('span');
+        checkWrap.className = 'sum-check';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = !!paid[key];
+        cb.addEventListener('change', function () {
+          var p = loadPaid();
+          if (cb.checked) p[key] = 1;
+          else delete p[key];
+          savePaid(p);
+          row.classList.toggle('paid', cb.checked);
+        });
+        checkWrap.appendChild(cb);
+        row.appendChild(checkWrap);
+
+        resultsArea.appendChild(row);
+      });
+    }
+
+    function doSummary(forceRefresh) {
+      var monthId = document.getElementById('monthSelect').value;
+      var period = document.getElementById('periodSelect').value;
+      var resultsArea = document.getElementById('resultsArea');
+
+      if (!monthId) {
+        resultsArea.innerHTML = '<div class="empty">年月を選択してください</div>';
+        return Promise.resolve();
+      }
+
+      resultsArea.innerHTML = '<div class="loading">集計中...</div>';
+
+      return jsonp({
+        action: 'summary',
+        month: monthId,
+        period: period,
+        refresh: forceRefresh ? '1' : '0'
+      }).then(function (data) {
+        updateLastUpdated();
+        renderSummary(data.rows, monthId, period);
+      }).catch(function (err) {
+        resultsArea.innerHTML = '<div class="empty">エラー: ' + err.message + '</div>';
+      });
+    }
+
+    function doAction(forceRefresh) {
+      return currentMode === 'weekly' ? doSummary(forceRefresh) : doSearch(forceRefresh);
+    }
+
     function doRefresh() {
       var btn = document.getElementById('refreshBtn');
       if (btn.disabled) return;
       btn.disabled = true;
       btn.classList.add('spinning');
-      doSearch(true).then(function () {
+      doAction(true).then(function () {
         btn.classList.remove('spinning');
         btn.disabled = false;
       });
     }
 
+    document.getElementById('modePersonal').addEventListener('click', function () { setMode('personal'); });
+    document.getElementById('modeWeekly').addEventListener('click', function () { setMode('weekly'); });
     document.getElementById('monthSelect').addEventListener('change', onMonthChange);
     document.getElementById('periodSelect').addEventListener('change', updatePeriodInfo);
-    document.getElementById('searchBtn').addEventListener('click', function () { doSearch(false); });
+    document.getElementById('searchBtn').addEventListener('click', function () { doAction(false); });
     document.getElementById('refreshBtn').addEventListener('click', doRefresh);
     document.getElementById('subtitle').textContent = formatToday();
     loadMonths();
