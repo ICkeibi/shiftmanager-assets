@@ -103,6 +103,7 @@
     .card .date { font-size: 14px; font-weight: bold; }
     .card .address { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
     .address.alert { color: var(--alert); font-weight: bold; }
+    .times { color: var(--primary); font-weight: bold; margin-left: 8px; }
     .empty, .loading { text-align: center; color: var(--text-secondary); padding: 20px 0; font-size: 14px; }
     .sum-head, .sum-row { display: flex; align-items: center; gap: 6px; }
     .sum-head { font-size: 12px; color: var(--text-secondary); padding: 0 12px 4px; }
@@ -379,16 +380,28 @@
           return;
         }
 
-        var html = '';
+        var grouped = [];
         data.results.forEach(function (row) {
+          var last = grouped[grouped.length - 1];
+          if (last && last.row[0] === row[0] && last.row[1] === row[1] && last.row[2] === row[2]) {
+            last.count++;
+          } else {
+            grouped.push({ row: row, count: 1 });
+          }
+        });
+
+        var html = '';
+        grouped.forEach(function (g) {
+          var row = g.row;
           var date = row[0], shift = row[1], address = row[2], isAlert = row[3], alertColor = row[4];
           var badgeClass = shift === '夜' ? 'night' : 'day';
           var addressClass = isAlert ? 'address alert' : 'address';
           var alertStyle = isAlert && alertColor ? ' style="color:' + alertColor + '"' : '';
+          var timesHtml = g.count > 1 ? '<span class="times">×' + g.count + '</span>' : '';
           html += '<div class="card">' +
             '<span class="badge ' + badgeClass + '">' + shift + '</span>' +
             '<div class="info">' +
-              '<div class="date">' + date + '</div>' +
+              '<div class="date">' + date + timesHtml + '</div>' +
               '<div class="' + addressClass + '"' + alertStyle + '>' + address + '</div>' +
             '</div></div>';
         });
