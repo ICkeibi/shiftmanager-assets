@@ -127,20 +127,20 @@
     }
     #printArea { display: none; }
     @media print {
-      @page { size: A4 portrait; margin: 15mm; }
+      @page { size: A4 portrait; margin: 12mm; }
       body.print-summary { background: #fff; color: #000; padding: 0; }
       body.print-summary > *:not(#printArea) { display: none !important; }
       body.print-summary #printArea { display: block; }
-      .print-title { font-size: 20px; font-weight: bold; text-align: center; margin-bottom: 6px; }
-      .print-sub { font-size: 13px; text-align: center; margin-bottom: 4px; }
-      table.print-table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 12px; }
-      .print-table th, .print-table td { border: 1px solid #000; padding: 6px 8px; color: #000; }
+      .print-title { font-size: 18px; font-weight: bold; text-align: center; margin-bottom: 4px; }
+      .print-sub { font-size: 12px; text-align: center; margin-bottom: 8px; }
+      .print-groups { display: flex; gap: 8px; align-items: flex-start; }
+      table.print-table { flex: 1; min-width: 0; border-collapse: collapse; font-size: 12px; }
+      .print-table th, .print-table td { border: 1px solid #000; padding: 3px 4px; color: #000; overflow-wrap: anywhere; }
       .print-table th { background: #eeeeee; }
-      .print-table .num { text-align: center; width: 64px; }
-      .print-table thead { display: table-header-group; }
-      .print-table tfoot { display: table-row-group; }
-      .print-table tfoot td { font-weight: bold; background: #f3f3f3; }
+      .print-table .num { text-align: center; width: 34px; }
+      .print-table .chk { text-align: center; width: 26px; }
       .print-table tr { page-break-inside: avoid; }
+      .print-total { margin-top: 8px; font-size: 13px; font-weight: bold; text-align: right; }
     }
   </style>
 </head>
@@ -464,10 +464,10 @@
       return el;
     }
 
-    function makeCell(tag, text, isNum) {
+    function makeCell(tag, text, cls) {
       var el = document.createElement(tag);
       el.textContent = text;
-      if (isNum) el.className = 'num';
+      if (cls) el.className = cls;
       return el;
     }
 
@@ -481,6 +481,7 @@
         ? '期間: 全'
         : (document.getElementById('periodInfo').textContent || ('期間: ' + lastSummary.period));
       var paid = loadPaid();
+      var rows = lastSummary.rows;
 
       var area = document.getElementById('printArea');
       area.innerHTML = '';
@@ -492,53 +493,57 @@
 
       var sub = document.createElement('div');
       sub.className = 'print-sub';
-      sub.textContent = monthLabel + '　' + periodText;
+      sub.textContent = monthLabel + '　' + periodText + '　印刷日: ' + formatToday();
       area.appendChild(sub);
 
-      var printed = document.createElement('div');
-      printed.className = 'print-sub';
-      printed.textContent = '印刷日: ' + formatToday();
-      area.appendChild(printed);
+      var groupCount = Math.min(3, Math.max(1, Math.ceil(rows.length / 36)));
+      var perGroup = Math.ceil(rows.length / groupCount);
 
-      var table = document.createElement('table');
-      table.className = 'print-table';
+      var groups = document.createElement('div');
+      groups.className = 'print-groups';
 
-      var thead = document.createElement('thead');
-      var headRow = document.createElement('tr');
-      ['名前', '日勤', '夜勤', '合計', '済'].forEach(function (h, i) {
-        headRow.appendChild(makeCell('th', h, i > 0));
-      });
-      thead.appendChild(headRow);
-      table.appendChild(thead);
-
-      var tbody = document.createElement('tbody');
       var sumDay = 0;
       var sumNight = 0;
-      lastSummary.rows.forEach(function (r) {
-        sumDay += r.day;
-        sumNight += r.night;
-        var key = paidKey(lastSummary.monthId, lastSummary.period, r.name);
-        var tr = document.createElement('tr');
-        tr.appendChild(makeCell('td', r.name, false));
-        tr.appendChild(makeCell('td', r.day, true));
-        tr.appendChild(makeCell('td', r.night, true));
-        tr.appendChild(makeCell('td', r.total, true));
-        tr.appendChild(makeCell('td', paid[key] ? '☑' : '☐', true));
-        tbody.appendChild(tr);
-      });
-      table.appendChild(tbody);
 
-      var tfoot = document.createElement('tfoot');
-      var footRow = document.createElement('tr');
-      footRow.appendChild(makeCell('td', '合計(' + lastSummary.rows.length + '名)', false));
-      footRow.appendChild(makeCell('td', sumDay, true));
-      footRow.appendChild(makeCell('td', sumNight, true));
-      footRow.appendChild(makeCell('td', sumDay + sumNight, true));
-      footRow.appendChild(makeCell('td', '', true));
-      tfoot.appendChild(footRow);
-      table.appendChild(tfoot);
+      for (var g = 0; g < groupCount; g++) {
+        var chunk = rows.slice(g * perGroup, (g + 1) * perGroup);
+        if (chunk.length === 0) continue;
 
-      area.appendChild(table);
+        var table = document.createElement('table');
+        table.className = 'print-table';
+
+        var thead = document.createElement('thead');
+        var headRow = document.createElement('tr');
+        headRow.appendChild(makeCell('th', '名前', ''));
+        headRow.appendChild(makeCell('th', '日勤', 'num'));
+        headRow.appendChild(makeCell('th', '夜勤', 'num'));
+        headRow.appendChild(makeCell('th', '合計', 'num'));
+        headRow.appendChild(makeCell('th', '済', 'chk'));
+        thead.appendChild(headRow);
+        table.appendChild(thead);
+
+        var tbody = document.createElement('tbody');
+        chunk.forEach(function (r) {
+          sumDay += r.day;
+          sumNight += r.night;
+          var key = paidKey(lastSummary.monthId, lastSummary.period, r.name);
+          var tr = document.createElement('tr');
+          tr.appendChild(makeCell('td', r.name, ''));
+          tr.appendChild(makeCell('td', r.day, 'num'));
+          tr.appendChild(makeCell('td', r.night, 'num'));
+          tr.appendChild(makeCell('td', r.total, 'num'));
+          tr.appendChild(makeCell('td', paid[key] ? '☑' : '☐', 'chk'));
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        groups.appendChild(table);
+      }
+      area.appendChild(groups);
+
+      var total = document.createElement('div');
+      total.className = 'print-total';
+      total.textContent = '合計 ' + rows.length + '名　日勤 ' + sumDay + '　夜勤 ' + sumNight + '　合計 ' + (sumDay + sumNight);
+      area.appendChild(total);
     }
 
     function printSummary() {
