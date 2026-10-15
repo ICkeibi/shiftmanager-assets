@@ -120,6 +120,28 @@
     .sum-num.night { color: var(--badge-night); }
     .sum-check { width: 44px; text-align: center; }
     .sum-check input { width: 24px; height: 24px; accent-color: var(--primary); }
+    .print-btn {
+      width: 100%; padding: 12px; font-size: 16px; font-weight: bold; margin-top: 8px;
+      color: var(--primary); background: var(--card-bg);
+      border: 1px solid var(--primary); border-radius: 8px; cursor: pointer;
+    }
+    #printArea { display: none; }
+    @media print {
+      @page { size: A4 portrait; margin: 15mm; }
+      body.print-summary { background: #fff; color: #000; padding: 0; }
+      body.print-summary > *:not(#printArea) { display: none !important; }
+      body.print-summary #printArea { display: block; }
+      .print-title { font-size: 20px; font-weight: bold; text-align: center; margin-bottom: 6px; }
+      .print-sub { font-size: 13px; text-align: center; margin-bottom: 4px; }
+      table.print-table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 12px; }
+      .print-table th, .print-table td { border: 1px solid #000; padding: 6px 8px; color: #000; }
+      .print-table th { background: #eeeeee; }
+      .print-table .num { text-align: center; width: 64px; }
+      .print-table thead { display: table-header-group; }
+      .print-table tfoot { display: table-row-group; }
+      .print-table tfoot td { font-weight: bold; background: #f3f3f3; }
+      .print-table tr { page-break-inside: avoid; }
+    }
   </style>
 </head>
 <body>
@@ -175,6 +197,7 @@
   <div class="last-updated" id="lastUpdated"></div>
 
   <div id="resultsArea"></div>
+  <div id="printArea"></div>
 
   <script>
     var API_URL = "https://script.google.com/macros/s/AKfycbwaakQiOZkfCQaPa6gdRa0qWEpOrnmW_HdDtY4nrzulSVaraO_4tgMQTvUYhjTDoA5a/exec";
@@ -255,6 +278,7 @@
 
     var periodMeta = {};
     var currentMode = 'personal';
+    var lastSummary = null;
 
     function updatePeriodInfo() {
       var val = document.getElementById('periodSelect').value;
@@ -273,6 +297,8 @@
       document.getElementById('nightCount').textContent = 0;
       document.getElementById('totalCount').textContent = 0;
       document.getElementById('lastUpdated').textContent = '';
+      lastSummary = null;
+      document.body.classList.remove('print-summary');
     }
 
     function setMode(mode) {
@@ -438,14 +464,105 @@
       return el;
     }
 
+    function makeCell(tag, text, isNum) {
+      var el = document.createElement(tag);
+      el.textContent = text;
+      if (isNum) el.className = 'num';
+      return el;
+    }
+
+    function buildPrintArea() {
+      if (!lastSummary) return;
+
+      var monthSel = document.getElementById('monthSelect');
+      var monthOpt = monthSel.options[monthSel.selectedIndex];
+      var monthLabel = monthOpt ? monthOpt.textContent : '';
+      var periodText = lastSummary.period === '全'
+        ? '期間: 全'
+        : (document.getElementById('periodInfo').textContent || ('期間: ' + lastSummary.period));
+      var paid = loadPaid();
+
+      var area = document.getElementById('printArea');
+      area.innerHTML = '';
+
+      var title = document.createElement('div');
+      title.className = 'print-title';
+      title.textContent = '週払い一覧';
+      area.appendChild(title);
+
+      var sub = document.createElement('div');
+      sub.className = 'print-sub';
+      sub.textContent = monthLabel + '　' + periodText;
+      area.appendChild(sub);
+
+      var printed = document.createElement('div');
+      printed.className = 'print-sub';
+      printed.textContent = '印刷日: ' + formatToday();
+      area.appendChild(printed);
+
+      var table = document.createElement('table');
+      table.className = 'print-table';
+
+      var thead = document.createElement('thead');
+      var headRow = document.createElement('tr');
+      ['名前', '日勤', '夜勤', '合計', '済'].forEach(function (h, i) {
+        headRow.appendChild(makeCell('th', h, i > 0));
+      });
+      thead.appendChild(headRow);
+      table.appendChild(thead);
+
+      var tbody = document.createElement('tbody');
+      var sumDay = 0;
+      var sumNight = 0;
+      lastSummary.rows.forEach(function (r) {
+        sumDay += r.day;
+        sumNight += r.night;
+        var key = paidKey(lastSummary.monthId, lastSummary.period, r.name);
+        var tr = document.createElement('tr');
+        tr.appendChild(makeCell('td', r.name, false));
+        tr.appendChild(makeCell('td', r.day, true));
+        tr.appendChild(makeCell('td', r.night, true));
+        tr.appendChild(makeCell('td', r.total, true));
+        tr.appendChild(makeCell('td', paid[key] ? '☑' : '☐', true));
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+
+      var tfoot = document.createElement('tfoot');
+      var footRow = document.createElement('tr');
+      footRow.appendChild(makeCell('td', '合計(' + lastSummary.rows.length + '名)', false));
+      footRow.appendChild(makeCell('td', sumDay, true));
+      footRow.appendChild(makeCell('td', sumNight, true));
+      footRow.appendChild(makeCell('td', sumDay + sumNight, true));
+      footRow.appendChild(makeCell('td', '', true));
+      tfoot.appendChild(footRow);
+      table.appendChild(tfoot);
+
+      area.appendChild(table);
+    }
+
+    function printSummary() {
+      if (!lastSummary) return;
+      buildPrintArea();
+      document.body.classList.add('print-summary');
+      window.print();
+    }
+
+    window.addEventListener('afterprint', function () {
+      document.body.classList.remove('print-summary');
+    });
+
     function renderSummary(rows, monthId, period) {
       var resultsArea = document.getElementById('resultsArea');
       resultsArea.innerHTML = '';
 
       if (!rows || rows.length === 0) {
+        lastSummary = null;
         resultsArea.innerHTML = '<div class="empty">該当するデータがありません</div>';
         return;
       }
+
+      lastSummary = { rows: rows, monthId: monthId, period: period };
 
       var paid = loadPaid();
 
@@ -485,6 +602,12 @@
 
         resultsArea.appendChild(row);
       });
+
+      var printBtn = document.createElement('button');
+      printBtn.className = 'print-btn';
+      printBtn.textContent = '印刷';
+      printBtn.addEventListener('click', printSummary);
+      resultsArea.appendChild(printBtn);
     }
 
     function doSummary(forceRefresh) {
