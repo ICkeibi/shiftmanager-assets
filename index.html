@@ -120,6 +120,15 @@
     .sum-num.night { color: var(--badge-night); }
     .sum-check { width: 44px; text-align: center; }
     .sum-check input { width: 24px; height: 24px; accent-color: var(--primary); }
+    .unknown-card {
+      background: var(--card-bg); border: 1px solid #E67E22; border-radius: 8px;
+      padding: 10px 12px; margin-bottom: 12px; font-size: 13px;
+    }
+    .unknown-card summary { cursor: pointer; font-weight: bold; color: #E67E22; font-size: 14px; }
+    .unknown-note { color: var(--text-secondary); font-size: 12px; margin: 6px 0 8px; }
+    .unknown-item { display: flex; gap: 8px; padding: 5px 0; border-top: 1px solid var(--border); }
+    .unknown-name { font-weight: bold; min-width: 0; overflow-wrap: anywhere; }
+    .unknown-meta { color: var(--text-secondary); margin-left: auto; text-align: right; font-size: 12px; flex-shrink: 0; }
     .print-btn {
       width: 100%; padding: 12px; font-size: 16px; font-weight: bold; margin-top: 8px;
       color: var(--primary); background: var(--card-bg);
@@ -557,13 +566,45 @@
       document.body.classList.remove('print-summary');
     });
 
-    function renderSummary(rows, monthId, period) {
+    function renderUnknown(unknown) {
+      if (!unknown || unknown.length === 0) return;
+      var resultsArea = document.getElementById('resultsArea');
+
+      var card = document.createElement('details');
+      card.className = 'unknown-card';
+
+      var summary = document.createElement('summary');
+      summary.textContent = '⚠ 名簿(F列)にない名前 ' + unknown.length + '件';
+      card.appendChild(summary);
+
+      var note = document.createElement('div');
+      note.className = 'unknown-note';
+      note.textContent = '週払いの一覧に入っていません。新しい人や、表記の違い・入力ミスの可能性があります。';
+      card.appendChild(note);
+
+      unknown.forEach(function (u) {
+        var row = document.createElement('div');
+        row.className = 'unknown-item';
+        row.appendChild(makeSpan('unknown-name', u.name));
+        var where = u.where.join('、') + (u.count > u.where.length && u.where.length >= 3 ? ' ほか' : '');
+        row.appendChild(makeSpan('unknown-meta', u.count + '回: ' + where));
+        card.appendChild(row);
+      });
+
+      resultsArea.appendChild(card);
+    }
+
+    function renderSummary(rows, monthId, period, unknown) {
       var resultsArea = document.getElementById('resultsArea');
       resultsArea.innerHTML = '';
+      renderUnknown(unknown);
 
       if (!rows || rows.length === 0) {
         lastSummary = null;
-        resultsArea.innerHTML = '<div class="empty">該当するデータがありません</div>';
+        var empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = '該当するデータがありません';
+        resultsArea.appendChild(empty);
         return;
       }
 
@@ -634,7 +675,7 @@
         refresh: forceRefresh ? '1' : '0'
       }).then(function (data) {
         updateLastUpdated();
-        renderSummary(data.rows, monthId, period);
+        renderSummary(data.rows, monthId, period, data.unknown);
       }).catch(function (err) {
         resultsArea.innerHTML = '<div class="empty">エラー: ' + err.message + '</div>';
       });
