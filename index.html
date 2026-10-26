@@ -132,6 +132,22 @@
     .sum-num.night { color: var(--badge-night); }
     .sum-check { width: 44px; text-align: center; }
     .sum-check input { width: 24px; height: 24px; accent-color: var(--primary); }
+    .sum-type { width: 30px; flex-shrink: 0; text-align: center; }
+    .type-btn {
+      width: 26px; height: 26px; padding: 0; border-radius: 50%;
+      border: 2px solid var(--primary); background: transparent; color: var(--primary);
+      font-size: 11px; font-weight: bold; line-height: 22px; cursor: pointer;
+    }
+    .type-btn.on { border-color: var(--text-secondary); background: var(--text-secondary); color: var(--card-bg); }
+    .type-btn:disabled { opacity: 0.4; }
+    .sum-row.monthly { opacity: 0.45; }
+    .sum-section { font-size: 12px; color: var(--text-secondary); margin: 14px 4px 6px; }
+    .sum-total {
+      display: flex; align-items: center; gap: 6px; margin: 10px 0 4px; padding: 12px;
+      border-radius: 8px; border: 2px solid var(--primary); background: var(--card-bg);
+    }
+    .sum-total .sum-name { font-size: 15px; }
+    .sum-total-note { text-align: right; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; }
     .unknown-card {
       background: var(--card-bg); border: 1px solid #E67E22; border-radius: 8px;
       padding: 10px 12px; margin-bottom: 12px; font-size: 13px;
@@ -506,7 +522,7 @@
         ? '期間: 全'
         : (document.getElementById('periodInfo').textContent || ('期間: ' + lastSummary.period));
       var paid = loadPaid();
-      var rows = lastSummary.rows;
+      var rows = lastSummary.rows.filter(function (r) { return !isMonthly(r.name); }); // 月払いの人は印刷しない
 
       var area = document.getElementById('printArea');
       area.innerHTML = '';
@@ -567,7 +583,9 @@
 
       var total = document.createElement('div');
       total.className = 'print-total';
-      total.textContent = '合計 ' + rows.length + '名　日勤 ' + sumDay + '　夜勤 ' + sumNight + '　合計 ' + (sumDay + sumNight);
+      var monCount = lastSummary.rows.length - rows.length;
+      total.textContent = '週払い 合計 ' + rows.length + '名　日勤 ' + sumDay + '　夜勤 ' + sumNight + '　合計 ' + (sumDay + sumNight) +
+        (monCount ? '（月払い ' + monCount + '名は除く）' : '');
       area.appendChild(total);
     }
 
@@ -610,6 +628,39 @@
       resultsArea.appendChild(card);
     }
 
+    // 月払いの人（「支払区分」シートで月払いになっている人）
+    var monthlyKeys = {};
+    function nameKey(n) { return String(n || '').replace(/[\s　]/g, ''); }
+    function setMonthly(names) {
+      monthlyKeys = {};
+      (names || []).forEach(function (n) { monthlyKeys[nameKey(n)] = true; });
+    }
+    function isMonthly(name) { return !!monthlyKeys[nameKey(name)]; }
+
+    // ○ボタン：週払い ⇔ 月払い を切り替える（月払いにログインした端末だけ）
+    function togglePayType(r, btn) {
+      var toMonthly = !isMonthly(r.name);
+      var token = '';
+      try { token = localStorage.getItem('payToken') || ''; } catch (e) {}
+      if (!token) {
+        alert('週払い・月払いの切り替えは、「⋮」→「月払い」にログインしたことのある端末でだけできます。');
+        return;
+      }
+      var msg = toMonthly
+        ? r.name + ' さんを「月払い」にしますか？\n（週払いの合計と印刷から外れます）'
+        : r.name + ' さんを「週払い」に戻しますか？';
+      if (!confirm(msg)) return;
+      btn.disabled = true;
+      jsonp({ action: 'setPayType', token: token, name: r.name, monthly: toMonthly ? '1' : '0' }).then(function (res) {
+        if (res.error) { alert(res.error); btn.disabled = false; return; }
+        setMonthly(res.monthly);
+        renderSummary(lastSummary.rows, lastSummary.monthId, lastSummary.period, lastSummary.unknown);
+      }).catch(function (err) {
+        alert('エラー: ' + err.message);
+        btn.disabled = false;
+      });
+    }
+
     function renderSummary(rows, monthId, period, unknown) {
       var resultsArea = document.getElementById('resultsArea');
       resultsArea.innerHTML = '';
@@ -624,12 +675,15 @@
         return;
       }
 
-      lastSummary = { rows: rows, monthId: monthId, period: period };
+      lastSummary = { rows: rows, monthId: monthId, period: period, unknown: unknown };
 
       var paid = loadPaid();
+      var weekly = rows.filter(function (r) { return !isMonthly(r.name); });
+      var monthly = rows.filter(function (r) { return isMonthly(r.name); });
 
       var head = document.createElement('div');
       head.className = 'sum-head';
+      head.appendChild(makeSpan('sum-type', ''));
       head.appendChild(makeSpan('sum-name', '名前'));
       head.appendChild(makeSpan('sum-num', '日勤'));
       head.appendChild(makeSpan('sum-num', '夜勤'));
@@ -637,10 +691,20 @@
       head.appendChild(makeSpan('sum-check', '済'));
       resultsArea.appendChild(head);
 
-      rows.forEach(function (r) {
+      function addRow(r, isMon) {
         var key = paidKey(monthId, period, r.name);
         var row = document.createElement('div');
-        row.className = 'sum-row' + (paid[key] ? ' paid' : '');
+        row.className = 'sum-row' + (isMon ? ' monthly' : (paid[key] ? ' paid' : ''));
+
+        var typeWrap = document.createElement('span');
+        typeWrap.className = 'sum-type';
+        var tb = document.createElement('button');
+        tb.className = 'type-btn' + (isMon ? ' on' : '');
+        tb.textContent = isMon ? '月' : '週';
+        tb.title = isMon ? '月払い（押すと週払いに戻す）' : '週払い（押すと月払いにする）';
+        tb.addEventListener('click', function () { togglePayType(r, tb); });
+        typeWrap.appendChild(tb);
+        row.appendChild(typeWrap);
 
         row.appendChild(makeSpan('sum-name', r.name));
         row.appendChild(makeSpan('sum-num day', r.day));
@@ -649,21 +713,51 @@
 
         var checkWrap = document.createElement('span');
         checkWrap.className = 'sum-check';
-        var cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.checked = !!paid[key];
-        cb.addEventListener('change', function () {
-          var p = loadPaid();
-          if (cb.checked) p[key] = 1;
-          else delete p[key];
-          savePaid(p);
-          row.classList.toggle('paid', cb.checked);
-        });
-        checkWrap.appendChild(cb);
+        if (!isMon) {
+          var cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.checked = !!paid[key];
+          cb.addEventListener('change', function () {
+            var p = loadPaid();
+            if (cb.checked) p[key] = 1;
+            else delete p[key];
+            savePaid(p);
+            row.classList.toggle('paid', cb.checked);
+          });
+          checkWrap.appendChild(cb);
+        }
         row.appendChild(checkWrap);
-
         resultsArea.appendChild(row);
-      });
+      }
+
+      weekly.forEach(function (r) { addRow(r, false); });
+
+      if (monthly.length) {
+        var sec = document.createElement('div');
+        sec.className = 'sum-section';
+        sec.textContent = '月払いの人（' + monthly.length + '人・合計と印刷に入りません）';
+        resultsArea.appendChild(sec);
+        monthly.forEach(function (r) { addRow(r, true); });
+      }
+
+      // 週払いの合計
+      var sumDay = 0, sumNight = 0;
+      weekly.forEach(function (r) { sumDay += r.day; sumNight += r.night; });
+      var total = document.createElement('div');
+      total.className = 'sum-total';
+      total.appendChild(makeSpan('sum-type', ''));
+      total.appendChild(makeSpan('sum-name', '合計 ' + weekly.length + '人'));
+      total.appendChild(makeSpan('sum-num day', sumDay));
+      total.appendChild(makeSpan('sum-num night', sumNight));
+      total.appendChild(makeSpan('sum-num', sumDay + sumNight));
+      total.appendChild(makeSpan('sum-check', ''));
+      resultsArea.appendChild(total);
+      if (monthly.length) {
+        var note = document.createElement('div');
+        note.className = 'sum-total-note';
+        note.textContent = '月払いの ' + monthly.length + '人は含みません';
+        resultsArea.appendChild(note);
+      }
 
       var printBtn = document.createElement('button');
       printBtn.className = 'print-btn';
@@ -684,12 +778,15 @@
 
       resultsArea.innerHTML = '<div class="loading">集計中...</div>';
 
-      return jsonp({
+      var types = jsonp({ action: 'payTypes' }).catch(function () { return { monthly: [] }; });
+      return Promise.all([jsonp({
         action: 'summary',
         month: monthId,
         period: period,
         refresh: forceRefresh ? '1' : '0'
-      }).then(function (data) {
+      }), types]).then(function (res) {
+        var data = res[0];
+        setMonthly(res[1] && res[1].monthly);
         updateLastUpdated();
         renderSummary(data.rows, monthId, period, data.unknown);
       }).catch(function (err) {
