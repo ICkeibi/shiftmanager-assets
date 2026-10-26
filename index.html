@@ -652,7 +652,13 @@
       if (!confirm(msg)) return;
       btn.disabled = true;
       jsonp({ action: 'setPayType', token: token, name: r.name, monthly: toMonthly ? '1' : '0' }).then(function (res) {
-        if (res.error) { alert(res.error); btn.disabled = false; return; }
+        if (res.error) {
+          var hint = res.error.indexOf('期限') >= 0
+            ? '\n\n「⋮」→「月払い」を一度開くと、ログインが新しくなります。そのあと、もう一度押してください。' : '';
+          alert(res.error + hint);
+          btn.disabled = false;
+          return;
+        }
         setMonthly(res.monthly);
         renderSummary(lastSummary.rows, lastSummary.monthId, lastSummary.period, lastSummary.unknown);
       }).catch(function (err) {
