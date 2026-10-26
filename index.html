@@ -738,15 +738,7 @@
 
       weekly.forEach(function (r) { addRow(r, false); });
 
-      if (monthly.length) {
-        var sec = document.createElement('div');
-        sec.className = 'sum-section';
-        sec.textContent = '月払いの人（' + monthly.length + '人・合計と印刷に入りません）';
-        resultsArea.appendChild(sec);
-        monthly.forEach(function (r) { addRow(r, true); });
-      }
-
-      // 週払いの合計
+      // 週払いの合計（週払いの最後の人のすぐ下）
       var sumDay = 0, sumNight = 0;
       weekly.forEach(function (r) { sumDay += r.day; sumNight += r.night; });
       var total = document.createElement('div');
@@ -763,6 +755,14 @@
         note.className = 'sum-total-note';
         note.textContent = '月払いの ' + monthly.length + '人は含みません';
         resultsArea.appendChild(note);
+      }
+
+      if (monthly.length) {
+        var sec = document.createElement('div');
+        sec.className = 'sum-section';
+        sec.textContent = '月払いの人（' + monthly.length + '人・合計と印刷に入りません）';
+        resultsArea.appendChild(sec);
+        monthly.forEach(function (r) { addRow(r, true); });
       }
 
       var printBtn = document.createElement('button');
