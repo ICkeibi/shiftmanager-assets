@@ -4,24 +4,732 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <title>月払い</title>
+  <title>出勤確認</title>
   <link rel="apple-touch-icon" href="icon.png">
   <link rel="icon" type="image/png" href="icon.png">
   <link rel="manifest" href="manifest.json">
   <style>
-    html, body { margin: 0; height: 100%; background: #f5f5f5; }
-    @media (prefers-color-scheme: dark) { html, body { background: #121212; } }
-    iframe { display: block; width: 100%; height: 100%; border: 0; }
+    :root {
+      --bg: #f5f5f5;
+      --card-bg: #ffffff;
+      --text: #222222;
+      --text-secondary: #666666;
+      --border: #cccccc;
+      --primary: #4A86E8;
+      --primary-active: #3a6fc0;
+      --badge-day: #F5A623;
+      --badge-night: #3F51B5;
+      --shadow: rgba(0,0,0,0.1);
+      --alert: #FF0000;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #121212;
+        --card-bg: #1e1e1e;
+        --text: #eeeeee;
+        --text-secondary: #aaaaaa;
+        --border: #444444;
+        --primary: #6fa0f5;
+        --primary-active: #5688dd;
+        --badge-day: #FFB74D;
+        --badge-night: #7986CB;
+        --shadow: rgba(0,0,0,0.5);
+        --alert: #ff6b6b;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+      margin: 0; padding: 16px; background: var(--bg); color: var(--text);
+    }
+    .header-row { display: flex; align-items: center; justify-content: center; position: relative; margin-bottom: 4px; }
+    h1 { font-size: 20px; margin: 0; text-align: center; }
+    .refresh-btn {
+      position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+      background: none; border: none; color: var(--primary); font-size: 24px;
+      padding: 4px 8px; cursor: pointer; line-height: 1;
+    }
+    .refresh-btn:disabled { opacity: 0.5; }
+    .refresh-btn.spinning { animation: spin 0.8s linear infinite; }
+    .more-btn {
+      position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+      background: none; border: none; color: var(--primary); font-size: 26px;
+      padding: 4px 8px; cursor: pointer; line-height: 1;
+    }
+    .more-menu {
+      position: absolute; right: 0; top: 100%; z-index: 1000; min-width: 150px;
+      background: var(--card-bg); border-radius: 8px; overflow: hidden;
+      box-shadow: 0 2px 8px var(--shadow); border: 1px solid var(--border);
+    }
+    .more-menu a { display: block; padding: 14px 16px; color: var(--text); text-decoration: none; font-size: 16px; }
+    .more-menu a:active { background: var(--bg); }
+    @keyframes spin {
+      from { transform: translateY(-50%) rotate(0deg); }
+      to { transform: translateY(-50%) rotate(360deg); }
+    }
+    .subtitle { text-align: center; font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; }
+    .mode-toggle { display: flex; gap: 8px; margin-bottom: 16px; }
+    .mode-toggle button {
+      flex: 1; padding: 10px; font-size: 15px; font-weight: bold;
+      border-radius: 8px; border: 1px solid var(--primary);
+      background: var(--card-bg); color: var(--primary); cursor: pointer;
+    }
+    .mode-toggle button.active { background: var(--primary); color: #fff; }
+    .field { margin-bottom: 12px; }
+    label { display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 4px; }
+    select {
+      width: 100%; padding: 10px; font-size: 16px;
+      border-radius: 8px; border: 1px solid var(--border); background: var(--card-bg); color: var(--text);
+    }
+    .period-info {
+      text-align: center; font-size: 13px; font-weight: bold; color: var(--primary);
+      min-height: 18px; margin: -4px 0 12px;
+    }
+    button#searchBtn {
+      width: 100%; padding: 12px; font-size: 16px; font-weight: bold;
+      color: #fff; background: var(--primary); border: none; border-radius: 8px; margin-top: 4px;
+    }
+    button#searchBtn:active { background: var(--primary-active); }
+    .counts { display: flex; gap: 8px; margin: 16px 0 8px; }
+    .count-box {
+      flex: 1; background: var(--card-bg); border-radius: 8px; padding: 10px;
+      text-align: center; box-shadow: 0 1px 3px var(--shadow);
+    }
+    .count-box .label { font-size: 12px; color: var(--text-secondary); }
+    .count-box .num { font-size: 22px; font-weight: bold; }
+    .count-box.day .num { color: var(--badge-day); }
+    .count-box.night .num { color: var(--badge-night); }
+    .last-updated { text-align: center; font-size: 11px; color: var(--text-secondary); margin: 12px 0; min-height: 14px; }
+    .card {
+      background: var(--card-bg); border-radius: 8px; padding: 12px; margin-bottom: 8px;
+      box-shadow: 0 1px 3px var(--shadow);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .badge {
+      display: inline-block; padding: 4px 10px; border-radius: 12px;
+      font-size: 13px; font-weight: bold; color: #fff; flex-shrink: 0;
+    }
+    .badge.day { background: var(--badge-day); }
+    .badge.night { background: var(--badge-night); }
+    .card .info { flex: 1; }
+    .card .date { font-size: 14px; font-weight: bold; }
+    .card .address { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+    .address.alert { color: var(--alert); font-weight: bold; }
+    .times { color: var(--primary); font-weight: bold; margin-left: 8px; }
+    .empty, .loading { text-align: center; color: var(--text-secondary); padding: 20px 0; font-size: 14px; }
+    .sum-head, .sum-row { display: flex; align-items: center; gap: 6px; }
+    .sum-head { font-size: 12px; color: var(--text-secondary); padding: 0 12px 4px; }
+    .sum-row {
+      background: var(--card-bg); border-radius: 8px; padding: 10px 12px; margin-bottom: 6px;
+      box-shadow: 0 1px 3px var(--shadow);
+    }
+    .sum-row.paid { opacity: 0.55; }
+    .sum-name { flex: 1; min-width: 0; font-size: 15px; font-weight: bold; overflow-wrap: anywhere; }
+    .sum-head .sum-name { font-size: 12px; font-weight: normal; }
+    .sum-num { width: 40px; text-align: center; font-size: 16px; font-weight: bold; }
+    .sum-head .sum-num { font-size: 12px; font-weight: normal; }
+    .sum-num.day { color: var(--badge-day); }
+    .sum-num.night { color: var(--badge-night); }
+    .sum-check { width: 44px; text-align: center; }
+    .sum-check input { width: 24px; height: 24px; accent-color: var(--primary); }
+    .unknown-card {
+      background: var(--card-bg); border: 1px solid #E67E22; border-radius: 8px;
+      padding: 10px 12px; margin-bottom: 12px; font-size: 13px;
+    }
+    .unknown-card summary { cursor: pointer; font-weight: bold; color: #E67E22; font-size: 14px; }
+    .unknown-note { color: var(--text-secondary); font-size: 12px; margin: 6px 0 8px; }
+    .unknown-item { display: flex; gap: 8px; padding: 5px 0; border-top: 1px solid var(--border); }
+    .unknown-name { font-weight: bold; min-width: 0; overflow-wrap: anywhere; }
+    .unknown-meta { color: var(--text-secondary); margin-left: auto; text-align: right; font-size: 12px; flex-shrink: 0; }
+    .print-btn {
+      width: 100%; padding: 12px; font-size: 16px; font-weight: bold; margin-top: 8px;
+      color: var(--primary); background: var(--card-bg);
+      border: 1px solid var(--primary); border-radius: 8px; cursor: pointer;
+    }
+    #printArea { display: none; }
+    @media print {
+      @page { size: A4 portrait; margin: 12mm; }
+      body.print-summary { background: #fff; color: #000; padding: 0; }
+      body.print-summary > *:not(#printArea) { display: none !important; }
+      body.print-summary #printArea { display: block; }
+      .print-title { font-size: 18px; font-weight: bold; text-align: center; margin-bottom: 4px; }
+      .print-sub { font-size: 12px; text-align: center; margin-bottom: 8px; }
+      .print-groups { display: flex; gap: 8px; align-items: flex-start; }
+      table.print-table { flex: 1; min-width: 0; border-collapse: collapse; font-size: 12px; }
+      .print-table th, .print-table td { border: 1px solid #000; padding: 3px 4px; color: #000; overflow-wrap: anywhere; }
+      .print-table th { background: #eeeeee; }
+      .print-table .num { text-align: center; width: 34px; }
+      .print-table .chk { text-align: center; width: 26px; }
+      .print-table tr { page-break-inside: avoid; }
+      .print-total { margin-top: 8px; font-size: 13px; font-weight: bold; text-align: right; }
+    }
   </style>
 </head>
 <body>
-  <!-- 月払いの画面（Apps Script）をアプリの中に表示する -->
-  <iframe id="payFrame" title="月払い"></iframe>
+  <div class="header-row">
+    <button id="refreshBtn" class="refresh-btn" title="更新" aria-label="更新">⟳</button>
+    <h1>出勤確認</h1>
+    <button id="moreBtn" class="more-btn" title="メニュー" aria-label="メニュー">⋮</button>
+    <div id="moreMenu" class="more-menu" hidden>
+      <a id="payLink" href="pay.html">月払い</a>
+    </div>
+  </div>
+  <div class="subtitle" id="subtitle">年月を選択してください</div>
+
+  <div class="mode-toggle">
+    <button id="modePersonal" class="active">個人検索</button>
+    <button id="modeWeekly">週払い</button>
+  </div>
+
+  <div class="field">
+    <label>年月</label>
+    <select id="monthSelect">
+      <option value="">選択してください</option>
+    </select>
+  </div>
+
+  <div class="field" id="nameField">
+    <label>名前</label>
+    <select id="nameSelect" disabled>
+      <option value="">先に年月を選択</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <label>期間</label>
+    <select id="periodSelect" disabled>
+      <option value="全">全</option>
+    </select>
+  </div>
+  <div class="period-info" id="periodInfo"></div>
+
+  <button id="searchBtn">検索</button>
+
+  <div class="counts" id="counts">
+    <div class="count-box day">
+      <div class="label">日勤</div>
+      <div class="num" id="dayCount">0</div>
+    </div>
+    <div class="count-box night">
+      <div class="label">夜勤</div>
+      <div class="num" id="nightCount">0</div>
+    </div>
+    <div class="count-box">
+      <div class="label">合計</div>
+      <div class="num" id="totalCount">0</div>
+    </div>
+  </div>
+  <div class="last-updated" id="lastUpdated"></div>
+
+  <div id="resultsArea"></div>
+  <div id="printArea"></div>
+
   <script>
-    // index.html の API_URL と同じURL
     var API_URL = "https://script.google.com/macros/s/AKfycbwaakQiOZkfCQaPa6gdRa0qWEpOrnmW_HdDtY4nrzulSVaraO_4tgMQTvUYhjTDoA5a/exec";
-    var back = new URL('./', location.href).href;
-    document.getElementById('payFrame').src = API_URL + '?page=pay&back=' + encodeURIComponent(back);
+
+    var jsonpCounter = 0;
+    function jsonp(params) {
+      return new Promise(function (resolve, reject) {
+        var callbackName = 'jsonp_cb_' + (jsonpCounter++);
+        var allParams = Object.assign({}, params, { callback: callbackName });
+        var qs = Object.keys(allParams).map(function (k) {
+          return encodeURIComponent(k) + '=' + encodeURIComponent(allParams[k]);
+        }).join('&');
+
+        var script = document.createElement('script');
+        var timeoutId = setTimeout(function () {
+          cleanup();
+          reject(new Error('タイムアウトしました'));
+        }, 15000);
+
+        function cleanup() {
+          delete window[callbackName];
+          if (script.parentNode) script.parentNode.removeChild(script);
+          clearTimeout(timeoutId);
+        }
+
+        window[callbackName] = function (data) {
+          cleanup();
+          resolve(data);
+        };
+
+        script.src = API_URL + '?' + qs;
+        script.onerror = function () {
+          cleanup();
+          reject(new Error('通信エラーが発生しました'));
+        };
+        document.body.appendChild(script);
+      });
+    }
+
+    function formatToday() {
+      var d = new Date();
+      var youbi = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
+      var mm = ('0' + (d.getMonth() + 1)).slice(-2);
+      var dd = ('0' + d.getDate()).slice(-2);
+      return d.getFullYear() + '年' + mm + '月' + dd + '日(' + youbi + ')';
+    }
+
+    function getCurrentYm() {
+      var d = new Date();
+      return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2);
+    }
+
+    function loadMonths() {
+      jsonp({ action: 'months' }).then(function (months) {
+        var sel = document.getElementById('monthSelect');
+        if (!months || months.length === 0) {
+          sel.innerHTML = '<option value="">月一覧が空です</option>';
+          return;
+        }
+        var currentYm = getCurrentYm();
+        var matchId = '';
+        months.forEach(function (m) {
+          var opt = document.createElement('option');
+          opt.value = m.id;
+          opt.textContent = m.label;
+          sel.appendChild(opt);
+          if (m.ym === currentYm) matchId = m.id;
+        });
+        if (matchId) {
+          sel.value = matchId;
+          onMonthChange();
+        }
+      }).catch(function (err) {
+        document.getElementById('monthSelect').innerHTML =
+          '<option value="">エラー: ' + err.message + '</option>';
+      });
+    }
+
+    var periodMeta = {};
+    var currentMode = 'personal';
+    var lastSummary = null;
+
+    function updatePeriodInfo() {
+      var val = document.getElementById('periodSelect').value;
+      if (!val || val === '全') {
+        document.getElementById('periodInfo').textContent = '';
+        return;
+      }
+      var startLabel = periodMeta[val] || '';
+      var text = startLabel ? (startLabel + '〜' + val) : val;
+      document.getElementById('periodInfo').textContent = '表示期間: ' + text;
+    }
+
+    function resetResults() {
+      document.getElementById('resultsArea').innerHTML = '';
+      document.getElementById('dayCount').textContent = 0;
+      document.getElementById('nightCount').textContent = 0;
+      document.getElementById('totalCount').textContent = 0;
+      document.getElementById('lastUpdated').textContent = '';
+      lastSummary = null;
+      document.body.classList.remove('print-summary');
+    }
+
+    function setMode(mode) {
+      currentMode = mode;
+      document.getElementById('modePersonal').classList.toggle('active', mode === 'personal');
+      document.getElementById('modeWeekly').classList.toggle('active', mode === 'weekly');
+      document.getElementById('nameField').style.display = mode === 'personal' ? '' : 'none';
+      document.getElementById('counts').style.display = mode === 'personal' ? '' : 'none';
+      resetResults();
+    }
+
+    function onMonthChange() {
+      var monthSel = document.getElementById('monthSelect');
+      var monthId = monthSel.value;
+      var nameSel = document.getElementById('nameSelect');
+      var periodSel = document.getElementById('periodSelect');
+
+      resetResults();
+      document.getElementById('periodInfo').textContent = '';
+
+      if (!monthId) {
+        nameSel.disabled = true;
+        periodSel.disabled = true;
+        nameSel.innerHTML = '<option value="">先に年月を選択</option>';
+        return;
+      }
+
+      nameSel.innerHTML = '<option value="">読み込み中...</option>';
+      periodSel.innerHTML = '<option value="全">全</option>';
+      nameSel.disabled = true;
+      periodSel.disabled = true;
+
+      jsonp({ action: 'names', month: monthId }).then(function (names) {
+        nameSel.innerHTML = '<option value="">選択してください</option>';
+        names.forEach(function (n) {
+          var opt = document.createElement('option');
+          opt.value = n;
+          opt.textContent = n;
+          nameSel.appendChild(opt);
+        });
+        nameSel.disabled = false;
+      }).catch(function (err) {
+        nameSel.innerHTML = '<option value="">エラー: ' + err.message + '</option>';
+      });
+
+      jsonp({ action: 'periods', month: monthId }).then(function (periods) {
+        periodSel.innerHTML = '';
+        periodMeta = {};
+        periods.forEach(function (p) {
+          var opt = document.createElement('option');
+          opt.value = p.label;
+          opt.textContent = p.label;
+          if (p.label === '全') opt.selected = true;
+          periodSel.appendChild(opt);
+          periodMeta[p.label] = p.startLabel;
+        });
+        periodSel.disabled = false;
+        updatePeriodInfo();
+      }).catch(function (err) {
+        periodSel.innerHTML = '<option value="">エラー: ' + err.message + '</option>';
+      });
+    }
+
+    function updateLastUpdated() {
+      var d = new Date();
+      var hh = ('0' + d.getHours()).slice(-2);
+      var mm = ('0' + d.getMinutes()).slice(-2);
+      document.getElementById('lastUpdated').textContent = '最終更新: ' + hh + ':' + mm;
+    }
+
+    function doSearch(forceRefresh) {
+      var monthId = document.getElementById('monthSelect').value;
+      var name = document.getElementById('nameSelect').value;
+      var period = document.getElementById('periodSelect').value;
+      var resultsArea = document.getElementById('resultsArea');
+
+      if (!monthId) {
+        resultsArea.innerHTML = '<div class="empty">年月を選択してください</div>';
+        return Promise.resolve();
+      }
+      if (!name) {
+        resultsArea.innerHTML = '<div class="empty">名前を選択してください</div>';
+        document.getElementById('dayCount').textContent = 0;
+        document.getElementById('nightCount').textContent = 0;
+        document.getElementById('totalCount').textContent = 0;
+        return Promise.resolve();
+      }
+
+      resultsArea.innerHTML = '<div class="loading">検索中...</div>';
+
+      return jsonp({
+        action: 'search',
+        month: monthId,
+        name: name,
+        period: period,
+        refresh: forceRefresh ? '1' : '0'
+      }).then(function (data) {
+        document.getElementById('dayCount').textContent = data.dayCount;
+        document.getElementById('nightCount').textContent = data.nightCount;
+        document.getElementById('totalCount').textContent = data.dayCount + data.nightCount;
+        updateLastUpdated();
+
+        if (data.results.length === 0) {
+          resultsArea.innerHTML = '<div class="empty">該当するデータがありません</div>';
+          return;
+        }
+
+        var grouped = [];
+        data.results.forEach(function (row) {
+          var last = grouped[grouped.length - 1];
+          if (last && last.row[0] === row[0] && last.row[1] === row[1] && last.row[2] === row[2]) {
+            last.count++;
+          } else {
+            grouped.push({ row: row, count: 1 });
+          }
+        });
+
+        var html = '';
+        grouped.forEach(function (g) {
+          var row = g.row;
+          var date = row[0], shift = row[1], address = row[2], isAlert = row[3], alertColor = row[4];
+          var badgeClass = shift === '夜' ? 'night' : 'day';
+          var addressClass = isAlert ? 'address alert' : 'address';
+          var alertStyle = isAlert && alertColor ? ' style="color:' + alertColor + '"' : '';
+          var timesHtml = g.count > 1 ? '<span class="times">×' + g.count + '</span>' : '';
+          html += '<div class="card">' +
+            '<span class="badge ' + badgeClass + '">' + shift + '</span>' +
+            '<div class="info">' +
+              '<div class="date">' + date + timesHtml + '</div>' +
+              '<div class="' + addressClass + '"' + alertStyle + '>' + address + '</div>' +
+            '</div></div>';
+        });
+        resultsArea.innerHTML = html;
+      }).catch(function (err) {
+        resultsArea.innerHTML = '<div class="empty">エラー: ' + err.message + '</div>';
+      });
+    }
+
+    var PAID_STORAGE_KEY = 'weeklyPaidChecks';
+
+    function loadPaid() {
+      try {
+        return JSON.parse(localStorage.getItem(PAID_STORAGE_KEY) || '{}') || {};
+      } catch (e) {
+        return {};
+      }
+    }
+
+    function savePaid(obj) {
+      try {
+        localStorage.setItem(PAID_STORAGE_KEY, JSON.stringify(obj));
+      } catch (e) {}
+    }
+
+    function paidKey(monthId, period, name) {
+      return monthId + '|' + period + '|' + name;
+    }
+
+    function makeSpan(className, text) {
+      var el = document.createElement('span');
+      el.className = className;
+      el.textContent = text;
+      return el;
+    }
+
+    function makeCell(tag, text, cls) {
+      var el = document.createElement(tag);
+      el.textContent = text;
+      if (cls) el.className = cls;
+      return el;
+    }
+
+    function buildPrintArea() {
+      if (!lastSummary) return;
+
+      var monthSel = document.getElementById('monthSelect');
+      var monthOpt = monthSel.options[monthSel.selectedIndex];
+      var monthLabel = monthOpt ? monthOpt.textContent : '';
+      var periodText = lastSummary.period === '全'
+        ? '期間: 全'
+        : (document.getElementById('periodInfo').textContent || ('期間: ' + lastSummary.period));
+      var paid = loadPaid();
+      var rows = lastSummary.rows;
+
+      var area = document.getElementById('printArea');
+      area.innerHTML = '';
+
+      var title = document.createElement('div');
+      title.className = 'print-title';
+      title.textContent = '週払い一覧';
+      area.appendChild(title);
+
+      var sub = document.createElement('div');
+      sub.className = 'print-sub';
+      sub.textContent = monthLabel + '　' + periodText + '　印刷日: ' + formatToday();
+      area.appendChild(sub);
+
+      var groupCount = Math.min(3, Math.max(1, Math.ceil(rows.length / 36)));
+      var perGroup = Math.ceil(rows.length / groupCount);
+
+      var groups = document.createElement('div');
+      groups.className = 'print-groups';
+
+      var sumDay = 0;
+      var sumNight = 0;
+
+      for (var g = 0; g < groupCount; g++) {
+        var chunk = rows.slice(g * perGroup, (g + 1) * perGroup);
+        if (chunk.length === 0) continue;
+
+        var table = document.createElement('table');
+        table.className = 'print-table';
+
+        var thead = document.createElement('thead');
+        var headRow = document.createElement('tr');
+        headRow.appendChild(makeCell('th', '名前', ''));
+        headRow.appendChild(makeCell('th', '日勤', 'num'));
+        headRow.appendChild(makeCell('th', '夜勤', 'num'));
+        headRow.appendChild(makeCell('th', '合計', 'num'));
+        headRow.appendChild(makeCell('th', '済', 'chk'));
+        thead.appendChild(headRow);
+        table.appendChild(thead);
+
+        var tbody = document.createElement('tbody');
+        chunk.forEach(function (r) {
+          sumDay += r.day;
+          sumNight += r.night;
+          var key = paidKey(lastSummary.monthId, lastSummary.period, r.name);
+          var tr = document.createElement('tr');
+          tr.appendChild(makeCell('td', r.name, ''));
+          tr.appendChild(makeCell('td', r.day, 'num'));
+          tr.appendChild(makeCell('td', r.night, 'num'));
+          tr.appendChild(makeCell('td', r.total, 'num'));
+          tr.appendChild(makeCell('td', paid[key] ? '☑' : '☐', 'chk'));
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        groups.appendChild(table);
+      }
+      area.appendChild(groups);
+
+      var total = document.createElement('div');
+      total.className = 'print-total';
+      total.textContent = '合計 ' + rows.length + '名　日勤 ' + sumDay + '　夜勤 ' + sumNight + '　合計 ' + (sumDay + sumNight);
+      area.appendChild(total);
+    }
+
+    function printSummary() {
+      if (!lastSummary) return;
+      buildPrintArea();
+      document.body.classList.add('print-summary');
+      window.print();
+    }
+
+    window.addEventListener('afterprint', function () {
+      document.body.classList.remove('print-summary');
+    });
+
+    function renderUnknown(unknown) {
+      if (!unknown || unknown.length === 0) return;
+      var resultsArea = document.getElementById('resultsArea');
+
+      var card = document.createElement('details');
+      card.className = 'unknown-card';
+
+      var summary = document.createElement('summary');
+      summary.textContent = '⚠ 名簿(F列)にない名前 ' + unknown.length + '件';
+      card.appendChild(summary);
+
+      var note = document.createElement('div');
+      note.className = 'unknown-note';
+      note.textContent = '週払いの一覧に入っていません。新しい人や、表記の違い・入力ミスの可能性があります。';
+      card.appendChild(note);
+
+      unknown.forEach(function (u) {
+        var row = document.createElement('div');
+        row.className = 'unknown-item';
+        row.appendChild(makeSpan('unknown-name', u.name));
+        var where = u.where.join('、') + (u.count > u.where.length && u.where.length >= 3 ? ' ほか' : '');
+        row.appendChild(makeSpan('unknown-meta', u.count + '回: ' + where));
+        card.appendChild(row);
+      });
+
+      resultsArea.appendChild(card);
+    }
+
+    function renderSummary(rows, monthId, period, unknown) {
+      var resultsArea = document.getElementById('resultsArea');
+      resultsArea.innerHTML = '';
+      renderUnknown(unknown);
+
+      if (!rows || rows.length === 0) {
+        lastSummary = null;
+        var empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = '該当するデータがありません';
+        resultsArea.appendChild(empty);
+        return;
+      }
+
+      lastSummary = { rows: rows, monthId: monthId, period: period };
+
+      var paid = loadPaid();
+
+      var head = document.createElement('div');
+      head.className = 'sum-head';
+      head.appendChild(makeSpan('sum-name', '名前'));
+      head.appendChild(makeSpan('sum-num', '日勤'));
+      head.appendChild(makeSpan('sum-num', '夜勤'));
+      head.appendChild(makeSpan('sum-num', '合計'));
+      head.appendChild(makeSpan('sum-check', '済'));
+      resultsArea.appendChild(head);
+
+      rows.forEach(function (r) {
+        var key = paidKey(monthId, period, r.name);
+        var row = document.createElement('div');
+        row.className = 'sum-row' + (paid[key] ? ' paid' : '');
+
+        row.appendChild(makeSpan('sum-name', r.name));
+        row.appendChild(makeSpan('sum-num day', r.day));
+        row.appendChild(makeSpan('sum-num night', r.night));
+        row.appendChild(makeSpan('sum-num', r.total));
+
+        var checkWrap = document.createElement('span');
+        checkWrap.className = 'sum-check';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = !!paid[key];
+        cb.addEventListener('change', function () {
+          var p = loadPaid();
+          if (cb.checked) p[key] = 1;
+          else delete p[key];
+          savePaid(p);
+          row.classList.toggle('paid', cb.checked);
+        });
+        checkWrap.appendChild(cb);
+        row.appendChild(checkWrap);
+
+        resultsArea.appendChild(row);
+      });
+
+      var printBtn = document.createElement('button');
+      printBtn.className = 'print-btn';
+      printBtn.textContent = '印刷';
+      printBtn.addEventListener('click', printSummary);
+      resultsArea.appendChild(printBtn);
+    }
+
+    function doSummary(forceRefresh) {
+      var monthId = document.getElementById('monthSelect').value;
+      var period = document.getElementById('periodSelect').value;
+      var resultsArea = document.getElementById('resultsArea');
+
+      if (!monthId) {
+        resultsArea.innerHTML = '<div class="empty">年月を選択してください</div>';
+        return Promise.resolve();
+      }
+
+      resultsArea.innerHTML = '<div class="loading">集計中...</div>';
+
+      return jsonp({
+        action: 'summary',
+        month: monthId,
+        period: period,
+        refresh: forceRefresh ? '1' : '0'
+      }).then(function (data) {
+        updateLastUpdated();
+        renderSummary(data.rows, monthId, period, data.unknown);
+      }).catch(function (err) {
+        resultsArea.innerHTML = '<div class="empty">エラー: ' + err.message + '</div>';
+      });
+    }
+
+    function doAction(forceRefresh) {
+      return currentMode === 'weekly' ? doSummary(forceRefresh) : doSearch(forceRefresh);
+    }
+
+    function doRefresh() {
+      var btn = document.getElementById('refreshBtn');
+      if (btn.disabled) return;
+      btn.disabled = true;
+      btn.classList.add('spinning');
+      doAction(true).then(function () {
+        btn.classList.remove('spinning');
+        btn.disabled = false;
+      });
+    }
+
+    document.getElementById('modePersonal').addEventListener('click', function () { setMode('personal'); });
+    document.getElementById('modeWeekly').addEventListener('click', function () { setMode('weekly'); });
+    document.getElementById('monthSelect').addEventListener('change', onMonthChange);
+    document.getElementById('periodSelect').addEventListener('change', updatePeriodInfo);
+    document.getElementById('searchBtn').addEventListener('click', function () { doAction(false); });
+    document.getElementById('refreshBtn').addEventListener('click', doRefresh);
+    document.getElementById('subtitle').textContent = formatToday();
+    loadMonths();
+
+    // ⋮ メニュー（月払い）
+    document.getElementById('moreBtn').addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      var menu = document.getElementById('moreMenu');
+      menu.hidden = !menu.hidden;
+    });
+    document.addEventListener('click', function () {
+      document.getElementById('moreMenu').hidden = true;
+    });
   </script>
 </body>
 </html>
