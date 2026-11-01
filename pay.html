@@ -37,7 +37,8 @@
     });
 
     var back = new URL('./', location.href).href;
-    document.getElementById('payFrame').src = API_URL + '?page=pay&back=' + encodeURIComponent(back);
+        var view = new URLSearchParams(location.search).get('view') === 'bill' ? '&view=bill' : '';
+    document.getElementById('payFrame').src = API_URL + '?page=pay' + view + '&back=' + encodeURIComponent(back);
   </script>
 </body>
 </html>
