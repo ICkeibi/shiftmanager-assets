@@ -37,8 +37,12 @@
     });
 
     var back = new URL('./', location.href).href;
-        var view = new URLSearchParams(location.search).get('view') === 'bill' ? '&view=bill' : '';
-    document.getElementById('payFrame').src = API_URL + '?page=pay' + view + '&back=' + encodeURIComponent(back);
+    var view = new URLSearchParams(location.search).get('view') === 'bill' ? '&view=bill' : '';
+    // ログインを # に付けて渡す（# の後ろはサーバーに送られない。iPhone でもログインが続くように）
+    var saved = '';
+    try { saved = localStorage.getItem(TOKEN_KEY) || ''; } catch (e) {}
+    document.getElementById('payFrame').src = API_URL + '?page=pay' + view + '&back=' + encodeURIComponent(back) +
+      (saved ? '#t=' + encodeURIComponent(saved) : '');
   </script>
 </body>
 </html>
