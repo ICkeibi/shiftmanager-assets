@@ -148,6 +148,19 @@
     }
     .sum-total .sum-name { font-size: 15px; }
     .sum-total-note { text-align: right; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; }
+    /* 週払い：名前を押すと、その人の勤務（個人検索と同じ）を下に開く */
+    .sum-row .sum-name.link { cursor: pointer; color: var(--primary); }
+    .sum-row .sum-name.link::after { content: ' ▸'; font-size: 12px; }
+    .sum-row.open .sum-name.link::after { content: ' ▾'; }
+    .sum-detail { margin: -2px 0 10px 14px; padding-left: 10px; border-left: 3px solid var(--primary); }
+    .sum-detail .card { box-shadow: none; border: 1px solid var(--border, #ddd); padding: 8px 10px; margin-bottom: 6px; }
+    .sum-detail .detail-count { font-size: 12px; color: var(--text-secondary); margin: 4px 0 6px; }
+    .sum-detail .empty, .sum-detail .loading { padding: 8px 0; }
+    .name-filter { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; }
+    .name-filter input { flex: 1; min-width: 0; padding: 10px 12px; font-size: 16px; border-radius: 8px;
+      border: 1px solid var(--border, #ccc); background: var(--card-bg); color: inherit; }
+    .name-filter .filter-info { font-size: 13px; color: var(--text-secondary); min-width: 32px; text-align: right; }
+    .sum-item[hidden] { display: none; }
     .unknown-card {
       background: var(--card-bg); border: 1px solid #E67E22; border-radius: 8px;
       padding: 10px 12px; margin-bottom: 12px; font-size: 13px;
@@ -445,39 +458,59 @@
         document.getElementById('totalCount').textContent = data.dayCount + data.nightCount;
         updateLastUpdated();
 
-        if (data.results.length === 0) {
-          resultsArea.innerHTML = '<div class="empty">該当するデータがありません</div>';
-          return;
-        }
-
-        var grouped = [];
-        data.results.forEach(function (row) {
-          var last = grouped[grouped.length - 1];
-          if (last && last.row[0] === row[0] && last.row[1] === row[1] && last.row[2] === row[2]) {
-            last.count++;
-          } else {
-            grouped.push({ row: row, count: 1 });
-          }
-        });
-
-        var html = '';
-        grouped.forEach(function (g) {
-          var row = g.row;
-          var date = row[0], shift = row[1], address = row[2], isAlert = row[3], alertColor = row[4];
-          var badgeClass = shift === '夜' ? 'night' : 'day';
-          var addressClass = isAlert ? 'address alert' : 'address';
-          var alertStyle = isAlert && alertColor ? ' style="color:' + alertColor + '"' : '';
-          var timesHtml = g.count > 1 ? '<span class="times">×' + g.count + '</span>' : '';
-          html += '<div class="card">' +
-            '<span class="badge ' + badgeClass + '">' + shift + '</span>' +
-            '<div class="info">' +
-              '<div class="date">' + date + timesHtml + '</div>' +
-              '<div class="' + addressClass + '"' + alertStyle + '>' + address + '</div>' +
-            '</div></div>';
-        });
-        resultsArea.innerHTML = html;
+        resultsArea.innerHTML = searchCardsHtml(data.results);
       }).catch(function (err) {
         resultsArea.innerHTML = '<div class="empty">エラー: ' + err.message + '</div>';
+      });
+    }
+
+    // 個人検索の結果（1日ずつのカード）。週払いで名前を押したときにも使う
+    function searchCardsHtml(results) {
+      if (!results || results.length === 0) return '<div class="empty">該当するデータがありません</div>';
+      var grouped = [];
+      results.forEach(function (row) {
+        var last = grouped[grouped.length - 1];
+        if (last && last.row[0] === row[0] && last.row[1] === row[1] && last.row[2] === row[2]) {
+          last.count++;
+        } else {
+          grouped.push({ row: row, count: 1 });
+        }
+      });
+      var html = '';
+      grouped.forEach(function (g) {
+        var row = g.row;
+        var date = row[0], shift = row[1], address = row[2], isAlert = row[3], alertColor = row[4];
+        var badgeClass = shift === '夜' ? 'night' : 'day';
+        var addressClass = isAlert ? 'address alert' : 'address';
+        var alertStyle = isAlert && alertColor ? ' style="color:' + alertColor + '"' : '';
+        var timesHtml = g.count > 1 ? '<span class="times">×' + g.count + '</span>' : '';
+        html += '<div class="card">' +
+          '<span class="badge ' + badgeClass + '">' + shift + '</span>' +
+          '<div class="info">' +
+            '<div class="date">' + date + timesHtml + '</div>' +
+            '<div class="' + addressClass + '"' + alertStyle + '>' + address + '</div>' +
+          '</div></div>';
+      });
+      return html;
+    }
+
+    // 週払い：名前を押すと、その人の勤務の内訳（個人検索と同じ）をすぐ下に開く。もう一度押すと閉じる
+    var detailCache = {};
+    function toggleDetail(r, row, detail, monthId, period) {
+      var open = detail.hidden;
+      detail.hidden = !open;
+      row.classList.toggle('open', open);
+      if (!open) return Promise.resolve();
+      var key = monthId + '|' + period + '|' + r.name;
+      if (detailCache[key]) { detail.innerHTML = detailCache[key]; return Promise.resolve(); }
+      detail.innerHTML = '<div class="loading">読み込み中...</div>';
+      return jsonp({ action: 'search', month: monthId, name: r.name, period: period, refresh: '0' }).then(function (data) {
+        var html = '<div class="detail-count">日勤 ' + data.dayCount + '・夜勤 ' + data.nightCount + '・合計 ' + (data.dayCount + data.nightCount) + '</div>' +
+          searchCardsHtml(data.results);
+        detailCache[key] = html;
+        detail.innerHTML = html;
+      }).catch(function (err) {
+        detail.innerHTML = '<div class="empty">エラー: ' + err.message + '</div>';
       });
     }
 
@@ -698,7 +731,24 @@
       head.appendChild(makeSpan('sum-num', '夜勤'));
       head.appendChild(makeSpan('sum-num', '合計'));
       head.appendChild(makeSpan('sum-check', '済'));
+
+      // 名前の絞り込み（入れた文字を含む人だけ出す。空なら全員）
+      var filterWrap = document.createElement('div');
+      filterWrap.className = 'name-filter';
+      var filterInput = document.createElement('input');
+      filterInput.type = 'search';
+      filterInput.placeholder = '名前で絞り込む（例：石）';
+      filterInput.setAttribute('aria-label', '名前で絞り込む');
+      var filterInfo = document.createElement('span');
+      filterInfo.className = 'filter-info';
+      filterWrap.appendChild(filterInput);
+      filterWrap.appendChild(filterInfo);
+      resultsArea.appendChild(filterWrap);
       resultsArea.appendChild(head);
+
+      // 週払いの人の入れ物（「済」にした人は下へ、外した人は「済」の人たちの上へ動かす）
+      var weeklyBox = document.createElement('div');
+      var items = [];
 
       function addRow(r, isMon) {
         var key = paidKey(monthId, period, r.name);
@@ -715,7 +765,10 @@
         typeWrap.appendChild(tb);
         row.appendChild(typeWrap);
 
-        row.appendChild(makeSpan('sum-name', r.name));
+        var nameEl = makeSpan('sum-name link', r.name);
+        nameEl.setAttribute('role', 'button');
+        nameEl.title = '押すと勤務の内訳を開きます';
+        row.appendChild(nameEl);
         row.appendChild(makeSpan('sum-num day', r.day));
         row.appendChild(makeSpan('sum-num night', r.night));
         row.appendChild(makeSpan('sum-num', r.total));
@@ -732,14 +785,52 @@
             else delete p[key];
             savePaid(p);
             row.classList.toggle('paid', cb.checked);
+            item.classList.toggle('paid', cb.checked);
+            // 「済」にした人は一番下へ。外した人は「済」の人たちのすぐ上へ
+            var firstPaid = null;
+            Array.prototype.some.call(weeklyBox.children, function (el) {
+              if (el !== item && el.classList.contains('paid')) { firstPaid = el; return true; }
+              return false;
+            });
+            if (cb.checked) weeklyBox.appendChild(item);
+            else weeklyBox.insertBefore(item, firstPaid);
           });
           checkWrap.appendChild(cb);
         }
         row.appendChild(checkWrap);
-        resultsArea.appendChild(row);
+        var item = document.createElement('div');
+        item.className = 'sum-item' + (!isMon && paid[key] ? ' paid' : '');
+        item.appendChild(row);
+        var detail = document.createElement('div');
+        detail.className = 'sum-detail';
+        detail.hidden = true;
+        item.appendChild(detail);
+        (isMon ? resultsArea : weeklyBox).appendChild(item);
+        var toggle = function () { return toggleDetail(r, row, detail, monthId, period); };
+        nameEl.addEventListener('click', toggle);
+        items.push({ el: item, name: r.name });
       }
 
-      weekly.forEach(function (r) { addRow(r, false); });
+      // 「済」でない人を上に、「済」の人を下に（それぞれは今までの順番のまま）
+      var isPaid = function (r) { return !!paid[paidKey(monthId, period, r.name)]; };
+      weekly.filter(function (r) { return !isPaid(r); }).concat(weekly.filter(isPaid))
+        .forEach(function (r) { addRow(r, false); });
+      resultsArea.appendChild(weeklyBox);
+
+      // 絞り込み：空白は無視、ひらがな・カタカナ、全角・半角の違いも気にしない
+      var normName = function (s) {
+        return String(s || '').normalize('NFKC').replace(/[\s　]/g, '').toLowerCase()
+          .replace(/[ァ-ヶ]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0x60); });
+      };
+      filterInput.addEventListener('input', function () {
+        var q = normName(filterInput.value), shown = 0;
+        items.forEach(function (x) {
+          var hit = !q || normName(x.name).indexOf(q) >= 0;
+          x.el.hidden = !hit;
+          if (hit) shown++;
+        });
+        filterInfo.textContent = q ? shown + '人' : '';
+      });
 
       // 週払いの合計（週払いの最後の人のすぐ下）
       var sumDay = 0, sumNight = 0;
@@ -786,6 +877,7 @@
       }
 
       resultsArea.innerHTML = '<div class="loading">集計中...</div>';
+      if (forceRefresh) detailCache = {};   // ⟳ で読み直したときは、開いた内訳も読み直す
 
       var types = jsonp({ action: 'payTypes' }).catch(function () { return { monthly: [] }; });
       return Promise.all([jsonp({
