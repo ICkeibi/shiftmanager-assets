@@ -37,7 +37,8 @@
     });
 
     var back = new URL('./', location.href).href;
-    var view = new URLSearchParams(location.search).get('view') === 'bill' ? '&view=bill' : '';
+    var v = new URLSearchParams(location.search).get('view');
+    var view = v === 'bill' || v === 'ot' ? '&view=' + v : '';
     // ログインを # に付けて渡す（# の後ろはサーバーに送られない。iPhone でもログインが続くように）
     var saved = '';
     try { saved = localStorage.getItem(TOKEN_KEY) || ''; } catch (e) {}
