@@ -38,7 +38,7 @@
 
     var back = new URL('./', location.href).href;
     var v = new URLSearchParams(location.search).get('view');
-    var view = v === 'bill' || v === 'ot' ? '&view=' + v : '';
+    var view = ['bill', 'ot', 'chart'].indexOf(v) >= 0 ? '&view=' + v : '';
     // ログインを # に付けて渡す（# の後ろはサーバーに送られない。iPhone でもログインが続くように）
     var saved = '';
     try { saved = localStorage.getItem(TOKEN_KEY) || ''; } catch (e) {}
