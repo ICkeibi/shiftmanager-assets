@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>管理画面</title>
+  <link rel="icon" type="image/png" href="icon.png">
+  <style>
+    html, body { margin: 0; height: 100%; background: #f3f5f8; }
+    @media (prefers-color-scheme: dark) { html, body { background: #14171c; } }
+    iframe { display: block; width: 100%; height: 100%; border: 0; }
+  </style>
+</head>
+<body>
+  <!-- パソコン用の管理画面（Apps Script）をこのページの中に表示する -->
+  <iframe id="adminFrame" title="管理画面"></iframe>
+  <script>
+    // index.html の API_URL と同じURL
+    var API_URL = "https://script.google.com/macros/s/AKfycbwaakQiOZkfCQaPa6gdRa0qWEpOrnmW_HdDtY4nrzulSVaraO_4tgMQTvUYhjTDoA5a/exec";
+    var TOKEN_KEY = 'payToken';
+
+    // ログイン（覚えた端末）を、このページ側に保存して中の画面に渡す（月払いの画面と共通）
+    window.addEventListener('message', function (ev) {
+      try { if (!/\.googleusercontent\.com$/.test(new URL(ev.origin).hostname)) return; } catch (e) { return; }
+      var msg = ev.data || {};
+      try {
+        if (msg.type === 'payHello') {
+          ev.source.postMessage({ type: 'payToken', token: localStorage.getItem(TOKEN_KEY) || '' }, ev.origin);
+        } else if (msg.type === 'paySave') {
+          if (msg.token) localStorage.setItem(TOKEN_KEY, msg.token);
+          else localStorage.removeItem(TOKEN_KEY);
+        }
+      } catch (e) {}
+    });
+
+    var back = new URL('./', location.href).href;
+    var saved = '';
+    try { saved = localStorage.getItem(TOKEN_KEY) || ''; } catch (e) {}
+    document.getElementById('adminFrame').src = API_URL + '?page=admin&back=' + encodeURIComponent(back) +
+      (saved ? '#t=' + encodeURIComponent(saved) : '');
+  </script>
+</body>
+</html>
