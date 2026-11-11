@@ -445,6 +445,11 @@
         Array.prototype.forEach.call(document.querySelectorAll('[data-sheet]'), function (a) { a.href = res.sheetUrl || '#'; a.target = '_blank'; });
         $('login').classList.add('hidden'); $('app').classList.remove('hidden');
         renderHome(res.home);
+        // 月払いなどの画面を、ホームを見ている間に裏で読み込んでおく（押したときにすぐ出るように）
+        setTimeout(function () {
+          var v = $('view');
+          if (!v.getAttribute('data-for')) { v.src = payUrl(''); v.setAttribute('data-for', 'pay'); }
+        }, 1500);
       }, function (msg) {
         if (String(cred).indexOf('t:') === 0) setToken('');
         showLogin(msg);
@@ -488,8 +493,12 @@
       if (where === 'billing') blOpen();
       var v = $('view');
       if (VIEW_URL[where]) {
-        var url = VIEW_URL[where]();
-        if (v.getAttribute('data-for') !== where) { v.src = url; v.setAttribute('data-for', where); }
+        // 一度読み込んだら、画面は読み直さずにタブだけ切り替える（月払い・会社別請求・残業・グラフは同じ画面）
+        if (v.getAttribute('data-for')) {
+          try { v.contentWindow.postMessage({ type: 'payTab', tab: where === 'pay' ? 'list' : where }, '*'); } catch (e) {}
+        } else {
+          v.src = VIEW_URL[where](); v.setAttribute('data-for', where);
+        }
         v.classList.remove('hidden');
       } else {
         v.classList.add('hidden');
