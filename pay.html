@@ -22,9 +22,25 @@
     var API_URL = "https://script.google.com/macros/s/AKfycbwaakQiOZkfCQaPa6gdRa0qWEpOrnmW_HdDtY4nrzulSVaraO_4tgMQTvUYhjTDoA5a/exec";
     var TOKEN_KEY = 'payToken';
 
+    // よそのページの枠の中に、この画面を表示させない（見えない枠に重ねて押させる攻撃を防ぐ）
+    if (window.top !== window.self) { document.documentElement.style.display = 'none'; throw new Error('framed'); }
+
     // 「この端末で覚える」のログインを、このアプリ側に保存して月払いの画面に渡す
+    //  ・この画面の中の枠（payFrame）から来たメッセージにだけ答える。
+    //    googleusercontent.com は誰でも Apps Script でページを置けるので、送り元のアドレスだけで信じると、
+    //    よそのページがこの画面を開いてログインを抜き取れてしまうため
+    function fromOurFrame(src) {
+      var frame = document.getElementById('payFrame').contentWindow, w = src;
+      for (var i = 0; w && i < 6; i++) {
+        if (w === frame) return true;
+        if (w === window || w === w.parent) return false;
+        w = w.parent;
+      }
+      return false;
+    }
     window.addEventListener('message', function (ev) {
-      if (!/\.googleusercontent\.com$/.test(new URL(ev.origin).hostname)) return;
+      try { if (!/\.googleusercontent\.com$/.test(new URL(ev.origin).hostname)) return; } catch (e) { return; }
+      if (!ev.source || !fromOurFrame(ev.source)) return;
       var msg = ev.data || {};
       try {
         if (msg.type === 'payHello') {
