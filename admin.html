@@ -222,6 +222,7 @@
       <a href="#" data-go="home" class="on" title="ホーム（今日やること）"><i data-icon="home"></i><span class="label">ホーム</span><span class="badge hidden" id="navBadge"></span></a>
       <a href="#" data-go="weekly" title="週払いの確認"><i data-icon="weekly"></i><span class="label">週払い</span></a>
       <a href="#" data-go="kintai" title="個人別集計・勤怠書き込み"><i data-icon="kintai"></i><span class="label">勤怠書き込み</span></a>
+      <a href="#" data-go="dakoku" title="勤怠打刻の反映"><i data-icon="stamp"></i><span class="label">打刻</span></a>
       <a href="#" data-go="salary" title="給与（弥生給与Next）"><i data-icon="salary"></i><span class="label">給与</span></a>
       <a href="#" data-go="billing" title="請求書・売上累計表"><i data-icon="billing"></i><span class="label">請求書</span></a>
       <a href="#" data-go="pay" title="月払い・給与明細"><i data-icon="pay"></i><span class="label">月払い</span></a>
@@ -268,7 +269,7 @@
                 <a class="mtile" data-goto="bill"><span class="ic" data-icon="bill"></span>会社別請求<small>スマホ画面</small></a>
                 <a class="mtile" data-goto="ot"><span class="ic" data-icon="ot"></span>定時後残業<small>残業代と請求</small></a>
                 <a class="mtile" data-goto="chart"><span class="ic" data-icon="chart"></span>グラフ<small>売上・人件費</small></a>
-                <a class="mtile soon" title="これから作ります"><span class="ic" data-icon="stamp"></span>勤怠打刻の反映<small>準備中</small></a>
+                <a class="mtile" data-goto="dakoku"><span class="ic" data-icon="stamp"></span>勤怠打刻の反映<small>打刻 → 勤怠管理表</small></a>
               </div>
             </div>
             <div class="panel">
@@ -332,6 +333,29 @@
             <div class="res" id="r3"></div></div><button class="btn" data-run="write">書き込む</button></div>
         </div>
       </div>
+      <!-- 勤怠打刻の反映 -->
+      <div class="page hidden" id="pDakoku">
+        <h2>勤怠打刻の反映</h2>
+        <div class="sub">勤怠管理システムの打刻（退勤済みの日）を、勤怠管理表の始業・終業に書きます。打刻を正として、出勤簿から書いた時刻と違えば書き換えます。打刻のない人・日は、今までどおり出勤簿から書いたままです。</div>
+        <div class="filters">
+          <label>対象の月<select id="dkMonth"></select></label>
+          <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="dkOnly" checked> 本人が確認（「認」に ✓）した日だけ反映する</label>
+        </div>
+        <div id="dkMsg"></div>
+        <div class="steps">
+          <div class="step"><div class="sn">1</div><div class="sb"><div class="t">勤怠管理システムのURL</div>
+            <div class="note" id="dkFile">読み込み中...</div>
+            <div style="margin-top:6px;display:flex;gap:6px"><input id="dkUrl" type="url" placeholder="https://docs.google.com/spreadsheets/d/…" style="flex:1;font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--text)">
+              <button class="btn" id="dkSaveUrl">保存</button></div>
+            <div class="res" id="d1"></div></div></div>
+          <div class="step"><div class="sn">2</div><div class="sb"><div class="t">確認する（まだ書き込みません）</div>
+            <div class="note">打刻の人数・日数と、「打刻対応」シートで勤怠管理表の氏名が決まっていない社員IDを出します。新しい社員IDは自動で足されるので、黄色・赤の行を確認してください。</div>
+            <div class="res" id="d2"></div></div><button class="btn" data-dk="check">確認する</button></div>
+          <div class="step"><div class="sn">3</div><div class="sb"><div class="t">勤怠管理表に反映する</div>
+            <div class="note">始業：定時（日勤 8:30・夜勤 19:30）より早い出勤は定時、遅い出勤は打刻の時刻（遅刻）。終業：退勤の時刻。出勤簿に残業の書き込みがなく、定時（17:30・4:30）を30分超えて遅いときは定時。残業は今までどおり勤怠管理表で計算されます。中全・中半・研修の日は書き換えません。</div>
+            <div class="res" id="d3"></div></div><button class="btn" data-dk="run">反映する</button></div>
+        </div>
+      </div>
       <!-- 給与（弥生給与Next） -->
       <div class="page hidden" id="pSalary">
         <h2>給与（弥生給与Next）</h2>
@@ -393,7 +417,7 @@
       ot: S('<circle cx="24" cy="25" r="17" stroke="' + B + '" stroke-width="3.5"/><path d="M24 14v11l8 6" stroke="' + G + '" stroke-width="4"/><path d="M19 4h10" stroke="' + B + '" stroke-width="3.5"/>'),
       chart: S('<path d="M6 42h36" stroke="' + B + '" stroke-width="3.5"/><rect x="9" y="26" width="7" height="13" rx="1.5" fill="' + B + '"/><rect x="20.5" y="16" width="7" height="23" rx="1.5" fill="' + G + '"/><rect x="32" y="8" width="7" height="31" rx="1.5" fill="' + B + '"/>'),
       sheet: S('<rect x="7" y="7" width="34" height="34" rx="4" stroke="' + G + '" stroke-width="3.5"/><path d="M7 18h34M7 29h34M20 7v34" stroke="' + B + '" stroke-width="3"/>'),
-      stamp: S('<circle cx="24" cy="22" r="14" stroke="#9aa0a6" stroke-width="3.5"/><path d="M24 13v9l6 4" stroke="#9aa0a6" stroke-width="3.5"/><path d="M12 42h24" stroke="#9aa0a6" stroke-width="3.5"/>')
+      stamp: S('<circle cx="24" cy="22" r="14" stroke="' + B + '" stroke-width="3.5"/><path d="M24 13v9l6 4" stroke="' + G + '" stroke-width="3.5"/><path d="M12 42h24" stroke="' + B + '" stroke-width="3.5"/>')
     };
     Array.prototype.forEach.call(document.querySelectorAll('[data-icon]'), function (el) { el.innerHTML = ICON[el.getAttribute('data-icon')] || ''; });
     // ロゴ（GitHub のアプリの icon.png）
@@ -487,6 +511,8 @@
       if (where === 'weekly') wkOpen();
       $('pKintai').classList.toggle('hidden', where !== 'kintai');
       if (where === 'kintai') kwOpen();
+      $('pDakoku').classList.toggle('hidden', where !== 'dakoku');
+      if (where === 'dakoku') dkOpen();
       $('pSalary').classList.toggle('hidden', where !== 'salary');
       if (where === 'salary') slOpen();
       $('pBilling').classList.toggle('hidden', where !== 'billing');
@@ -530,7 +556,16 @@
     function renderHome(h) {
       HOME = h;
       $('homeMsg').innerHTML = '';
-      $('todayLabel').textContent = '今日 ' + h.today + '　（' + h.madeAt + ' 時点）';
+      // 夜の計算（定時後残業・請求額）の結果。エラーがあれば、どの月の何かを出す
+      var nt = h.night, ntText = '';
+      if (nt) {
+        var ngs = (nt.results || []).filter(function (x) { return !x.ok; });
+        ntText = '　夜の計算 ' + nt.at + (ngs.length
+          ? ' でエラー：' + ngs.map(function (x) { return (x.k === 'ot' ? '残業 ' : '請求 ') + x.label + '（' + x.msg + '）'; }).join('、')
+          : ' 済');
+      }
+      $('todayLabel').textContent = '今日 ' + h.today + '　（' + h.madeAt + ' 時点）' + ntText;
+      $('todayLabel').style.color = nt && nt.ng ? '#c5221f' : '';
       var soon = h.tasks.filter(function (t) { return t.left > 0; }).length;
       $('sOver').textContent = h.overdue; $('sToday').textContent = h.dueToday; $('sSoon').textContent = soon;
       var urgent = h.overdue + h.dueToday;
@@ -824,6 +859,78 @@
           '　<a href="' + esc(r.kintaiUrl) + '" target="_blank" rel="noopener">勤怠管理表を開く ↗</a></div>' +
           (r.issues ? '<details style="margin-top:6px" open><summary>確認してほしいもの（' + r.issues + '件）</summary>' + issueTable(r.issueList, ['氏名', '日付', '昼夜', '結果', '内容']) + '</details>' : '');
       }, function (m) { kwBusy(false); $('r3').innerHTML = '<div class="msg err">' + esc(m) + '<br>もう一度「書き込む」を押すと、続きから書き込みます。</div>'; });
+    }
+
+    // ── 勤怠打刻の反映 ──
+    var DK = { init: false, busy: false };
+    function dkOpen() {
+      if (DK.init) return;
+      call('adminDakokuInit', [PIN, DEVICE], function (r) {
+        DK.init = true;
+        $('dkMonth').innerHTML = r.months.map(function (m) {
+          return '<option value="' + esc(m.label) + '">' + esc(m.label) + (m.hasKintai ? '' : '（勤怠管理表なし）') + '</option>';
+        }).join('');
+        $('dkMonth').selectedIndex = r.index;
+        dkShowFile(r.url, r.file);
+      }, function (m) { $('dkMsg').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+    }
+    function dkShowFile(url, file) {
+      $('dkUrl').value = url || '';
+      $('dkFile').innerHTML = url
+        ? '読むファイル：<b>' + esc(file) + '</b>（<a href="' + esc(url) + '" target="_blank" rel="noopener">開く ↗</a>）。変えるときだけ、下にURLを貼って「保存」を押します。'
+        : '<b style="color:#c5221f">まだ入っていません。</b>勤怠管理システムのスプレッドシートを開き、アドレス欄のURLを下に貼って「保存」を押してください。';
+    }
+    function dkBusy(on) {
+      DK.busy = on;
+      Array.prototype.forEach.call(document.querySelectorAll('#pDakoku button'), function (b) { b.disabled = on; });
+      $('dkMonth').disabled = on; $('dkOnly').disabled = on;
+    }
+    $('dkSaveUrl').addEventListener('click', function () {
+      if (DK.busy) return;
+      dkBusy(true); $('d1').innerHTML = '<div class="run">確認しています...</div>';
+      call('adminDakokuSetUrl', [PIN, DEVICE, $('dkUrl').value], function (r) {
+        dkBusy(false); dkShowFile(r.url, r.file);
+        $('d1').innerHTML = '<div class="ok">保存しました：' + esc(r.file) + '</div>';
+      }, function (m) { dkBusy(false); $('d1').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+    });
+    $('pDakoku').addEventListener('click', function (e) {
+      var b = e.target.closest('button[data-dk]');
+      if (!b || DK.busy) return;
+      var what = b.getAttribute('data-dk'), label = $('dkMonth').value, only = $('dkOnly').checked;
+      var out = what === 'check' ? $('d2') : $('d3');
+      dkBusy(true); out.innerHTML = '<div class="run">打刻を読んでいます...</div>';
+      call('adminDakoku', [PIN, DEVICE, label, only, true], function (p) {
+        var info = esc(p.src) + '：<b>' + p.people + '人・' + p.items + '件</b>を反映できます。' +
+          (only && p.unchecked ? '　本人の確認（✓）がまだの <b>' + p.unchecked + '件</b>は反映しません。' : '');
+        var unk = p.unknown.length
+          ? '<div class="msg err" style="margin-top:6px">勤怠管理表の氏名が決まっていない社員IDが <b>' + p.unknown.length + '人</b>あります（この人の打刻は反映しません）：' +
+            esc(p.unknown.join('、')) + '<br><a href="' + esc(p.mapUrl) + '" target="_blank" rel="noopener">「打刻対応」シートを開く ↗</a>（赤い行のC列に、勤怠管理表のシート名を入れてください）</div>'
+          : '<div style="margin-top:4px"><a href="' + esc(p.mapUrl) + '" target="_blank" rel="noopener">「打刻対応」シートを開く ↗</a>（黄色の行は自動で入れた氏名です。合っているか確認してください）</div>';
+        if (what === 'check') { dkBusy(false); out.innerHTML = '<div class="ok">' + info + '</div>' + unk; return; }
+        var msg = (p.resume ? '前回の続きから反映します（' + p.resume + ' / ' + p.people + ' 人は済み）。\n\n' : '') +
+          '「' + p.file + '」の ' + p.people + ' 人・' + p.items + ' 件に、' + p.label + ' の打刻を書きます。\n' +
+          '出勤簿から書いた時刻と違う日は、打刻の時刻に書き換えます（前の時刻は「打刻の反映結果」シートに残します）。\n\n実行しますか？';
+        if (!p.items) { dkBusy(false); out.innerHTML = '<div class="ok">' + info + '</div>' + unk; return; }
+        if (!confirm(msg)) { dkBusy(false); out.innerHTML = ''; return; }
+        dkRun(label, only);
+      }, function (m) { dkBusy(false); out.innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+    });
+    function dkRun(label, only) {
+      $('d3').innerHTML = '<div class="run">反映しています...（出勤簿も読むので1〜2分。この画面のままお待ちください）</div>';
+      call('adminDakoku', [PIN, DEVICE, label, only, false], function (r) {
+        if (!r.finished) {
+          $('d3').innerHTML = '<div class="run">反映しています... ' + r.done + ' / ' + r.total + ' 人（続きを自動で書きます）' +
+            '<div class="bar2"><div style="width:' + Math.round(r.done / r.total * 100) + '%"></div></div></div>';
+          setTimeout(function () { dkRun(label, only); }, 500);
+          return;
+        }
+        dkBusy(false);
+        $('d3').innerHTML = '<div class="ok">反映しました：<b>' + r.written + '件</b>（' + r.total + '人）。うち出勤簿の時刻から書き換えた日 <b>' + r.changed + '件</b>。' +
+          '　<a href="' + esc(r.resultUrl) + '" target="_blank" rel="noopener">「打刻の反映結果」シート ↗</a>' +
+          '　<a href="' + esc(r.kintaiUrl) + '" target="_blank" rel="noopener">勤怠管理表を開く ↗</a></div>' +
+          (r.changed ? '<details style="margin-top:6px"><summary>書き換えた日（' + r.changed + '件）</summary>' + issueTable(r.changedList, ['氏名', '日付', '昼夜', '結果', '内容']) + '</details>' : '') +
+          (r.issues ? '<details style="margin-top:6px" open><summary>確認してほしいもの（' + r.issues + '件）</summary>' + issueTable(r.issueList, ['氏名', '日付', '昼夜', '結果', '内容']) + '</details>' : '');
+      }, function (m) { dkBusy(false); $('d3').innerHTML = '<div class="msg err">' + esc(m) + '<br>もう一度「反映する」を押すと、続きから書きます。</div>'; });
     }
 
     // ── 給与（弥生給与Next） ──
