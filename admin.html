@@ -94,7 +94,7 @@
     .pgbar { position: relative; height: 18px; background: var(--bg); border-radius: 9px; overflow: hidden; margin-bottom: 12px; }
     .pgbar div { height: 100%; background: linear-gradient(90deg, var(--brand2), #66bb6a); border-radius: 9px; transition: width .3s; }
     .pgbar span { position: absolute; inset: 0; text-align: center; font-size: 11px; line-height: 18px; font-weight: bold; color: var(--text); }
-    .pgsteps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .pgsteps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
     .pgstep { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 13px; display: flex; gap: 8px; align-items: flex-start; background: var(--card); }
     .pgstep .no { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; background: var(--brand-bg); color: var(--brand); font-weight: bold; font-size: 12px;
       display: flex; align-items: center; justify-content: center; }
@@ -279,10 +279,10 @@
           <summary>1か月の流れ</summary>
           <table>
             <tr><td>毎週 木曜・金曜</td><td><a href="#" data-goto="weekly">週払いの確認</a>：木曜締めの出勤を確認して「済」を付け、金曜に振り込む</td></tr>
-            <tr><td>月初め（1日〜）</td><td><a href="#" data-goto="kintai">個人別集計・勤怠書き込み</a>：①名前対応 → ②個人別一覧 → ③勤怠管理表に書き込む</td></tr>
+            <tr><td>月初め（1日〜）</td><td><a href="#" data-goto="kintai">個人別集計・勤怠書き込み</a>：①名前対応 → ②個人別一覧 → ③勤怠管理表に書き込む → ④<a href="#" data-goto="dakoku">勤怠打刻の反映</a>（本人が ✓ を付けた日）</td></tr>
             <tr><td>5日まで</td><td><a href="#" data-goto="billing">請求書・売上累計表</a>：会社別の請求額を出し、売上累計表に貼る。締め日（20日・25日・末）ごとに請求書を作る</td></tr>
-            <tr><td>10日まで</td><td><a href="#" data-goto="salary">給与（弥生給与Next）</a>：勤怠管理表を確認 → CSVを作る → 弥生給与Nextに取り込んで給与明細を作る</td></tr>
-            <tr><td>いつでも</td><td><a href="#" data-goto="pay">月払い・給与明細</a>・<a href="#" data-goto="chart">グラフ</a>で、金額や売上の確認</td></tr>
+            <tr><td>10日まで</td><td><a href="#" data-goto="salary">給与（弥生給与Next）</a>：勤怠管理表を確認 → 遅刻・早退の一覧で控除を確認 → CSVを作る → 弥生給与Nextに取り込んで給与明細を作る</td></tr>
+            <tr><td>いつでも</td><td><a href="#" data-goto="pay">月払い・給与明細</a>・<a href="#" data-goto="chart">グラフ</a>で、金額や売上の確認（会社別請求・残業は毎晩3時に計算済み）</td></tr>
           </table>
         </details>
         <details class="info">
