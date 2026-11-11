@@ -224,6 +224,7 @@
       <a href="#" data-go="kintai" title="個人別集計・勤怠書き込み"><i data-icon="kintai"></i><span class="label">勤怠書き込み</span></a>
       <a href="#" data-go="dakoku" title="勤怠打刻の反映"><i data-icon="stamp"></i><span class="label">打刻</span></a>
       <a href="#" data-go="salary" title="給与（弥生給与Next）"><i data-icon="salary"></i><span class="label">給与</span></a>
+      <a href="#" data-go="nencho" title="年末調整"><i data-icon="nencho"></i><span class="label">年末調整</span></a>
       <a href="#" data-go="billing" title="請求書・売上累計表"><i data-icon="billing"></i><span class="label">請求書</span></a>
       <a href="#" data-go="pay" title="月払い・給与明細"><i data-icon="pay"></i><span class="label">月払い</span></a>
       <a href="#" data-go="bill" title="会社別請求（スマホ画面）"><i data-icon="bill"></i><span class="label">会社別請求</span></a>
@@ -376,6 +377,15 @@
             <a class="btn" href="https://payroll-administrator.yayoi-kk.co.jp/home" target="_blank" rel="noopener">弥生給与Nextを開く ↗</a></div>
         </div>
       </div>
+      <!-- 年末調整 -->
+      <div class="page hidden" id="pNencho">
+        <div class="toolbar">
+          <div><h2 id="nkTitle">年末調整</h2><div class="sub">提出の状況と計算の結果を見る画面です（読むだけ）。チェック表を作る・計算するのは、今までどおり勤怠管理表のメニュー「年末調整」から行います。</div></div>
+          <div class="noprint"><button class="btn" id="nkReload">読み直す</button></div>
+        </div>
+        <div id="nkMsg"><div class="loading">読み込み中...（勤怠管理表と源泉徴収簿を読むので、20秒ほどかかります）</div></div>
+        <div id="nkBody"></div>
+      </div>
       <!-- 請求書・売上累計表 -->
       <div class="page hidden" id="pBilling">
         <h2>請求書・売上累計表</h2>
@@ -422,6 +432,7 @@
       ot: S('<circle cx="24" cy="25" r="17" stroke="' + B + '" stroke-width="3.5"/><path d="M24 14v11l8 6" stroke="' + G + '" stroke-width="4"/><path d="M19 4h10" stroke="' + B + '" stroke-width="3.5"/>'),
       chart: S('<path d="M6 42h36" stroke="' + B + '" stroke-width="3.5"/><rect x="9" y="26" width="7" height="13" rx="1.5" fill="' + B + '"/><rect x="20.5" y="16" width="7" height="23" rx="1.5" fill="' + G + '"/><rect x="32" y="8" width="7" height="31" rx="1.5" fill="' + B + '"/>'),
       sheet: S('<rect x="7" y="7" width="34" height="34" rx="4" stroke="' + G + '" stroke-width="3.5"/><path d="M7 18h34M7 29h34M20 7v34" stroke="' + B + '" stroke-width="3"/>'),
+      nencho: S('<path d="M11 5h19l8 8v30H11z" stroke="' + B + '" stroke-width="3.5"/><path d="M30 5v8h8" stroke="' + B + '" stroke-width="3"/><path d="M17 22h14M17 29h8" stroke="' + B + '" stroke-width="3"/><path d="M27 36l4 4 8-9" stroke="' + G + '" stroke-width="4"/>'),
       stamp: S('<circle cx="24" cy="22" r="14" stroke="' + B + '" stroke-width="3.5"/><path d="M24 13v9l6 4" stroke="' + G + '" stroke-width="3.5"/><path d="M12 42h24" stroke="' + B + '" stroke-width="3.5"/>')
     };
     Array.prototype.forEach.call(document.querySelectorAll('[data-icon]'), function (el) { el.innerHTML = ICON[el.getAttribute('data-icon')] || ''; });
@@ -520,6 +531,8 @@
       if (where === 'dakoku') dkOpen();
       $('pSalary').classList.toggle('hidden', where !== 'salary');
       if (where === 'salary') slOpen();
+      $('pNencho').classList.toggle('hidden', where !== 'nencho');
+      if (where === 'nencho') nkOpen(false);
       $('pBilling').classList.toggle('hidden', where !== 'billing');
       if (where === 'billing') blOpen();
       var v = $('view');
@@ -936,6 +949,70 @@
           (r.changed ? '<details style="margin-top:6px"><summary>書き換えた日（' + r.changed + '件）</summary>' + issueTable(r.changedList, ['氏名', '日付', '昼夜', '結果', '内容']) + '</details>' : '') +
           (r.issues ? '<details style="margin-top:6px" open><summary>確認してほしいもの（' + r.issues + '件）</summary>' + issueTable(r.issueList, ['氏名', '日付', '昼夜', '結果', '内容']) + '</details>' : '');
       }, function (m) { dkBusy(false); $('d3').innerHTML = '<div class="msg err">' + esc(m) + '<br>もう一度「反映する」を押すと、続きから書きます。</div>'; });
+    }
+
+    // ── 年末調整（読むだけ） ──
+    var NK = { data: null, busy: false };
+    function nkYen(n) { n = Math.round(Number(n) || 0); return (n < 0 ? '-' : '') + '¥' + Math.abs(n).toLocaleString('ja-JP'); }
+    function nkOpen(force) {
+      if (NK.busy || (NK.data && !force)) { if (NK.data) nkRender(NK.data); return; }
+      NK.busy = true;
+      $('nkMsg').innerHTML = '<div class="loading">読み込み中...（勤怠管理表と源泉徴収簿を読むので、20秒ほどかかります）</div>';
+      call('adminNencho', [PIN, DEVICE], function (r) { NK.busy = false; NK.data = r; nkRender(r); },
+        function (m) { NK.busy = false; $('nkMsg').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+    }
+    $('nkReload').addEventListener('click', function () { nkOpen(true); });
+    function nkCalcHtml(c, label) {
+      if (!c) return '<div class="note">まだ「' + label + '」の計算をしていません。</div>';
+      return '<div class="ok" style="margin-top:6px">' + esc(c.sheet) + '：<b>' + c.rows.length + '人</b>。返す人 <b>' + c.nBack + '人・' + nkYen(c.back) + '</b>　' +
+        '追加で引く人 <b>' + c.nMore + '人・' + nkYen(c.more) + '</b>' +
+        (c.errors ? '　<b style="color:#c5221f">メモ（確認が要る人）' + c.errors + '人</b>' : '') +
+        '　<a href="' + esc(c.url) + '" target="_blank" rel="noopener">シートを開く ↗</a></div>' +
+        '<details style="margin-top:6px"' + (c.errors ? ' open' : '') + '><summary>1人ずつ（' + c.rows.length + '人）</summary>' +
+        issueTable(c.rows.map(function (x) { return [x.name, nkYen(x.withheld), x.tax === '' ? '' : nkYen(x.tax), (x.diff > 0 ? '+' : '') + nkYen(x.diff), x.memo]; }),
+          ['氏名', '毎月引いた所得税', '年税額', '過不足（＋返す／－引く）', 'メモ']) + '</details>';
+    }
+    function nkRender(r) {
+      $('nkTitle').textContent = '年末調整（' + r.wareki + '）';
+      $('nkMsg').innerHTML = '<div class="note" style="margin-bottom:8px">' + esc(r.madeAt) + ' 時点。計算や提出チェックを勤怠管理表で直したら「読み直す」を押してください。</div>';
+      // 流れ
+      var steps = '<div class="panel"><div class="ph"><span class="pi"><span class="dot"></span>流れ（今どこか）</span></div><div class="res"><table>' +
+        r.steps.map(function (s, i) {
+          var mark = s.state === 'past' ? '<span style="color:var(--text3)">済んだ日</span>' : i === r.next ? '<b style="color:#e8710a">次はこれ</b>' : '';
+          return '<tr' + (i === r.next ? ' style="background:#fff8e1"' : s.state === 'past' ? ' style="color:var(--text3)"' : '') + '><td style="white-space:nowrap;width:90px">' + esc(s.date) + '</td>' +
+            '<td style="white-space:nowrap;width:170px"><b>' + esc(s.title) + '</b></td><td>' + esc(s.note) + '</td><td style="white-space:nowrap;width:70px">' + mark + '</td></tr>';
+        }).join('') + '</table></div></div>';
+      // 提出
+      var c = r.check, check;
+      if (!c.found) {
+        check = '<div class="msg err">勤怠管理表に「年末調整 提出チェック」シートがありません。勤怠管理表のメニュー「年末調整の提出チェック表を作る」を押してください。' +
+          '　<a href="' + esc(c.url) + '" target="_blank" rel="noopener">勤怠管理表を開く ↗</a></div>';
+      } else {
+        var rest = c.total - c.both;
+        check = '<div class="' + (rest ? 'msg err' : 'ok') + '">対象（甲欄）<b>' + c.total + '人</b>のうち、①②とも提出 <b>' + c.both + '人</b>・<b>まだ ' + rest + '人</b>　' +
+          '中身を確認した人 <b>' + c.checked + '人</b>' + (c.outside ? '　（乙欄で対象外 ' + c.outside + '人）' : '') +
+          '　<a href="' + esc(c.url) + '" target="_blank" rel="noopener">チェック表を開く ↗</a>（' + esc(c.label) + 'の勤怠管理表）</div>' +
+          (c.missing.length ? '<details style="margin-top:6px" open><summary>まだ出していない人（' + c.missing.length + '人）</summary>' +
+            issueTable(c.missing.map(function (m) { return [m.name, m.need, m.memo]; }), ['氏名', 'まだの書類', 'メモ']) + '</details>' : '') +
+          (c.unchecked.length ? '<div class="note" style="margin-top:6px">①②は出たが、中身をまだ確認していない人：' + esc(c.unchecked.join('、')) + '</div>' : '');
+      }
+      // 源泉徴収簿・計算
+      var g = r.gensen, calc;
+      if (!g.found) {
+        calc = '<div class="msg err">「' + esc(g.name) + '」がまだありません。各月の勤怠管理表で「源泉徴収簿に今月分を記録」を押すと作られます。</div>';
+      } else {
+        calc = '<div>支給した月の記録（' + g.people + '人分）：' + g.months.map(function (x) {
+          return '<span style="display:inline-block;margin:2px 3px;padding:2px 8px;border-radius:10px;font-size:12px;' +
+            (x.n ? 'background:var(--ok-bg);color:var(--ok)' : 'background:var(--line);color:var(--text3)') + '">' + x.m + '月' + (x.n ? ' ✓' : '') + '</span>';
+        }).join('') + '　<a href="' + esc(g.url) + '" target="_blank" rel="noopener">源泉徴収簿を開く ↗</a></div>' +
+          '<div class="note" style="margin-top:4px">月の名前は支給した月です（10月分の給料を11月に払えば「11月」）。試しの計算の前に、支給した月が全部 ✓ になっているか確かめます。</div>' +
+          '<h3 style="margin:14px 0 0;font-size:15px">試しの計算</h3>' + nkCalcHtml(g.trial, '試し') +
+          '<h3 style="margin:14px 0 0;font-size:15px">本番の計算</h3>' + nkCalcHtml(g.final, '本番');
+      }
+      $('nkBody').innerHTML = steps +
+        '<div class="panel"><div class="ph"><span class="pi"><span class="dot"></span>書類の提出</span></div><div class="res">' + check + '</div></div>' +
+        '<div class="panel"><div class="ph"><span class="pi"><span class="dot"></span>源泉徴収簿と計算の結果</span>' +
+        '<a class="btn" href="' + esc(r.kintaiUrl) + '" target="_blank" rel="noopener" style="padding:4px 10px;font-size:12px">勤怠管理表を開く（計算はメニューから）↗</a></div><div class="res">' + calc + '</div></div>';
     }
 
     // ── 給与（弥生給与Next） ──
