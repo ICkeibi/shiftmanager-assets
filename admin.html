@@ -972,6 +972,43 @@
         issueTable(c.rows.map(function (x) { return [x.name, nkYen(x.withheld), x.tax === '' ? '' : nkYen(x.tax), (x.diff > 0 ? '+' : '') + nkYen(x.diff), x.memo]; }),
           ['氏名', '毎月引いた所得税', '年税額', '過不足（＋返す／－引く）', 'メモ']) + '</details>';
     }
+    // 支給月ごとに、どの月の勤怠管理表から記録するか＋「記録する」ボタン
+    function nkSourcesHtml(g) {
+      var src = g.sources || [];
+      var rows = src.map(function (s) {
+        var state = s.recorded ? '<span style="color:var(--ok)">✓ 記録済み（' + s.recorded + '人）</span>'
+          : s.hasKintai ? '<b style="color:#c5221f">まだ</b>' : '<span style="color:var(--text3)">勤怠管理表のURLなし</span>';
+        var btn = s.hasKintai ? '<button class="btn" data-gs="' + esc(s.label) + '" style="padding:3px 10px;font-size:12px">' + (s.recorded ? '記録し直す' : '記録する') + '</button>' : '';
+        return '<tr><td>' + s.payM + '月支給</td><td>' + esc(s.label) + 'の勤怠管理表</td><td>' + state + '</td><td>' + btn + '</td></tr>';
+      }).join('');
+      var none = (g.noSource || []).length
+        ? '<div class="msg err" style="margin-top:6px">' + g.noSource.map(function (m) { return m + '月'; }).join('・') + ' に支給した分の勤怠管理表が、月一覧にありません。' +
+          '出勤確認マスターの「月一覧」に、その月（支給月の前の月）の行を足し、D列に勤怠管理表のURLを入れてください。</div>' : '';
+      return '<h3 style="margin:14px 0 0;font-size:15px">支給月ごとの記録</h3>' +
+        '<div class="note">勤怠管理表のメニュー「源泉徴収簿に今月分を記録」と同じことを、ここから行います（前の月の勤怠管理表にはこのメニューがないため）。押すと先に確認の画面が出ます。</div>' +
+        (rows ? '<table>' + rows + '</table>' : '') + none + '<div id="gsMsg"></div>';
+    }
+    $('pNencho').addEventListener('click', function (e) {
+      var b = e.target.closest('button[data-gs]');
+      if (!b || NK.busy) return;
+      var label = b.getAttribute('data-gs');
+      NK.busy = true; b.disabled = true;
+      $('gsMsg').innerHTML = '<div class="run">' + esc(label) + 'の勤怠管理表を読んでいます...（1分ほど）</div>';
+      call('adminGensenRecord', [PIN, DEVICE, label, true], function (p) {
+        var lines = p.sample.map(function (x) { return '　' + x[0] + '：総支給 ' + nkYen(x[1]) + '・社会保険料等 ' + nkYen(x[2]) + '・所得税 ' + nkYen(x[3]); }).join('\n');
+        var msg = '「' + p.file + '」（' + p.period + '・支給日 ' + p.payday + '）の ' + p.people + '人分を、\n' +
+          '「' + p.book + '」の ' + p.payM + '月 の行に記録します。' + (p.already ? '\nこの月はすでに ' + p.already + '人分の記録があり、上書きします。' : '') +
+          '\n\n最初の人の数字（勤怠管理表の数字と合っているか見てください）：\n' + lines +
+          (p.noTax ? '\n\n※ 所得税が0円の人が ' + p.noTax + '人います（乙欄・学生・少ない月なら普通です）' : '') + '\n\n記録しますか？';
+        if (!confirm(msg)) { NK.busy = false; b.disabled = false; $('gsMsg').innerHTML = ''; return; }
+        $('gsMsg').innerHTML = '<div class="run">' + esc(label) + 'の分を記録しています...（1〜2分。この画面のままお待ちください）</div>';
+        call('adminGensenRecord', [PIN, DEVICE, label, false], function (r) {
+          NK.busy = false;
+          $('gsMsg').innerHTML = '<div class="ok">' + esc(r.label) + '（' + r.payM + '月支給）の ' + r.people + '人分を記録しました。表を新しくしています...</div>';
+          nkOpen(true);
+        }, function (m) { NK.busy = false; b.disabled = false; $('gsMsg').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+      }, function (m) { NK.busy = false; b.disabled = false; $('gsMsg').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+    });
     function nkRender(r) {
       $('nkTitle').textContent = '年末調整（' + r.wareki + '）';
       $('nkMsg').innerHTML = '<div class="note" style="margin-bottom:8px">' + esc(r.madeAt) + ' 時点。計算や提出チェックを勤怠管理表で直したら「読み直す」を押してください。</div>';
@@ -1006,6 +1043,7 @@
             (x.n ? 'background:var(--ok-bg);color:var(--ok)' : 'background:var(--line);color:var(--text3)') + '">' + x.m + '月' + (x.n ? ' ✓' : '') + '</span>';
         }).join('') + '　<a href="' + esc(g.url) + '" target="_blank" rel="noopener">源泉徴収簿を開く ↗</a></div>' +
           '<div class="note" style="margin-top:4px">月の名前は支給した月です（10月分の給料を11月に払えば「11月」）。試しの計算の前に、支給した月が全部 ✓ になっているか確かめます。</div>' +
+          nkSourcesHtml(g) +
           '<h3 style="margin:14px 0 0;font-size:15px">試しの計算</h3>' + nkCalcHtml(g.trial, '試し') +
           '<h3 style="margin:14px 0 0;font-size:15px">本番の計算</h3>' + nkCalcHtml(g.final, '本番');
       }
