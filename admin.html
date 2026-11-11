@@ -365,10 +365,13 @@
           <div class="step"><div class="sn">1</div><div class="sb"><div class="t">勤怠管理表で、個人の出勤を確認する</div>
             <div class="note">「個人別集計・勤怠書き込み」で書き込んだあと、勤怠管理表を開いて何人か確認します。直したら保存されます。</div>
             <div class="res" id="s1"></div></div><button class="btn" data-sl="open">勤怠管理表を開く ↗</button></div>
-          <div class="step"><div class="sn">2</div><div class="sb"><div class="t">弥生給与用のCSVを作る</div>
+          <div class="step"><div class="sn">2</div><div class="sb"><div class="t">遅刻・早退の一覧を見る</div>
+            <div class="note">全員のシートから、D列が 3・4（遅刻）・5（早退）の日を集めます。出勤簿の確認の画像と見比べて、控除が合っているか確かめます。「遅刻早退一覧」シートにも出すので、印刷もできます。</div>
+            <div class="res" id="s0"></div></div><button class="btn" data-sl="late">一覧を出す</button></div>
+          <div class="step"><div class="sn">3</div><div class="sb"><div class="t">弥生給与用のCSVを作る</div>
             <div class="note">勤怠管理表のメニュー「弥生給与用のCSVを作る」と同じものを作ります。①勤怠CSV ②支給控除CSV の2つ。</div>
             <div class="res" id="s2"></div></div><button class="btn" data-sl="csv">CSVを作る</button></div>
-          <div class="step"><div class="sn">3</div><div class="sb"><div class="t">弥生給与Nextに取り込む</div>
+          <div class="step"><div class="sn">4</div><div class="sb"><div class="t">弥生給与Nextに取り込む</div>
             <div class="note">2で作ったCSVを開き、右上の「ダウンロード」でパソコンに保存します。弥生給与Nextで ①は「勤怠CSVファイルのインポート」、②は「支給・控除・その他CSVファイルのインポート」で取り込み、給与明細を作ります。</div></div>
             <a class="btn" href="https://payroll-administrator.yayoi-kk.co.jp/home" target="_blank" rel="noopener">弥生給与Nextを開く ↗</a></div>
         </div>
@@ -956,6 +959,26 @@
         call('adminKintaiUrl', [PIN, DEVICE, label], function (url) {
           if (url) w.location = url; else { w.close(); $('s1').innerHTML = '<div class="msg err">この月の勤怠管理表のURLが、月一覧にありません。</div>'; }
         }, function (m) { w.close(); $('s1').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+      }
+      if (what === 'late') {
+        b.disabled = true; $('s0').innerHTML = '<div class="run">全員のシートを読んでいます...（70人ほどで30秒〜1分）</div>';
+        call('adminLateList', [PIN, DEVICE, label], function (r) {
+          b.disabled = false;
+          var late = r.days.filter(function (x) { return x[2].indexOf('遅刻') === 0; }).length, early = r.days.length - late;
+          var sum = '<table><tr><td style="color:var(--text2)">氏名</td><td style="color:var(--text2)">遅刻（回）</td><td style="color:var(--text2)">遅刻時間</td>' +
+            '<td style="color:var(--text2)">早退（日）</td><td style="color:var(--text2)">早退時間</td><td style="color:var(--text2)">遅刻早退控除</td></tr>' +
+            r.people.map(function (p) {
+              return '<tr><td>' + esc(p.name) + '</td><td>' + esc(p.late) + '</td><td>' + esc(p.lateTime) + '</td><td>' + esc(p.early) + '</td><td>' + esc(p.earlyTime) + '</td><td>' + esc(p.ded) + '</td></tr>';
+            }).join('') + '</table>';
+          $('s0').innerHTML = r.days.length || r.people.length
+            ? '<div class="ok">' + esc(r.label) + '：遅刻 <b>' + late + '件</b>・早退 <b>' + early + '件</b>（' + r.people.length + '人）。' +
+              '　<a href="' + esc(r.sheetUrl) + '" target="_blank" rel="noopener">「遅刻早退一覧」シート ↗</a>' +
+              '　<a href="' + esc(r.kintaiUrl) + '" target="_blank" rel="noopener">勤怠管理表を開く ↗</a></div>' +
+              '<details style="margin-top:6px" open><summary>1人ずつ（シートの上の数字）</summary>' + sum + '</details>' +
+              '<details style="margin-top:6px" open><summary>日ごと（' + r.days.length + '件）</summary>' +
+              issueTable(r.days, ['氏名', '日付', '区分', '始業', '終業', '遅れた分・早く上がった分']) + '</details>'
+            : '<div class="ok">' + esc(r.label) + '：遅刻・早退の日はありません。</div>';
+        }, function (m) { b.disabled = false; $('s0').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
       }
       if (what === 'csv') {
         if (!confirm(label + ' の勤怠管理表から、弥生給与Next用のCSVを作ります。\n同じ月のCSVがあれば、新しいものに置き換わります（古いものはゴミ箱へ）。\n\n作りますか？')) return;
