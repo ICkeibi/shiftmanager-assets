@@ -405,6 +405,8 @@
     var PIN = '', HOME = null;
 
     function $(id) { return document.getElementById(id); }
+    // よそのページの枠の中に、この画面を表示させない（見えない枠に重ねて押させる攻撃を防ぐ）
+    if (window.top !== window.self) { document.documentElement.style.display = 'none'; throw new Error('framed'); }
 
     // ── 絵（ロゴの青と緑） ──
     var B = '#1f63ad', G = '#43a047';
@@ -598,8 +600,8 @@
             '<input type="checkbox" data-key="' + esc(x.key) + '"' + (x.done ? ' checked' : '') + '>' + esc(x.name) + '</label>';
         }).join('') + '</div>' : '';
         var open = t.link ? '<button class="btn main" data-open="' + t.link + '">開く</button>'
-          : t.url ? '<a class="btn main" href="' + esc(t.url) + '" target="_blank" rel="noopener">予定シートを開く ↗</a>' : '';
-        var doneBtn = t.group ? '' : '<button class="btn done" data-done="' + esc(t.key) + '" data-title="' + esc(t.title) + '">✓ 済にする</button>';
+          : t.url ? '<a class="btn main" href="' + esc(t.url) + '" target="_blank" rel="noopener">' + esc(t.urlLabel || '予定シートを開く') + ' ↗</a>' : '';
+        var doneBtn = t.group || t.noDone ? '' : '<button class="btn done" data-done="' + esc(t.key) + '" data-title="' + esc(t.title) + '">✓ 済にする</button>';
         return '<div class="task ' + cls + '"><div class="top"><span class="chip">' + whenChip(t) + '</span><span class="d">期限 ' + esc(t.dueLabel) + '</span></div>' +
           '<div class="t">' + esc(t.title) + '</div><div class="note">' + esc(t.note || '') + '</div>' + cos +
           '<div class="acts">' + open + doneBtn + '</div></div>';
@@ -1064,8 +1066,21 @@
     // ── 起動：この端末に覚えたログインがあれば、そのまま開く ──
     (function () { var t = getToken(); if (t) login(t, true); else showLogin(''); })();
     // 中に表示する月払いなどの画面（Apps Script）に、この端末のログインを渡す
+    //  ・この画面の中の枠（id="view"）から来たメッセージにだけ答える。
+    //    googleusercontent.com は誰でも Apps Script でページを置けるので、送り元のアドレスだけで信じると、
+    //    よそのページがこの画面を開いてログインを抜き取れてしまうため
+    function fromOurFrame(src) {
+      var frame = $('view').contentWindow, w = src;
+      for (var i = 0; w && i < 6; i++) {
+        if (w === frame) return true;
+        if (w === window || w === w.parent) return false;
+        w = w.parent;
+      }
+      return false;
+    }
     window.addEventListener('message', function (ev) {
       try { if (!/\.googleusercontent\.com$/.test(new URL(ev.origin).hostname)) return; } catch (e) { return; }
+      if (!ev.source || !fromOurFrame(ev.source)) return;
       var msg = ev.data || {};
       if (msg.type === 'payHello') ev.source.postMessage({ type: 'payToken', token: getToken() }, ev.origin);
       else if (msg.type === 'paySave') { try { if (msg.token) localStorage.setItem(TOKEN_KEY, msg.token); else localStorage.removeItem(TOKEN_KEY); } catch (e) {} }
