@@ -204,6 +204,7 @@
     table.ki .kind.k2 { background: var(--warn-bg); color: var(--warn); }
     table.ki .now { display: block; font-size: 11px; color: var(--text2); margin-bottom: 3px; }
     table.ki tr.done td { color: var(--text3); }
+    table.ki tr.kigrp td { background: var(--bg); border-top: 2px solid var(--line); padding-top: 6px; }
     table.ki .doneby { color: var(--ok); font-size: 12px; }
     .bar2 { height: 8px; background: var(--line); border-radius: 4px; margin-top: 6px; overflow: hidden; }
     .bar2 div { height: 100%; background: var(--primary); }
@@ -964,9 +965,35 @@
       };
       $('r4').innerHTML = '<div class="kihead"><span class="left">残り <b class="' + (todo.length ? '' : 'zero') + '">' + todo.length + '件</b> / ' + d.list.length + '件</span>' +
         '<span class="note">（' + esc(d.label) + '・書き込み ' + esc(d.made) + '）</span>' + open + '</div>' +
-        (todo.length ? '<table class="ki">' + todo.map(row).join('') + '</table>' : '<div class="ok" style="margin-top:6px">全部片付きました。</div>') +
+        (todo.length ? '<table class="ki">' + todo.map(function (i, n) {
+          // 同じ人の「確認」が2件以上あれば、その人の最初の行の前に「まとめてOK」を出す
+          var x = d.list[i], prev = n ? d.list[todo[n - 1]] : null, head = '';
+          if (x.kind === 'check' && !(prev && prev.kind === 'check' && prev.name === x.name)) {
+            var cnt = todo.filter(function (j) { var y = d.list[j]; return y.kind === 'check' && y.name === x.name; }).length;
+            if (cnt >= 2) head = '<tr class="kigrp"><td colspan="3"><b>' + esc(x.name) + '</b>　確認 ' + cnt + '件</td><td class="acts">' +
+              (KI.busy['g:' + x.name] ? '<span class="note">保存しています...</span>' : '<button class="tbtn main" data-ki="okall" data-name="' + esc(x.name) + '">この人の確認をまとめてOK</button>') + '</td></tr>';
+          }
+          return head + row(i);
+        }).join('') + '</table>' : '<div class="ok" style="margin-top:6px">全部片付きました。</div>') +
         (fin.length ? '<details style="margin-top:8px"><summary>片付けたもの（' + fin.length + '件）</summary><table class="ki">' + fin.map(row).join('') + '</table></details>' : '') +
         '<div class="msg err hidden" id="kiErr" style="margin-top:6px"></div>';
+    }
+    // 同じ人の「確認」をまとめてOK（勤怠管理表は書き換えない）
+    function kiOkAll(name) {
+      var d = KI.data, idx = [];
+      d.list.forEach(function (x, i) { if (x.kind === 'check' && !x.done && x.name === name && !KI.busy[i]) idx.push(i); });
+      if (!idx.length) return;
+      if (!confirm(name + ' さんの「確認」' + idx.length + '件を、まとめてOK（このままでよい）にします。\n勤怠管理表は書き換えません。\n\nよろしいですか？')) return;
+      var items = idx.map(function (i) { var x = d.list[i]; return { row: x.row, name: x.name, date: x.date, shift: x.shift, msg: x.msg }; });
+      KI.busy['g:' + name] = true; idx.forEach(function (i) { KI.busy[i] = true; }); KI.edit = null; kiRender();
+      call('adminKintaiResolve', [PIN, DEVICE, d.label, {}, 'okmany', items], function (r) {
+        delete KI.busy['g:' + name];
+        idx.forEach(function (i) { delete KI.busy[i]; d.list[i].done = { how: r.how, by: r.by, at: r.at }; });
+        kiRender();
+      }, function (m) {
+        delete KI.busy['g:' + name]; idx.forEach(function (i) { delete KI.busy[i]; });
+        kiRender(); kiErr(name + '：' + m);
+      });
     }
     function kiErr(m) { var e = $('kiErr'); if (e) { e.textContent = m; e.classList.remove('hidden'); } else alert(m); }
     function kiSend(i, action, value, confirmMsg) {
@@ -983,6 +1010,7 @@
     $('r4').addEventListener('click', function (e) {
       var b = e.target.closest('button[data-ki]');
       if (!b || !KI.data) return;
+      if (b.getAttribute('data-ki') === 'okall') { kiOkAll(b.getAttribute('data-name')); return; }
       var i = Number(b.getAttribute('data-i')), what = b.getAttribute('data-ki'), d = KI.data, x = d.list[i];
       var item = { row: x.row, name: x.name, date: x.date, shift: x.shift, msg: x.msg };
       if (what === 'ok') kiSend(i, 'ok');
