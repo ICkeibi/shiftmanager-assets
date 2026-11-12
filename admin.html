@@ -151,6 +151,9 @@
     .filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 14px; }
     .filters label { font-size: 12px; color: var(--text2); display: flex; flex-direction: column; gap: 4px; }
     .filters select, .filters input { font: inherit; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); min-width: 160px; }
+    /* 「対象の月」は見落とさないように、画面の青と反対のオレンジで目立たせる（勤怠書き込み・打刻・給与・請求書） */
+    label:has(> #kwMonth), label:has(> #dkMonth), label:has(> #slMonth), label:has(> #blMonth) { color: var(--today); font-weight: bold; }
+    #kwMonth, #dkMonth, #slMonth, #blMonth { background: var(--today-bg); border: 2px solid var(--today); color: var(--today); font-weight: bold; }
     table.wk { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
     table.wk th { text-align: left; font-size: 12px; color: var(--text2); font-weight: normal; padding: 9px 12px; background: var(--bg); border-bottom: 1px solid var(--line); }
     table.wk td { padding: 9px 12px; border-bottom: 1px solid var(--line); }
