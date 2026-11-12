@@ -985,7 +985,10 @@
       var none = (g.noSource || []).length
         ? '<div class="msg err" style="margin-top:6px">' + g.noSource.map(function (m) { return m + '月'; }).join('・') + ' に支給した分の勤怠管理表が、月一覧にありません。' +
           '出勤確認マスターの「月一覧」に、その月（支給月の前の月）の行を足してください。A列に表示名（例：令和8年1月）、C列に年月（例：2026-01）、D列に勤怠管理表のURL。B列（出勤簿）は空のままで大丈夫です。</div>' : '';
-      return '<h3 style="margin:14px 0 0;font-size:15px">支給月ごとの記録</h3>' +
+      var prev = g.firstPay > 1
+        ? '<div class="note" style="margin-top:6px;color:#b06000">' + (g.firstPay - 1) + '月までに支給した分は前の会社の給料です。ここでは記録しません。' +
+          '前の会社の源泉徴収票の「支払金額・社会保険料等の金額・源泉徴収税額」を、年末調整のシートの黄色の欄「前職の支払金額・前職の社会保険料等・前職の源泉徴収税額」に入れてください（入れないと、返す額が多く出ます）。</div>' : '';
+      return '<h3 style="margin:14px 0 0;font-size:15px">支給月ごとの記録</h3>' + prev +
         '<div class="note">勤怠管理表のメニュー「源泉徴収簿に今月分を記録」と同じことを、ここから行います（前の月の勤怠管理表にはこのメニューがないため）。押すと先に確認の画面が出ます。</div>' +
         (rows ? '<table>' + rows + '</table>' : '') + none + '<div id="gsMsg"></div>';
     }
