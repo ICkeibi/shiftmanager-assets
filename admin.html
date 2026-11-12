@@ -977,13 +977,14 @@
       var src = g.sources || [];
       var rows = src.map(function (s) {
         var state = s.recorded ? '<span style="color:var(--ok)">✓ 記録済み（' + s.recorded + '人）</span>'
-          : s.hasKintai ? '<b style="color:#c5221f">まだ</b>' : '<span style="color:var(--text3)">勤怠管理表のURLなし</span>';
-        var btn = s.hasKintai ? '<button class="btn" data-gs="' + esc(s.label) + '" style="padding:3px 10px;font-size:12px">' + (s.recorded ? '記録し直す' : '記録する') + '</button>' : '';
+          : s.future ? '<span style="color:var(--text3)">支給前（給料を払ってから記録）</span>'
+          : s.hasKintai ? '<b style="color:#c5221f">まだ</b>' : '<span style="color:#c5221f">月一覧のD列に勤怠管理表のURLがありません</span>';
+        var btn = s.hasKintai && !(s.future && !s.recorded) ? '<button class="btn" data-gs="' + esc(s.label) + '" style="padding:3px 10px;font-size:12px">' + (s.recorded ? '記録し直す' : '記録する') + '</button>' : '';
         return '<tr><td>' + s.payM + '月支給</td><td>' + esc(s.label) + 'の勤怠管理表</td><td>' + state + '</td><td>' + btn + '</td></tr>';
       }).join('');
       var none = (g.noSource || []).length
         ? '<div class="msg err" style="margin-top:6px">' + g.noSource.map(function (m) { return m + '月'; }).join('・') + ' に支給した分の勤怠管理表が、月一覧にありません。' +
-          '出勤確認マスターの「月一覧」に、その月（支給月の前の月）の行を足し、D列に勤怠管理表のURLを入れてください。</div>' : '';
+          '出勤確認マスターの「月一覧」に、その月（支給月の前の月）の行を足してください。A列に表示名（例：令和8年1月）、C列に年月（例：2026-01）、D列に勤怠管理表のURL。B列（出勤簿）は空のままで大丈夫です。</div>' : '';
       return '<h3 style="margin:14px 0 0;font-size:15px">支給月ごとの記録</h3>' +
         '<div class="note">勤怠管理表のメニュー「源泉徴収簿に今月分を記録」と同じことを、ここから行います（前の月の勤怠管理表にはこのメニューがないため）。押すと先に確認の画面が出ます。</div>' +
         (rows ? '<table>' + rows + '</table>' : '') + none + '<div id="gsMsg"></div>';
