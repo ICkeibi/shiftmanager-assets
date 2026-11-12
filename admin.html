@@ -1340,10 +1340,11 @@
         '<div class="wkinfo"><span>' + esc(r.label) + '</span><span>' + r.companies.length + '社</span><span>日勤 <b>' + g.day + '人</b></span><span>夜勤 <b>' + g.night + '人</b></span>' +
         '<span>小計 <b>' + yen(g.total) + '</b></span><span>消費税 ' + yen(g.tax) + '</span><span>税込み <b>' + yen(g.total + g.tax) + '</b></span></div>' +
         '<div class="toolbar" style="margin-bottom:8px"><div class="sub" style="margin:0">売上累計表と同じ並び（会社名・現場名・日勤・夜勤・金額）です。「コピー」でExcelの売上累計表にそのまま貼れます。</div>' +
-        '<div class="noprint"><button class="btn" id="blCopy">表をコピー</button> <a class="btn" href="' + esc(r.sheetUrl) + '" target="_blank" rel="noopener">請求集計シートを開く ↗</a></div></div>' +
+        '<div class="noprint"><button class="btn main" id="blPrint">売上累計表を印刷（A4）</button> <button class="btn" id="blCopy">表をコピー</button> <a class="btn" href="' + esc(r.sheetUrl) + '" target="_blank" rel="noopener">請求集計シートを開く ↗</a></div></div>' +
         '<table class="wk"><thead><tr><th>会社名</th><th>現場名</th><th class="num">日勤</th><th class="num">夜勤</th><th class="num" style="width:120px">金額（税抜）</th></tr></thead><tbody>' + rows +
         '<tr class="total"><td>計</td><td></td><td class="num">' + g.day + '人</td><td class="num">' + g.night + '人</td><td class="num">' + yen(g.total) + '</td></tr></tbody></table>' +
         '<div class="note" style="font-size:12px;color:var(--text2);margin-top:8px">請求書の項目ごとの数量・単価・消費税（現場ごと）は「請求集計」シート、1日ずつの明細は「請求明細」シートで見られます。</div>';
+      $('blPrint').addEventListener('click', function () { blPrint(r); });
       $('blCopy').addEventListener('click', function () {
         var t = [];
         r.companies.forEach(function (c) { c.sites.forEach(function (s, i) { t.push([i === 0 ? c.name : '', s.name, s.day, s.night, s.total].join('\t')); }); });
@@ -1363,6 +1364,54 @@
         $('blBody').insertBefore(box, $('blBody').firstChild); box.focus(); box.select();
         $('blCopy').textContent = 'Ctrl+C を押してください';
       });
+    }
+
+    // 売上累計表（A4縦1枚）：Excelの「売上累計表」と同じ並び。会社名・現場名・日勤【人数】・夜勤【人数】・金額（税込）、計・合計
+    //  ・会社名は「請求単価」シートN列（空欄ならA列）、現場名は「現場の振り分け」D列・M列（都内各所）のとおり
+    //  ・金額は現場ごとに消費税10%（切り捨て）を足した税込み（請求書と同じ）
+    //  ・行が多い月は、文字を小さくして1枚に収める
+    var BL_OUR_COMPANY = 'I・C警備保障株式会社';
+    function blPrint(r) {
+      var m = String(r.label).match(/(\d+)月/), title = (m ? m[1] + '月分' : r.label);
+      var num = function (n) { return Math.round(n).toLocaleString('ja-JP'); };
+      var ppl = function (n) { return (Math.round(n * 10) / 10).toLocaleString('ja-JP'); };
+      var body = '', rowsN = 0, sum = { day: 0, night: 0, yen: 0 };
+      r.companies.forEach(function (c) {
+        c.sites.forEach(function (s, i) {
+          var inc = s.total + Math.floor(s.total * 0.1);
+          sum.day += s.day; sum.night += s.night; sum.yen += inc; rowsN++;
+          body += '<tr class="' + (i === 0 ? 'co' : '') + '"><td>' + (i === 0 ? esc(c.disp || c.name) : '') + '</td><td>' + esc(s.name) + '</td>' +
+            '<td class="n">' + ppl(s.day) + '</td><td class="n">' + ppl(s.night) + '</td><td class="n">' + num(inc) + '</td></tr>';
+        });
+      });
+      // A4縦（297mm − 上下の余白）に、見出し＋行＋計・合計が収まる文字の大きさ
+      var fs = Math.max(6.5, Math.min(12, 680 / (rowsN + 6) / 1.95));
+      var html = '<!doctype html><html><head><meta charset="utf-8"><title>' + esc(title) + ' 売上累計表</title><style>' +
+        '@page { size: A4 portrait; margin: 12mm 10mm; }' +
+        '* { box-sizing: border-box; } body { margin: 0; font-family: "Yu Gothic", "Meiryo", sans-serif; font-size: ' + fs.toFixed(1) + 'pt; color: #000; }' +
+        '.bar { display: flex; gap: 8px; padding: 10px; background: #eef3fb; } .bar button { font: inherit; font-size: 14px; padding: 6px 16px; cursor: pointer; }' +
+        '.page { width: 190mm; margin: 0 auto; padding-top: 4mm; }' +
+        'h1 { font-size: 1.5em; margin: 0 0 3mm; display: flex; justify-content: space-between; align-items: baseline; } h1 small { font-size: .75em; font-weight: normal; }' +
+        'table { width: 100%; border-collapse: collapse; table-layout: fixed; }' +
+        'th, td { border: 1px solid #555; padding: .35em .5em; overflow-wrap: anywhere; }' +
+        'th { background: #e8e8e8; font-weight: bold; } td.n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }' +
+        'tr.co td { border-top: 1.6px solid #000; } tr.sum td { font-weight: bold; border-top: 2px solid #000; background: #f4f4f4; }' +
+        '@media print { .bar { display: none; } .page { width: auto; padding: 0; } }' +
+        '</style></head><body><div class="bar"><button onclick="window.print()">印刷する</button><span style="font-size:13px;align-self:center">A4縦・1枚に収まるように文字の大きさを合わせています。印刷の画面で「余白：デフォルト」「倍率：100%」のままにしてください。</span></div>' +
+        '<div class="page"><h1><span>' + esc(title) + '　売上累計表</span><small>' + esc(BL_OUR_COMPANY) + '</small></h1>' +
+        '<table><colgroup><col style="width:28%"><col style="width:33%"><col style="width:11%"><col style="width:11%"><col style="width:17%"></colgroup>' +
+        '<thead><tr><th>会社名</th><th>現場名</th><th>日勤<br>【人数】</th><th>夜勤<br>【人数】</th><th>金額</th></tr></thead><tbody>' + body +
+        '<tr class="sum"><td></td><td>計</td><td class="n">' + ppl(sum.day) + '</td><td class="n">' + ppl(sum.night) + '</td><td class="n">' + num(sum.yen) + '</td></tr>' +
+        '<tr class="sum"><td></td><td>合計</td><td class="n" colspan="2" style="text-align:center">' + ppl(sum.day + sum.night) + '</td><td></td></tr>' +
+        '</tbody></table></div>' +
+        // 印刷の幅（190mm）で測って、高さが A4 の印刷範囲（約270mm）に収まるまで文字を小さくする
+        '<script>(function(){var p=document.querySelector(".page"),b=document.body,fs=12;p.style.width="190mm";' +
+        'var mm=function(){return p.scrollHeight*25.4/96;};b.style.fontSize=fs+"pt";' +
+        'while(mm()>262&&fs>6){fs-=0.25;b.style.fontSize=fs+"pt";}p.style.width="";})();<\/script>' +
+        '</body></html>';
+      var w = window.open('', '_blank');
+      if (!w) { alert('新しい画面を開けませんでした。ブラウザのポップアップを許可してから、もう一度押してください。'); return; }
+      w.document.open(); w.document.write(html); w.document.close();
     }
 
     // 1時間ごとに自動で最新にする（開きっぱなしでも日付が変われば出し直す）
