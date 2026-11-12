@@ -1240,7 +1240,221 @@
       $('nkBody').innerHTML = steps + forms +
         '<div class="panel"><div class="ph"><span class="pi"><span class="dot"></span>書類の提出</span></div><div class="res">' + check + '</div></div>' +
         '<div class="panel"><div class="ph"><span class="pi"><span class="dot"></span>源泉徴収簿と計算の結果</span>' +
-        '<a class="btn" href="' + esc(r.kintaiUrl) + '" target="_blank" rel="noopener" style="padding:4px 10px;font-size:12px">勤怠管理表を開く（計算はメニューから）↗</a></div><div class="res">' + calc + '</div></div>';
+        '<a class="btn" href="' + esc(r.kintaiUrl) + '" target="_blank" rel="noopener" style="padding:4px 10px;font-size:12px">勤怠管理表を開く（計算はメニューから）↗</a></div><div class="res">' + calc + '</div></div>' +
+        yyPanelHtml();
+    }
+
+    // ── 弥生給与Nextに入れる（源泉徴収票の準備）──
+    //  弥生は年末調整を自分で計算し、源泉徴収票も弥生が作る。ここでは「弥生に手で入れる数字」を1人ずつ出し、
+    //  弥生の「年調明細一覧」CSVを選ぶと、こちらの計算と見比べる（CSVはこのパソコンの中だけで読む。どこにも送らない）
+    var YY = { data: null, cmp: '', busy: false };
+    var YY_FLOW = [
+      ['申告情報の提出依頼・事業所設定', '「申告情報の収集方法を設定する」で、年末調整をする人を全員「紙申告書」にする（乙欄・退職の人は選ばない＝年末調整しない）'],
+      ['収集内容の確認・入力', '下の「1人ずつ入れるもの」を見ながら、本人情報・家族情報・保険料控除・住宅ローン控除・業務担当者入力用（前職分情報）に入れる。家族は申告書①②④を見て1人ずつ（名前・生年月日・所得）'],
+      ['年間の給与等の集計と年税額の算出', '11月分の給料（12月末に払う分）を弥生に取り込んでから行う。12月に払う給料が弥生に入っていないと、12月の支給なしとして計算される'],
+      ['見比べる', '「年調明細を確認する（一覧）」で［ダウンロード］→CSV。下の「弥生のCSVを選ぶ」で選ぶ。× の人を直して、もう一度算出（算出し直すと調整額は消えるので、調整額は最後に入れる）'],
+      ['過不足税額の精算', '精算方法「直近の給与」で、11月分の給料に入れる。振込金額にも返す額・引く額を足し引きする（勤怠管理表の差引支給額には入っていない）'],
+      ['源泉徴収簿の作成', 'PDFをダウンロードして保存（7年）'],
+      ['源泉徴収票/給与支払報告書の入力', '摘要（前職の会社名・住所・退職日など）を見て確定 → 印刷して1月29日（金）までに社員に渡す。年末調整しない人（乙欄・退職）の分も出るか確かめる'],
+      ['<書面>行政提出資料の作成', '給与支払報告書（総括表）を市区町村へ、法定調書合計表を税務署へ。2月1日（月）まで']
+    ];
+    function yyPanelHtml() {
+      var flow = '<details' + (YY.data ? '' : ' open') + '><summary><b>弥生での流れ</b>（手続き → 令和' + ((NK.data ? NK.data.year : 2026) - 2018) + '年分 年末調整手続き → やることリスト）</summary><table>' +
+        YY_FLOW.map(function (f, i) { return '<tr><td style="width:24px">' + (i + 1) + '</td><td style="white-space:nowrap;width:230px"><b>' + esc(f[0]) + '</b></td><td>' + esc(f[1]) + '</td></tr>'; }).join('') +
+        '</table><div class="note" style="margin-top:4px">弥生には、扶養や保険料をCSVで取り込む方法がありません（従業員情報のCSVで入るのは前職・障害者・寡婦などだけ）。なので申告書の中身は手で入れます。入れる数字は、勤怠管理表の「年末調整」シートの黄色の欄と同じです。</div></details>';
+      return '<div class="panel"><div class="ph"><span class="pi"><span class="dot"></span>弥生給与Nextに入れる（源泉徴収票）</span>' +
+        '<span class="noprint"><button class="btn" id="yyLoad" style="padding:4px 10px;font-size:12px">' + (YY.data ? '読み直す' : '入れる数字を出す') + '</button></span></div>' +
+        '<div class="res">' + flow + '<div id="yyMsg"></div><div id="yyBody">' + (YY.data ? yyBodyHtml(YY.data) : '') + '</div></div></div>';
+    }
+    function yyVal(v) {
+      if (v === true) return 'あり';
+      if (typeof v === 'number') return Math.abs(v) >= 1000 ? nkYen(v) : String(v);
+      return String(v == null ? '' : v);
+    }
+    // 1人分：弥生の画面ごとに、入れるもの（空・0・「なし」は出さない）
+    function yyItems(c) {
+      var out = [];
+      var add = function (screen, label, v, unit) {
+        if (v === '' || v === null || v === undefined || v === false || v === 0 || v === 'なし' || String(v).toUpperCase() === 'FALSE') return;
+        out.push([screen, label, yyVal(v) + (unit || '')]);
+      };
+      add('本人情報', '寡婦・ひとり親', c.single);
+      add('本人情報', '勤労学生', c.student === true || String(c.student).toUpperCase() === 'TRUE' ? true : '');
+      add('家族情報', '配偶者', c.spouse);
+      if (c.spouse && c.spouse !== 'なし') add('家族情報', '配偶者の合計所得（収入から所得にして入れる）', c.spouseIncome);
+      add('家族情報', '一般の扶養（16〜18歳・23〜69歳）', c.depGeneral, '人');
+      add('家族情報', '特定扶養（19〜22歳）', c.depSpecific, '人');
+      add('家族情報', '老人扶養（同居老親等以外）', c.depElder, '人');
+      add('家族情報', '同居老親等', c.depElderLive, '人');
+      add('家族情報', '特定親族（19〜22歳・所得62万超）の合計所得', c.tokuteiIncome);
+      add('家族情報', '障害者（本人を含む）', c.disabled, '人');
+      add('家族情報', '特別障害者（同居以外）', c.disabledSp, '人');
+      add('家族情報', '同居特別障害者', c.disabledSpLive, '人');
+      add('家族情報', '23歳未満の扶養親族（生年月日で弥生が判断）', c.under23 === true || String(c.under23).toUpperCase() === 'TRUE' ? true : '');
+      add('保険料控除', '一般の生命保険料（新）', c.lifeNew);
+      add('保険料控除', '一般の生命保険料（旧）', c.lifeOld);
+      add('保険料控除', '介護医療保険料', c.careMed);
+      add('保険料控除', '個人年金保険料（新）', c.pensionNew);
+      add('保険料控除', '個人年金保険料（旧）', c.pensionOld);
+      add('保険料控除', '地震保険料', c.quake);
+      add('保険料控除', '旧長期損害保険料', c.quakeOld);
+      add('保険料控除', '社会保険料（申告分：国民年金など）', c.selfShaho);
+      add('保険料控除', '小規模企業共済等掛金（iDeCoなど）', c.smallBiz);
+      add('住宅ローン控除', '住宅借入金等特別控除額', c.housing);
+      if (Number(c.prevPay) || Number(c.prevTax)) {
+        out.push(['業務担当者入力用（前職分情報）', '支払金額', nkYen(c.prevPay)]);
+        out.push(['業務担当者入力用（前職分情報）', '社会保険料等の金額', nkYen(c.prevShaho)]);
+        out.push(['業務担当者入力用（前職分情報）', '源泉徴収税額', nkYen(c.prevTax)]);
+        out.push(['業務担当者入力用（前職分情報）', '会社名・住所・退職日', '前職の源泉徴収票を見て入れる（摘要に出る）']);
+      }
+      return out;
+    }
+    function yyBodyHtml(d) {
+      var tg = d.people.filter(function (p) { return p.kind === '対象'; });
+      var head = '<div class="note" style="margin:8px 0 4px">' + esc(d.madeAt) + ' 時点。' +
+        (d.calcSheet ? '申告書の中身と計算は「' + esc(d.calcSheet) + '」シートから。' + (d.calcSheet.indexOf('試し') >= 0 ? '<b style="color:#c5221f">まだ試しの計算です。本番の計算のあとに読み直してください。</b>' : '')
+          : '<b style="color:#c5221f">勤怠管理表で「年末調整を計算」をまだしていないので、申告書の中身が出ません。</b>') +
+        '　<a href="' + esc(d.bookUrl) + '" target="_blank" rel="noopener">源泉徴収簿を開く ↗</a></div>' +
+        (d.noCode.length ? '<div class="msg err">弥生の従業員コード（勤怠管理表の社員シート E7）が見つからない人：' + esc(d.noCode.join('、')) + '。見比べは名前で行います。</div>' : '');
+      var list = '<h3 style="margin:12px 0 0;font-size:15px">全員（源泉徴収票を出す人 ' + d.people.length + '人・うち年末調整 ' + tg.length + '人）</h3>' +
+        issueTable(d.people.map(function (p) {
+          var c = p.calc;
+          return [p.name, p.code, p.kind, p.months + '月', nkYen(p.pay), nkYen(p.shaho), nkYen(p.withheld),
+            c && c.yearTax !== '' ? nkYen(c.yearTax) : '', c && c.diff !== '' ? (c.diff > 0 ? '+' : '') + nkYen(c.diff) : '', p.office ? '出す' : ''];
+        }), ['氏名', 'コード', '年末調整', '支給月', '支払金額（この会社）', '社会保険料等', '毎月引いた所得税', '年税額', '過不足（＋返す）', '税務署にも']);
+      var each = '<h3 style="margin:12px 0 0;font-size:15px">1人ずつ入れるもの（弥生の「収集内容の確認・入力」）</h3>' +
+        '<div class="note">入れるものがある欄だけ出しています。何も出ない人は、扶養なし・保険料なしです（基礎控除だけ）。下の「こちらの計算」は、弥生で算出したあと「年調明細を確認する（個人別）」と合うはずの数字です。</div>' +
+        tg.map(function (p) {
+          var c = p.calc;
+          if (!c) return '<details><summary>' + esc(p.name) + '　<span style="color:#c5221f">年末調整シートに行がありません</span></summary></details>';
+          var items = yyItems(c);
+          var res = [['給与の合計（前職を含む）', nkYen(c.totalPay)], ['給与所得控除後の金額（調整控除後）', nkYen(c.kyuyoShotoku)],
+            ['社会保険料等の控除', nkYen(c.shahoDed)], ['生命保険料の控除', nkYen(c.lifeDed)], ['地震保険料の控除', nkYen(c.quakeDed)],
+            ['配偶者（特別）控除', nkYen(c.spouseDed)], ['扶養・障害者等の控除', nkYen(c.depDed)], ['特定親族特別控除', nkYen(c.tokuteiDed)],
+            ['基礎控除', nkYen(c.basic)], ['所得控除の合計', nkYen(c.dedTotal)], ['差引課税給与所得', nkYen(c.taxable)],
+            ['年調年税額', nkYen(c.yearTax)], ['過不足（＋返す／－引く）', (c.diff > 0 ? '+' : '') + nkYen(c.diff)]];
+          return '<details><summary><b>' + esc(p.name) + '</b>' + (p.code ? '（' + esc(p.code) + '）' : '') + '　入れるもの ' + items.length + '件' +
+            (c.memo ? '　<span style="color:#c5221f">' + esc(c.memo) + '</span>' : '') + '</summary>' +
+            (items.length ? issueTable(items, ['弥生の画面', '項目', '入れる値']) : '<div class="note">入れるものはありません。</div>') +
+            '<div style="margin-top:4px">' + issueTable(res, ['こちらの計算', '金額']) + '</div></details>';
+        }).join('');
+      var cmp = '<h3 style="margin:14px 0 0;font-size:15px">弥生の結果と見比べる</h3>' +
+        '<div class="note">弥生で「年税額の算出」をしたあと、「年調明細を確認する（一覧）」の［ダウンロード］でCSVを保存し、ここで選びます。' +
+        'CSVはこのパソコンの中だけで読みます（どこにも送りません）。</div>' +
+        '<div class="noprint" style="margin:6px 0"><label class="btn" style="cursor:pointer">弥生のCSVを選ぶ<input type="file" id="yyFile" accept=".csv,text/csv" style="display:none"></label></div>' +
+        '<div id="yyCmp">' + YY.cmp + '</div>';
+      return head + list + each + cmp;
+    }
+    function yyLoad() {
+      if (YY.busy) return;
+      YY.busy = true;
+      $('yyMsg').innerHTML = '<div class="loading">源泉徴収簿と勤怠管理表を読んでいます...（30秒ほど）</div>';
+      call('adminYayoiNencho', [PIN, DEVICE], function (d) {
+        YY.busy = false; YY.data = d; $('yyMsg').innerHTML = ''; $('yyBody').innerHTML = yyBodyHtml(d); $('yyLoad').textContent = '読み直す';
+      }, function (m) { YY.busy = false; $('yyMsg').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+    }
+    $('pNencho').addEventListener('click', function (e) { if (e.target.closest('#yyLoad')) yyLoad(); });
+    $('pNencho').addEventListener('change', function (e) {
+      if (e.target.id !== 'yyFile' || !e.target.files[0]) return;
+      var f = e.target.files[0];
+      f.arrayBuffer().then(function (buf) {
+        var text;
+        try { text = new TextDecoder('utf-8', { fatal: true }).decode(buf); } catch (er) { text = new TextDecoder('shift_jis').decode(buf); }
+        YY.cmp = yyCompare(text.replace(/^﻿/, ''), f.name);
+        $('yyCmp').innerHTML = YY.cmp;
+      }).catch(function (er) { $('yyCmp').innerHTML = '<div class="msg err">CSVが読めませんでした：' + esc(er.message || er) + '</div>'; });
+      e.target.value = '';
+    });
+    function yyParseCsv(t) {
+      var rows = [], row = [], cell = '', q = false;
+      for (var i = 0; i < t.length; i++) {
+        var ch = t[i];
+        if (q) { if (ch === '"') { if (t[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += ch; }
+        else if (ch === '"') q = true;
+        else if (ch === ',') { row.push(cell); cell = ''; }
+        else if (ch === '\n' || ch === '\r') { if (ch === '\r' && t[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+        else cell += ch;
+      }
+      if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+      return rows.filter(function (r) { return r.some(function (c) { return String(c).trim() !== ''; }); });
+    }
+    function yyNum(s) { var n = Number(String(s == null ? '' : s).replace(/[,¥￥円\s]/g, '').replace(/^△|^▲/, '-')); return isNaN(n) ? null : n; }
+    function yyCompare(text, fileName) {
+      if (!YY.data) return '<div class="msg err">先に「入れる数字を出す」を押してください。</div>';
+      var rows = yyParseCsv(text);
+      var hi = -1;
+      for (var i = 0; i < Math.min(rows.length, 10); i++) if (rows[i].some(function (c) { return /氏名|従業員名/.test(c); })) { hi = i; break; }
+      if (hi < 0) return '<div class="msg err">「' + esc(fileName) + '」に「氏名」の列が見つかりません。弥生の「年調明細一覧」のCSVを選んでください。</div>';
+      // 見出しが2行のとき（上の行がまとまりの名前）は、つなげて1つの見出しにする
+      var head = rows[hi].map(function (c) { return String(c).trim(); }), start = hi + 1;
+      var nx = rows[hi + 1];
+      if (nx && nx.filter(function (c) { return yyNum(c) !== null && String(c).trim() !== ''; }).length === 0 && !nx.some(function (c) { return /氏名/.test(c); })) {
+        var grp = '';
+        head = head.map(function (h, j) { if (h) grp = h; var s = String(nx[j] || '').trim(); return s ? grp + ' ' + s : h || grp; });
+        start = hi + 2;
+      }
+      var find = function (re, not) { for (var j = 0; j < head.length; j++) if (re.test(head[j]) && !(not && not.test(head[j]))) return j; return -1; };
+      var all = function (re, not) { var a = []; head.forEach(function (h, j) { if (re.test(h) && !(not && not.test(h))) a.push(j); }); return a; };
+      var cName = find(/氏名|従業員名/), cCode = find(/従業員コード|^コード|社員番号/);
+      var cPay = find(/支給額総計/);
+      var payCols = cPay >= 0 ? [cPay] : all(/課税支給額/, /非課税|調整/);
+      var shahoCols = all(/社会保険料/, /申告|うち|控除額|確定拠出|小規模/);
+      var taxCols = all(/源泉徴収税額|徴収税額/, /年調|差引|過不足|算出|超過|不足/);
+      var cDed = find(/所得控除合計|所得控除額の合計/), cTaxable = find(/差引課税給与所得/), cYear = find(/年調年税額/);
+      var cDiff = find(/差引過不足|超過額又は不足額|過不足税額/), cBack = find(/(^|\s)還付(額)?$/), cMore = find(/(^|\s)徴収(額)?$/);
+      var used = [['氏名', cName], ['従業員コード', cCode], ['所得控除の合計', cDed], ['差引課税給与所得', cTaxable], ['年調年税額', cYear], ['差引過不足税額', cDiff], ['還付', cBack], ['徴収', cMore]]
+        .map(function (u) { return u[0] + '＝' + (u[1] >= 0 ? head[u[1]] : '（なし）'); })
+        .concat(['支払金額＝' + (payCols.length ? payCols.map(function (j) { return head[j]; }).join('＋') : '（なし）'),
+          '社会保険料＝' + (shahoCols.length ? shahoCols.map(function (j) { return head[j]; }).join('＋') : '（なし）'),
+          '源泉徴収税額＝' + (taxCols.length ? taxCols.map(function (j) { return head[j]; }).join('＋') : '（なし）')]);
+      var sum = function (r, cols) { if (!cols.length) return null; var s = 0, any = false; cols.forEach(function (j) { var n = yyNum(r[j]); if (n !== null) { s += n; any = true; } }); return any ? s : 0; };
+      var one = function (r, j) { return j < 0 ? null : yyNum(r[j]); };
+      var key = function (s) { return String(s || '').replace(/[\s　]/g, ''); };
+      var byCode = {}, byName = {};
+      YY.data.people.forEach(function (p) { if (p.code) byCode[String(p.code).replace(/^0+/, '')] = p; byName[key(p.name)] = p; });
+      var seen = {}, out = [], unknown = [], bad = 0;
+      var mark = function (y, ours, hint) {   // ours：合っていればよい値の並び
+        if (y === null || ours === null) return '<span style="color:var(--text3)">—</span>';
+        var ok = ours.some(function (o) { return o !== null && Math.round(o) === Math.round(y); });
+        if (ok) return '<span style="color:var(--ok)">○ ' + nkYen(y) + '</span>';
+        bad++;
+        return '<b style="color:#c5221f">× 弥生 ' + nkYen(y) + '</b><br><span style="font-size:12px">こちら ' + nkYen(ours[ours.length - 1]) + (hint ? '<br>' + esc(hint) : '') + '</span>';
+      };
+      rows.slice(start).forEach(function (r) {
+        var nm = cName >= 0 ? String(r[cName] || '').trim() : '';
+        if (!nm || /^合計|^計$/.test(nm)) return;
+        var code = cCode >= 0 ? String(r[cCode] || '').trim().replace(/^0+/, '') : '';
+        var p = (code && byCode[code]) || byName[key(nm)];
+        if (!p) { unknown.push(nm); return; }
+        seen[p.name] = true;
+        var c = p.calc, pp = c ? Number(c.prevPay) || 0 : 0, ps = c ? Number(c.prevShaho) || 0 : 0, pt = c ? Number(c.prevTax) || 0 : 0;
+        var yPay = sum(r, payCols), yShaho = sum(r, shahoCols), yTax = sum(r, taxCols);
+        var payHint = yPay !== null && Math.round(yPay) === Math.round(p.pay + pp + p.transport) ? '通勤手当（非課税）が入っているかも' : '弥生の給与と、勤怠管理表の課税支給額が違う月がある';
+        var yDiff = one(r, cDiff);
+        if (yDiff === null && (cBack >= 0 || cMore >= 0)) { var b = one(r, cBack) || 0, m = one(r, cMore) || 0; yDiff = b ? b : m ? -m : 0; }
+        var diffCell = '<span style="color:var(--text3)">—</span>';
+        if (yDiff !== null && c && c.diff !== '') {
+          if (Math.abs(Math.round(yDiff)) === Math.abs(Math.round(Number(c.diff)))) diffCell = '<span style="color:var(--ok)">○ ' + (Number(c.diff) > 0 ? '返す ' : Number(c.diff) < 0 ? '引く ' : '') + nkYen(Math.abs(yDiff)) + '</span>';
+          else { bad++; diffCell = '<b style="color:#c5221f">× 弥生 ' + nkYen(yDiff) + '</b><br><span style="font-size:12px">こちら ' + (c.diff > 0 ? '+' : '') + nkYen(c.diff) + '</span>'; }
+        }
+        out.push('<tr><td>' + esc(p.name) + '</td><td>' + esc(p.kind) + '</td>' +
+          '<td>' + mark(yPay, [p.pay, p.pay + pp], payHint) + '</td>' +
+          '<td>' + mark(yShaho, [p.shaho, p.shaho + ps], '社会保険料・雇用保険料が、弥生と勤怠管理表で違う月がある') + '</td>' +
+          '<td>' + mark(yTax, [p.withheld, p.withheld + pt], '毎月の所得税が違う。実際に引いたのは勤怠管理表の額なので、弥生の給与明細の所得税を直す') + '</td>' +
+          '<td>' + mark(one(r, cDed), c ? [Number(c.dedTotal)] : null, '申告書の入れ方（家族・保険料）が違う') + '</td>' +
+          '<td>' + mark(one(r, cTaxable), c ? [Number(c.taxable)] : null) + '</td>' +
+          '<td>' + mark(one(r, cYear), c ? [Number(c.yearTax)] : null) + '</td>' +
+          '<td>' + diffCell + '</td></tr>');
+      });
+      var missing = YY.data.people.filter(function (p) { return p.kind === '対象' && !seen[p.name]; }).map(function (p) { return p.name; });
+      var th = ['氏名', '年末調整', '支払金額', '社会保険料等', '源泉徴収税額', '所得控除の合計', '差引課税給与所得', '年調年税額', '過不足'];
+      return '<div class="' + (bad || missing.length || unknown.length ? 'msg err' : 'ok') + '">「' + esc(fileName) + '」：' + out.length + '人を見比べました。' +
+          (bad ? '<b>合わないところ ' + bad + 'か所</b>' : '全部合っています。') +
+          (missing.length ? '　弥生のCSVにいない年末調整の人：' + esc(missing.join('、')) : '') +
+          (unknown.length ? '　こちらにいない人：' + esc(unknown.join('、')) : '') + '</div>' +
+        '<table><tr>' + th.map(function (h) { return '<td style="color:var(--text2)">' + h + '</td>'; }).join('') + '</tr>' + out.join('') + '</table>' +
+        '<details style="margin-top:6px"><summary>使った弥生の列（見出しが違うときは知らせてください）</summary><div class="note">' + esc(used.join('　／　')) + '</div></details>' +
+        '<div class="note" style="margin-top:4px">— は、弥生のCSVにその列がない（またはこちらで計算していない）ところです。支払金額・社会保険料・所得税は、前職分を含めても含めなくても合っていれば ○ にしています。</div>';
     }
 
     // ── 給与（弥生給与Next） ──
