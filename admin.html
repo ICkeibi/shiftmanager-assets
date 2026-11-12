@@ -920,9 +920,11 @@
       var base = m ? m[1] : k, hint = m ? m[2] : '';
       var hit = names.filter(function (n) {
         var nk = String(n).replace(/[\s　]/g, '');
-        return nk.indexOf(base) === 0 && (!hint || nk.slice(base.length).indexOf(hint) === 0) && nk !== k;
+        return nk.indexOf(base) === 0 && (!hint || nk.slice(base.length).indexOf(hint) === 0);
       });
-      return hit.length === 1 ? hit[0] : '';
+      // 空白のちがいだけで同じ名前のシートがあれば、それを選ぶ
+      var same = hit.filter(function (n) { return String(n).replace(/[\s　]/g, '') === k; });
+      return same.length === 1 ? same[0] : hit.length === 1 ? hit[0] : '';
     }
     function kiActs(x, i) {
       if (KI.busy[i]) return '<span class="note">保存しています...</span>';
@@ -941,7 +943,7 @@
       if (x.kind === 'noname' || x.kind === 'nosheet') {
         var names = KI.data.sheetNames || [], guess = kiGuess(x.name, names);
         return '<select data-kisel="' + i + '"><option value="">勤怠管理表の氏名を選ぶ</option>' +
-          names.map(function (n) { return '<option' + (n === guess ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('') +
+          names.map(function (n) { return '<option value="' + esc(n) + '"' + (n === guess ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('') +
           '<option value="__skip__">書かない（他社・対象外）</option></select>' + b('name', '決める', true);
       }
       return b('ok', 'OK');
