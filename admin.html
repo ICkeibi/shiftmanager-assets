@@ -189,6 +189,22 @@
     .res .run { background: var(--primary-bg); color: var(--primary); border-radius: 8px; padding: 8px 12px; }
     .res table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 12px; }
     .res td { border-top: 1px solid var(--line); padding: 4px 6px; }
+    /* 書き込み結果の「確認してほしいもの」を片付ける */
+    .kihead { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-top: 4px; }
+    .kihead .left b { font-size: 15px; color: var(--over); }
+    .kihead .left b.zero { color: var(--ok); }
+    .res table.ki td { vertical-align: top; }
+    table.ki td.acts { white-space: nowrap; text-align: right; }
+    table.ki td.acts .tbtn { margin-left: 4px; }
+    table.ki td.acts .tbtn.main { background: var(--primary); color: #fff; border-color: transparent; }
+    table.ki td.acts input { width: 58px; font-size: 12px; padding: 2px 4px; border: 1px solid var(--line); border-radius: 4px; background: var(--card); color: var(--text); }
+    table.ki td.acts select { font-size: 12px; max-width: 170px; }
+    table.ki .kind { display: inline-block; font-size: 11px; font-weight: bold; padding: 1px 7px; border-radius: 10px; white-space: nowrap; }
+    table.ki .kind.k1 { background: var(--over-bg); color: var(--over); }
+    table.ki .kind.k2 { background: var(--warn-bg); color: var(--warn); }
+    table.ki .now { display: block; font-size: 11px; color: var(--text2); margin-bottom: 3px; }
+    table.ki tr.done td { color: var(--text3); }
+    table.ki .doneby { color: var(--ok); font-size: 12px; }
     .bar2 { height: 8px; background: var(--line); border-radius: 4px; margin-top: 6px; overflow: hidden; }
     .bar2 div { height: 100%; background: var(--primary); }
     @media print {
@@ -332,6 +348,9 @@
           <div class="step"><div class="sn">3</div><div class="sb"><div class="t">勤怠管理表に書き込む（空いている日だけ）</div>
             <div class="note">すでに入力がある日は書き換えません。時間がかかるときは、画面が自動で続きを書きます（この画面のまま待ってください）。</div>
             <div class="res" id="r3"></div></div><button class="btn" data-run="write">書き込む</button></div>
+          <div class="step"><div class="sn">4</div><div class="sb"><div class="t">確認してほしいものを片付ける</div>
+            <div class="note">書き込みで出た「確認してほしいもの」を、この画面で1件ずつ片付けます。時刻の直し・出勤簿での上書き・氏名の決め直しは、勤怠管理表にそのまま書きます。片付けた行は全員で共有され、書き込みをやり直しても済のままです。</div>
+            <div class="res" id="r4"></div></div><button class="btn" id="kiReload">読み直す</button></div>
         </div>
       </div>
       <!-- 勤怠打刻の反映 -->
@@ -816,8 +835,10 @@
           return '<option value="' + esc(m.label) + '">' + esc(m.label) + (m.hasKintai ? '' : '（勤怠管理表なし）') + '</option>';
         }).join('');
         $('kwMonth').selectedIndex = r.index;
+        kiLoad();
       }, function (m) { $('kwMsg').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
     }
+    $('kwMonth').addEventListener('change', function () { kiLoad(); });
     function issueTable(list, head) {
       if (!list || !list.length) return '';
       return '<table><tr>' + head.map(function (h) { return '<td style="color:var(--text2)">' + h + '</td>'; }).join('') + '</tr>' +
@@ -873,11 +894,122 @@
         }
         kwBusy(false);
         $('r3').innerHTML = '<div class="ok">書き込みました：<b>' + r.written + '件</b>（' + r.total + '人）。' +
-          (r.issues ? '　入力済みで出勤簿と違う日や、確認してほしい日が <b>' + r.issues + '件</b>（「' + esc(r.resultSheet) + '」シート）' : '') +
-          '　<a href="' + esc(r.kintaiUrl) + '" target="_blank" rel="noopener">勤怠管理表を開く ↗</a></div>' +
-          (r.issues ? '<details style="margin-top:6px" open><summary>確認してほしいもの（' + r.issues + '件）</summary>' + issueTable(r.issueList, ['氏名', '日付', '昼夜', '結果', '内容']) + '</details>' : '');
+          (r.issues ? '　確認してほしいものは、下の「4」で片付けます。' : '') +
+          '　<a href="' + esc(r.kintaiUrl) + '" target="_blank" rel="noopener">勤怠管理表を開く ↗</a></div>';
+        kiLoad();
       }, function (m) { kwBusy(false); $('r3').innerHTML = '<div class="msg err">' + esc(m) + '<br>もう一度「書き込む」を押すと、続きから書き込みます。</div>'; });
     }
+
+    // ── 4：確認してほしいものを片付ける（書き込み確認.gs） ──
+    var KI = { data: null, edit: null, busy: {}, loading: false };
+    var KI_KIND = { noname: '氏名がない', nosheet: 'シートがない', diff: '入力済みと違う', dup: '同じ日に2つ', other: '書けません', check: '確認' };
+    var KI_ORDER = { noname: 0, nosheet: 0, diff: 1, dup: 2, other: 3, check: 4 };
+    function kiLoad() {
+      var label = $('kwMonth').value;
+      if (!label || KI.loading) return;
+      KI.loading = true; KI.edit = null;
+      $('r4').innerHTML = '<div class="run">「書き込み結果」シートを読んでいます...</div>';
+      call('adminKintaiIssues', [PIN, DEVICE, label], function (r) {
+        KI.loading = false; KI.data = r; kiRender();
+      }, function (m) { KI.loading = false; $('r4').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+    }
+    $('kiReload').addEventListener('click', kiLoad);
+    // 「三井田」→ 勤怠管理表の「三井田 ○○」のように、名字が合うシートが1つだけなら先に選んでおく
+    function kiGuess(name, names) {
+      var k = String(name).replace(/[\s　]/g, ''), m = k.match(/^(.+?)[(（](.+?)[)）]$/);
+      var base = m ? m[1] : k, hint = m ? m[2] : '';
+      var hit = names.filter(function (n) {
+        var nk = String(n).replace(/[\s　]/g, '');
+        return nk.indexOf(base) === 0 && (!hint || nk.slice(base.length).indexOf(hint) === 0) && nk !== k;
+      });
+      return hit.length === 1 ? hit[0] : '';
+    }
+    function kiActs(x, i) {
+      if (KI.busy[i]) return '<span class="note">保存しています...</span>';
+      if (x.done) return '<span class="doneby">✓ ' + esc(x.done.how) + '<br>' + esc(x.done.by) + ' ' + esc(x.done.at) + '</span> <button class="tbtn" data-ki="undo" data-i="' + i + '">済を外す</button>';
+      var ed = KI.edit;
+      if (ed && ed.i === i) {
+        if (ed.loading) return '<span class="note">勤怠管理表を読んでいます...</span>';
+        return '<span class="now">今：' + esc([ed.kind, ed.start && ed.start + '〜' + ed.end].filter(Boolean).join(' ') || '（空）') + '</span>' +
+          '始業 <input data-kin="start" value="' + esc(ed.start || '') + '" placeholder="8:30"> 終業 <input data-kin="end" value="' + esc(ed.end || '') + '" placeholder="17:30">' +
+          '<button class="tbtn main" data-ki="save" data-i="' + i + '">保存</button><button class="tbtn" data-ki="cancel" data-i="' + i + '">やめる</button>';
+      }
+      var b = function (act, text, main) { return '<button class="tbtn' + (main ? ' main' : '') + '" data-ki="' + act + '" data-i="' + i + '">' + text + '</button>'; };
+      if (x.kind === 'check') return b('ok', 'OK', true) + b('times', '時刻を直す');
+      if (x.kind === 'diff') return b('over', '出勤簿で上書き', true) + b('ok', '今のまま');
+      if (x.kind === 'dup') return b('times', '時刻を直す') + b('ok', 'OK');
+      if (x.kind === 'noname' || x.kind === 'nosheet') {
+        var names = KI.data.sheetNames || [], guess = kiGuess(x.name, names);
+        return '<select data-kisel="' + i + '"><option value="">勤怠管理表の氏名を選ぶ</option>' +
+          names.map(function (n) { return '<option' + (n === guess ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('') +
+          '<option value="__skip__">書かない（他社・対象外）</option></select>' + b('name', '決める', true);
+      }
+      return b('ok', 'OK');
+    }
+    function kiRender() {
+      var d = KI.data;
+      if (!d) return;
+      var open = '　<a href="' + esc(d.kintaiUrl || '#') + '" target="_blank" rel="noopener">勤怠管理表を開く ↗</a>';
+      if (d.other) { $('r4').innerHTML = '<div class="note">「書き込み結果」シートは <b>' + esc(d.other) + '</b> の結果です。' + esc(d.label) + ' は、まだ「3」の書き込みをしていません。</div>'; return; }
+      if (!d.list.length) { $('r4').innerHTML = d.made ? '<div class="ok">確認してほしいものはありません。' + open + '</div>' : '<div class="note">まだ「3」の書き込みをしていません。</div>'; return; }
+      var idx = d.list.map(function (x, i) { return i; });
+      idx.sort(function (a, b) { var x = d.list[a], y = d.list[b]; return (KI_ORDER[x.kind] - KI_ORDER[y.kind]) || (a - b); });
+      var todo = idx.filter(function (i) { return !d.list[i].done; }), fin = idx.filter(function (i) { return d.list[i].done; });
+      var row = function (i) {
+        var x = d.list[i], k = x.kind === 'check' ? 'k2' : 'k1';
+        return '<tr' + (x.done ? ' class="done"' : '') + '><td style="white-space:nowrap">' + esc(x.name) + '</td><td style="white-space:nowrap">' + esc(x.date) + ' ' + esc(x.shift) + '</td>' +
+          '<td><span class="kind ' + k + '">' + esc(KI_KIND[x.kind] || x.result) + '</span> ' + esc(x.msg) + '</td><td class="acts">' + kiActs(x, i) + '</td></tr>';
+      };
+      $('r4').innerHTML = '<div class="kihead"><span class="left">残り <b class="' + (todo.length ? '' : 'zero') + '">' + todo.length + '件</b> / ' + d.list.length + '件</span>' +
+        '<span class="note">（' + esc(d.label) + '・書き込み ' + esc(d.made) + '）</span>' + open + '</div>' +
+        (todo.length ? '<table class="ki">' + todo.map(row).join('') + '</table>' : '<div class="ok" style="margin-top:6px">全部片付きました。</div>') +
+        (fin.length ? '<details style="margin-top:8px"><summary>片付けたもの（' + fin.length + '件）</summary><table class="ki">' + fin.map(row).join('') + '</table></details>' : '') +
+        '<div class="msg err hidden" id="kiErr" style="margin-top:6px"></div>';
+    }
+    function kiErr(m) { var e = $('kiErr'); if (e) { e.textContent = m; e.classList.remove('hidden'); } else alert(m); }
+    function kiSend(i, action, value, confirmMsg) {
+      var d = KI.data, x = d.list[i];
+      if (confirmMsg && !confirm(confirmMsg)) return;
+      KI.busy[i] = true; kiRender();
+      var item = { row: x.row, name: x.name, date: x.date, shift: x.shift, msg: x.msg };
+      call('adminKintaiResolve', [PIN, DEVICE, d.label, item, action, value], function (r) {
+        delete KI.busy[i]; KI.edit = null;
+        if (r.reload) { kiLoad(); return; }
+        x.done = { how: r.how, by: r.by, at: r.at }; kiRender();
+      }, function (m) { delete KI.busy[i]; kiRender(); kiErr(x.name + '：' + m); });
+    }
+    $('r4').addEventListener('click', function (e) {
+      var b = e.target.closest('button[data-ki]');
+      if (!b || !KI.data) return;
+      var i = Number(b.getAttribute('data-i')), what = b.getAttribute('data-ki'), d = KI.data, x = d.list[i];
+      var item = { row: x.row, name: x.name, date: x.date, shift: x.shift, msg: x.msg };
+      if (what === 'ok') kiSend(i, 'ok');
+      if (what === 'over') kiSend(i, 'overwrite', null, x.name + ' ' + x.date + ' ' + x.shift + ' を、出勤簿の内容で書き換えます。\n\n' + x.msg + '\n\n書き換えますか？' +
+        (x.plan ? '' : '\n（前の版で作った一覧なので、出勤簿を読み直します。1分ほどかかります）'));
+      if (what === 'times') {
+        KI.edit = { i: i, loading: true }; kiRender();
+        call('adminKintaiRow', [PIN, DEVICE, d.label, item], function (r) {
+          if (!KI.edit || KI.edit.i !== i) return;
+          KI.edit = { i: i, kind: r.kind, start: r.start, end: r.end }; kiRender();
+        }, function (m) { KI.edit = null; kiRender(); kiErr(x.name + '：' + m); });
+      }
+      if (what === 'cancel') { KI.edit = null; kiRender(); }
+      if (what === 'save') {
+        var tr = b.closest('tr'), s = tr.querySelector('input[data-kin=start]').value, en = tr.querySelector('input[data-kin=end]').value;
+        kiSend(i, 'times', { start: s, end: en });
+      }
+      if (what === 'name') {
+        var v = document.querySelector('select[data-kisel="' + i + '"]').value;
+        if (!v) { kiErr('勤怠管理表の氏名を選んでください'); return; }
+        if (v === '__skip__') kiSend(i, 'name', v, '「' + x.name + '」を、勤怠管理表に書き込まない人（他社・対象外）にします。\n次からの書き込みでも書きません（「書き込み対象外」シートの行を消すと元に戻ります）。\n\nよろしいですか？');
+        else kiSend(i, 'name', v, '「' + x.name + '」を、勤怠管理表の「' + v + '」として「名前対応」シートに入れ、この人の ' + d.label + ' の出勤を書き込みます（空いている日だけ）。\n出勤簿を読むので1分ほどかかります。\n\nよろしいですか？');
+      }
+      if (what === 'undo') {
+        KI.busy[i] = true; kiRender();
+        call('adminKintaiUndo', [PIN, DEVICE, d.label, item], function () { delete KI.busy[i]; x.done = null; kiRender(); },
+          function (m) { delete KI.busy[i]; kiRender(); kiErr(x.name + '：' + m); });
+      }
+    });
 
     // ── 勤怠打刻の反映 ──
     var DK = { init: false, busy: false };
