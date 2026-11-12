@@ -204,6 +204,14 @@
     table.ki .kind.k2 { background: var(--warn-bg); color: var(--warn); }
     table.ki .now { display: block; font-size: 11px; color: var(--text2); margin-bottom: 3px; }
     table.ki tr.done td { color: var(--text3); }
+    details.kifin { margin-top: 10px; }
+    details.kifin > summary { display: inline-block; cursor: pointer; list-style: none; padding: 6px 14px; border: 1px solid var(--primary); border-radius: 8px;
+      color: var(--primary); background: var(--primary-bg); font-weight: bold; font-size: 13px; user-select: none; }
+    details.kifin > summary::-webkit-details-marker { display: none; }
+    details.kifin > summary::before { content: '▶ '; }
+    details.kifin[open] > summary::before { content: '▼ '; }
+    details.kifin > summary:hover { background: var(--primary); color: #fff; }
+    details.kifin > summary .hint { font-weight: normal; margin-left: 6px; opacity: .8; }
     table.ki tr.kigrp td { background: var(--bg); border-top: 2px solid var(--line); padding-top: 6px; }
     table.ki .doneby { color: var(--ok); font-size: 12px; }
     .bar2 { height: 8px; background: var(--line); border-radius: 4px; margin-top: 6px; overflow: hidden; }
@@ -975,7 +983,7 @@
           }
           return head + row(i);
         }).join('') + '</table>' : '<div class="ok" style="margin-top:6px">全部片付きました。</div>') +
-        (fin.length ? '<details style="margin-top:8px"><summary>片付けたもの（' + fin.length + '件）</summary><table class="ki">' + fin.map(row).join('') + '</table></details>' : '') +
+        (fin.length ? '<details class="kifin"><summary>片付けたもの（' + fin.length + '件）<span class="hint">― 押すと開きます（済を外すときもここから）</span></summary><table class="ki">' + fin.map(row).join('') + '</table></details>' : '') +
         '<div class="msg err hidden" id="kiErr" style="margin-top:6px"></div>';
     }
     // 同じ人の「確認」をまとめてOK（勤怠管理表は書き換えない）
