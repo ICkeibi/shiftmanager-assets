@@ -1053,7 +1053,18 @@
           '<h3 style="margin:14px 0 0;font-size:15px">試しの計算</h3>' + nkCalcHtml(g.trial, '試し') +
           '<h3 style="margin:14px 0 0;font-size:15px">本番の計算</h3>' + nkCalcHtml(g.final, '本番');
       }
-      $('nkBody').innerHTML = steps +
+      // 用紙：国税庁のPDF（毎年新しくなるので、いつも国税庁から出す。名前などは書き込まない＝個人情報を画面に出さない）
+      var ny = r.year + 1, nw = '令和' + (ny - 2018) + '年分';
+      var forms = '<div class="panel"><div class="ph"><span class="pi"><span class="dot"></span>用紙を印刷する（国税庁）</span></div><div class="res"><table>' +
+        '<tr><td style="width:40px">①</td><td><a href="https://www.nta.go.jp/taxes/tetsuzuki/shinsei/annai/gensen/pdf/' + ny + 'bun_01.pdf" target="_blank" rel="noopener">' +
+          esc(nw) + ' 給与所得者の扶養控除等（異動）申告書（PDF）↗</a></td><td>甲欄の人全員。来年の分。入社した人には、その年の分も</td></tr>' +
+        '<tr><td>②〜⑤</td><td><a href="https://www.nta.go.jp/users/gensen/nencho/shinkokusyo/index.htm" target="_blank" rel="noopener">各種申告書・記載例の一覧（国税庁）↗</a></td>' +
+          '<td>②基礎控除申告書など・③保険料控除申告書・④特定親族特別控除申告書・⑤住宅ローン控除。記入例もここにあります</td></tr>' +
+        '<tr><td>外国語</td><td><a href="https://www.nta.go.jp/users/gensen/nencho/shinkokusyo/gaikokugo.htm" target="_blank" rel="noopener">外国語の訳（英語・中国語・ベトナム語・フィリピノ語など）↗</a></td>' +
+          '<td>日本語が読みにくい人に、日本語の用紙と一緒に渡す（出すのは日本語の用紙）</td></tr>' +
+        '</table>' + (r.check && r.check.found ? '<div class="note" style="margin-top:6px">配る人数の目安：チェック表の「対象」 <b>' + r.check.total + '人</b>分</div>' : '') +
+        '<div class="note" style="margin-top:4px">PDFを開いて、ブラウザの印刷（Ctrl+P）で人数分を印刷します。用紙は毎年変わるので、前の年の紙は使わないでください。</div></div></div>';
+      $('nkBody').innerHTML = steps + forms +
         '<div class="panel"><div class="ph"><span class="pi"><span class="dot"></span>書類の提出</span></div><div class="res">' + check + '</div></div>' +
         '<div class="panel"><div class="ph"><span class="pi"><span class="dot"></span>源泉徴収簿と計算の結果</span>' +
         '<a class="btn" href="' + esc(r.kintaiUrl) + '" target="_blank" rel="noopener" style="padding:4px 10px;font-size:12px">勤怠管理表を開く（計算はメニューから）↗</a></div><div class="res">' + calc + '</div></div>';
