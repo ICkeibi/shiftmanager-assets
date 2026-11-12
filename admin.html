@@ -1030,8 +1030,10 @@
           '　<a href="' + esc(c.url) + '" target="_blank" rel="noopener">勤怠管理表を開く ↗</a></div>';
       } else {
         var rest = c.total - c.both;
-        check = '<div class="' + (rest ? 'msg err' : 'ok') + '">対象（甲欄）<b>' + c.total + '人</b>のうち、①②とも提出 <b>' + c.both + '人</b>・<b>まだ ' + rest + '人</b>　' +
+        check = '<div class="' + (rest ? 'msg err' : 'ok') + '">対象（甲欄）<b>' + c.total + '人</b>のうち、' + (c.hasPrevCol ? '①②と前職票がそろった人' : '①②とも提出') + ' <b>' + c.both + '人</b>・<b>まだ ' + rest + '人</b>' +
+          (c.hasPrevCol && c.prevMissing ? '（うち前職票が空欄 ' + c.prevMissing + '人）' : '') + '　' +
           '中身を確認した人 <b>' + c.checked + '人</b>' + (c.outside ? '　（乙欄で対象外 ' + c.outside + '人）' : '') +
+          (c.noAdjust && c.noAdjust.length ? '　（前職票がもらえず本人が確定申告 ' + c.noAdjust.length + '人：' + esc(c.noAdjust.join('、')) + '）' : '') +
           '　<a href="' + esc(c.url) + '" target="_blank" rel="noopener">チェック表を開く ↗</a>（' + esc(c.label) + 'の勤怠管理表）</div>' +
           (c.missing.length ? '<details style="margin-top:6px" open><summary>まだ出していない人（' + c.missing.length + '人）</summary>' +
             issueTable(c.missing.map(function (m) { return [m.name, m.need, m.memo]; }), ['氏名', 'まだの書類', 'メモ']) + '</details>' : '') +
