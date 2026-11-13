@@ -940,8 +940,16 @@
     }
     $('plShow').addEventListener('click', function () { plLoad(); });
     $('plPrint').addEventListener('click', function () {
-      if (PL.data) plPrint(PL.data); else plLoad(plPrint);
+      if (PL.data) plPrintCheck(PL.data); else plLoad(plPrintCheck);
     });
+    // シートの月と、上で選んでいる月が違うときは、印刷の前に聞く
+    function plPrintCheck(r) {
+      var sel = $('kwMonth').value, t = String(r.title || '');
+      if (sel && t && t.indexOf(sel) !== 0 &&
+        !confirm('「個人別集計」シートは「' + t.split(/[\s　]/)[0] + '」の分です（上で選んでいる月は ' + sel + '）。\n\n' +
+          'このまま印刷しますか？\n\n' + sel + ' を印刷するときは「キャンセル」を押して、先に②の「作る」を押してください。')) return;
+      plPrint(r);
+    }
     // 並び：漢字の名前の人 → カタカナの名前の人 → 他社。それぞれの中はシートの順のまま
     function plOrder(rows) {
       var g = function (p) {
@@ -978,7 +986,7 @@
     // ── 出面表を印刷（個人別集計から。A4縦・1枚。入らなければ2枚） ──
     //  ・形は出面の表（Book1.xlsx「10月隊員出面」）に合わせる：左右2段に人を並べ、1行おきに薄い灰色、0 は空欄
     //  ・並びは「個人別集計」シートの順。他社の人は【協力会社】の下に、いちばん下に合計
-    //  ・残業・遅刻は時間（1:30）。右上に会社のアイコンと会社名
+    //  ・残業・遅刻は時間（1:30）。右上に会社のアイコンと会社名。色はアイコンの青・緑
     //  ・新しい画面は開かず、この画面の中の見えない枠で印刷の画面を出す
     var PL_COLS = [
       { k: 'day', h: '日勤', c: '#4472C4' }, { k: 'night', h: '夜勤', c: '#222' }, { k: 'over', m: 'overMin', h: '残業', c: '#C00000', wide: 1 },
@@ -1014,7 +1022,7 @@
       };
       // 左右で 50% ずつ（氏名 12.6%・数 4.2%・残業と遅刻 6.1%）
       var colg = '<col style="width:12.6%">' + PL_COLS.map(function (c) { return '<col style="width:' + (c.wide ? 6.1 : 4.2) + '%">'; }).join('');
-      var head = '<th>氏名</th>' + PL_COLS.map(function (c) { return '<th style="color:' + c.c + '">' + c.h + '</th>'; }).join('');
+      var head = '<th>氏名</th>' + PL_COLS.map(function (c) { return '<th>' + c.h + '</th>'; }).join('');
       var body = '', icon = new URL('icon.png', location.href).href;   // 右上の会社のアイコン（売上累計表と同じ）
       for (var pg = 0; pg < pages; pg++) {
         var L = items.slice(pg * per * 2, pg * per * 2 + per), R = items.slice(pg * per * 2 + per, pg * per * 2 + per * 2), rows = '';
@@ -1030,25 +1038,26 @@
       var html = '<!doctype html><html><head><meta charset="utf-8"><title>' + esc(title) + ' 出面表</title><style>' +
         '@page { size: A4 portrait; margin: 8mm 8mm; }' +
         '* { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
-        'body { margin: 0; font-family: "Yu Mincho", "YuMincho", "MS PMincho", "Hiragino Mincho ProN", serif; font-size: 10pt; color: #111; }' +
+        // 色は会社のアイコン（青 #0060A0・緑 #40A040）に合わせる（売上累計表と同じ）
+        'body { margin: 0; font-family: "Yu Mincho", "YuMincho", "MS PMincho", "Hiragino Mincho ProN", serif; font-size: 10pt; color: #1b2a36; }' +
         '.page { width: 194mm; margin: 0 auto; }' +
         '.page + .page { break-before: page; page-break-before: always; }' +
-        '.made { font-size: .7em; text-align: right; line-height: 1.2; }' +
-        '.head { display: flex; align-items: center; padding-bottom: 1.5mm; border-bottom: 3px solid #5b5b8a; font-weight: bold; }' +
+        '.made { font-size: .7em; text-align: right; line-height: 1.2; color: #5a6b78; }' +
+        '.head { display: flex; align-items: center; padding-bottom: 1.5mm; margin-bottom: 1.5mm; border-bottom: 3px solid #40A040; font-weight: bold; color: #0060A0; }' +
         '.head > div { flex: 1; } .head .ym { font-size: 1.5em; } .head .t { font-size: 1.7em; letter-spacing: .5em; text-align: center; }' +
         '.head .co { display: flex; align-items: center; justify-content: flex-end; gap: .4em; font-size: 1.05em; }' +
         '.head .co img { height: 2.2em; width: auto; }' +
-        'table { width: 100%; border-collapse: collapse; table-layout: fixed; border: 1.5px solid #222; border-top: 0; }' +
-        'th, td { border-top: 1px solid #888; border-bottom: 1px solid #888; border-left: 1px dotted #999; padding: .22em .25em; line-height: 1.2; white-space: nowrap; overflow: hidden; }' +
-        'th { font-weight: bold; text-align: center; font-size: .9em; border-bottom: 1.5px solid #222; }' +
-        'td.nm { font-weight: bold; border-left: 1px solid #222; text-overflow: clip; }' +
-        'td.nm.L { border-left: 0; } .Rb { border-left: 1.5px solid #222 !important; }' +
-        'td.nm.nomap { color: #777; } td.sec { font-weight: bold; } td.tot { text-align: center; }' +
+        'table { width: 100%; border-collapse: collapse; table-layout: fixed; border: 1.5px solid #0060A0; }' +
+        'th, td { border-top: 1px solid #9db8cf; border-bottom: 1px solid #9db8cf; border-left: 1px dotted #9db8cf; padding: .22em .25em; line-height: 1.2; white-space: nowrap; overflow: hidden; }' +
+        'th { font-weight: bold; text-align: center; font-size: .9em; background: #0060A0; color: #fff; border-color: #0060A0; border-left: 1px solid #3f86bd; }' +
+        'td.nm { font-weight: bold; border-left: 1px solid #0060A0; text-overflow: clip; }' +
+        'th:first-child, td.nm.L { border-left: 0; } .Rb { border-left: 1.5px solid #0060A0 !important; }' +
+        'td.nm.nomap { color: #8a96a0; } td.sec { font-weight: bold; color: #2f7d30; }' +
         'td.n { text-align: center; font-weight: bold; font-variant-numeric: tabular-nums; }' +
-        'td.n small { font-size: .72em; font-weight: normal; margin-left: .25em; }' +
-        'tr.odd td { background: #f2f2f2; }' +
-        'tr.totrow td { border-top: 1.5px solid #222; }' +
-        'td.n.t { white-space: normal; line-height: 1.05; } td.n.t small { display: block; margin-left: 0; }' +
+        'tr.odd td { background: #eef5fb; }' +
+        'td.nm.tot { text-align: center; } td.nm.tot, td.n.t { background: #40A040 !important; color: #fff; border-color: #40A040; }' +
+        'tr.totrow td { border-top: 1.5px solid #0060A0; }' +
+        'td.n.t { white-space: normal; line-height: 1.05; }' +
         '@media print { .page { width: auto; } }' +
         '</style></head><body>' + body +
         // 印刷の幅（194mm）で測って、1枚の高さが A4 の印刷範囲（約281mm）に収まるまで文字を小さくする
