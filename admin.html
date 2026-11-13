@@ -345,7 +345,7 @@
       <div class="page hidden" id="pWeekly">
         <div class="toolbar">
           <div><h2>週払いの確認</h2><div class="sub">毎週木曜締め・金曜払い。名前を押すと、日ごとの内訳を開きます。「済」は全員で共有されます。</div></div>
-          <div class="noprint"><button class="btn" id="wkPrint">印刷</button> <button class="btn" id="wkReload">出勤簿を読み直す</button></div>
+          <div class="noprint"><button class="btn" id="wkPrint">印刷</button> <button class="btn" id="wkReload">最新にする（出勤簿を読み直す）</button></div>
         </div>
         <div class="filters">
           <label>月<select id="wkMonth"></select></label>
@@ -760,13 +760,25 @@
     $('wkReload').addEventListener('click', function () { WK.detail = {}; wkLoad(true); });
     $('wkPrint').addEventListener('click', function () { window.print(); });
     $('wkFilter').addEventListener('input', wkRender);
+    // 一覧を出す：前に数えた結果があればすぐ出す（出勤簿は読まない）。無ければ数える
+    //  refresh（「最新にする」）のときは、出勤簿を必ず読み直す
     function wkLoad(refresh) {
       $('wkMsg').innerHTML = '';
-      $('wkBody').innerHTML = '<div class="loading">' + (refresh ? '出勤簿を読み直しています...（1分ほどかかることがあります）' : '読み込み中...') + '</div>';
-      var mid = wkMonthId(), per = $('wkPeriod').value;
-      call('adminWeekly', [PIN, DEVICE, mid, per, !!refresh], function (r) {
-        r.mid = mid; r.per = per; WK.data = r; wkRender();
-      }, function (m) { $('wkBody').innerHTML = ''; wkErr(m); });
+      var mid = wkMonthId(), per = $('wkPeriod').value, seq = WK.seq = (WK.seq || 0) + 1;
+      var count = function () {
+        $('wkBody').innerHTML = '<div class="loading">' + (refresh ? '出勤簿を読み直しています...（1分ほどかかることがあります）' : '出勤簿を読んでいます...') + '</div>';
+        call('adminWeekly', [PIN, DEVICE, mid, per, !!refresh], function (r) {
+          if (seq !== WK.seq) return;   // 読んでいる間に月・期間を変えた
+          r.mid = mid; r.per = per; r.at = r.savedAt || 0; r.changed = []; r.fresh = true; WK.data = r; wkRender();
+        }, function (m) { if (seq !== WK.seq) return; $('wkBody').innerHTML = ''; wkErr(m); });
+      };
+      if (refresh) { count(); return; }
+      $('wkBody').innerHTML = '<div class="loading">読み込み中...</div>';
+      call('adminWeeklySaved', [PIN, DEVICE, mid, per], function (r) {
+        if (seq !== WK.seq) return;
+        if (r.none) { count(); return; }
+        r.mid = mid; r.per = per; r.fresh = false; WK.data = r; wkRender();
+      }, function () { if (seq === WK.seq) count(); });
     }
     function nkey(n) { return String(n || '').replace(/[\s　]/g, ''); }
     function normName(s) {
@@ -799,7 +811,9 @@
       };
       var unk = d.unknown && d.unknown.length ? '<details class="unk"><summary>⚠ 名簿にない名前 ' + d.unknown.length + '件（新しい人・表記の違い・入力ミスの可能性）</summary>' +
         d.unknown.map(function (u) { return '<div>' + esc(u.name) + '　<span style="opacity:.8">' + u.count + '回：' + esc(u.where.join('、')) + '</span></div>'; }).join('') + '</details>' : '';
-      $('wkBody').innerHTML = unk +
+      var note = d.at ? savedNote(d.at, d.changed, d.fresh, '数えた') : '';
+      d.fresh = false;
+      $('wkBody').innerHTML = '<div class="noprint">' + note + '</div>' + unk +
         '<div class="wkinfo"><span>週払い <b>' + weekly.length + '人</b></span><span>済 <b>' + paidN + '人</b></span><span>未確認 <b style="color:var(--over)">' + (weekly.length - paidN) + '人</b></span>' +
         '<span>（' + esc(d.madeAt) + ' 時点）</span></div>' +
         '<table class="wk"><thead><tr><th class="typ">区分</th><th>名前</th><th class="num">日勤</th><th class="num">夜勤</th><th class="num">合計</th><th class="chk">済</th></tr></thead><tbody>' +
