@@ -1712,10 +1712,11 @@
         (r.note ? '<div class="unk">' + esc(r.note) + '</div>' : '') +
         (r.companies.some(function (c) { return c.noRate; }) ? '<div class="unk">単価が未登録の会社があります（金額が0円）。「請求単価」シートに入れてください。</div>' : '');
       var rows = '';
-      r.companies.forEach(function (c) {
+      r.companies.forEach(function (c, ci) {
         c.sites.forEach(function (s, i) {
           rows += '<tr' + (i === 0 ? ' style="border-top:2px solid var(--line)"' : '') + '><td>' + (i === 0 ? '<b>' + esc(c.name) + '</b>' + (c.noRate ? ' <span style="color:var(--over)">（単価未登録）</span>' : '') +
-            '<div style="font-size:11px;color:var(--text3)">' + esc(c.period) + '</div>' : '') + '</td><td>' + esc(s.name) + '</td><td class="num">' + s.day + '人</td><td class="num">' + s.night + '人</td><td class="num">' + yen(s.total) + '</td></tr>';
+            '<div style="font-size:11px;color:var(--text3)">' + esc(c.period) + '</div>' +
+            (c.sites[0] && c.sites[0].lines ? '<button class="btn noprint" data-inv="' + ci + '" style="margin-top:4px;padding:3px 10px;font-size:12px">請求書</button>' : '') : '') + '</td><td>' + esc(s.name) + '</td><td class="num">' + s.day + '人</td><td class="num">' + s.night + '人</td><td class="num">' + yen(s.total) + '</td></tr>';
         });
         if (c.sites.length > 1) rows += '<tr><td></td><td style="color:var(--text2)">小計</td><td class="num">' + c.day + '人</td><td class="num">' + c.night + '人</td><td class="num"><b>' + yen(c.total) + '</b></td></tr>';
       });
@@ -1723,11 +1724,18 @@
         '<div class="wkinfo"><span>' + esc(r.label) + '</span><span>' + r.companies.length + '社</span><span>日勤 <b>' + g.day + '人</b></span><span>夜勤 <b>' + g.night + '人</b></span>' +
         '<span>小計 <b>' + yen(g.total) + '</b></span><span>消費税 ' + yen(g.tax) + '</span><span>税込み <b>' + yen(g.total + g.tax) + '</b></span></div>' +
         '<div class="toolbar" style="margin-bottom:8px"><div class="sub" style="margin:0">売上累計表と同じ並び（会社名・現場名・日勤・夜勤・金額）です。「コピー」でExcelの売上累計表にそのまま貼れます。</div>' +
-        '<div class="noprint"><button class="btn main" id="blPrint">売上累計表を印刷（A4）</button> <button class="btn" id="blCopy">表をコピー</button> <a class="btn" href="' + esc(r.sheetUrl) + '" target="_blank" rel="noopener">請求集計シートを開く ↗</a></div></div>' +
+        '<div class="noprint"><button class="btn main" id="blPrint">売上累計表を印刷（A4）</button> ' +
+        (r.companies.length && r.companies[0].sites[0] && r.companies[0].sites[0].lines ? '<button class="btn main" id="invAll">請求書をまとめて印刷</button> ' : '') +
+        '<button class="btn" id="blCopy">表をコピー</button> <a class="btn" href="' + esc(r.sheetUrl) + '" target="_blank" rel="noopener">請求集計シートを開く ↗</a></div></div>' +
         '<table class="wk"><thead><tr><th>会社名</th><th>現場名</th><th class="num">日勤</th><th class="num">夜勤</th><th class="num" style="width:120px">金額（税抜）</th></tr></thead><tbody>' + rows +
         '<tr class="total"><td>計</td><td></td><td class="num">' + g.day + '人</td><td class="num">' + g.night + '人</td><td class="num">' + yen(g.total) + '</td></tr></tbody></table>' +
-        '<div class="note" style="font-size:12px;color:var(--text2);margin-top:8px">請求書の項目ごとの数量・単価・消費税（現場ごと）は「請求集計」シート、1日ずつの明細は「請求明細」シートで見られます。</div>';
+        '<div class="note" style="font-size:12px;color:var(--text2);margin-top:8px">請求書の項目ごとの数量・単価・消費税（現場ごと）は「請求集計」シート、1日ずつの明細は「請求明細」シートで見られます。</div>' +
+        '<div id="invBox"></div>';
       $('blPrint').addEventListener('click', function () { blPrint(r); });
+      if ($('invAll')) $('invAll').addEventListener('click', function () { invPrintAll(); });
+      Array.prototype.forEach.call(document.querySelectorAll('#blBody button[data-inv]'), function (b) {
+        b.addEventListener('click', function () { invEdit(Number(b.getAttribute('data-inv'))); });
+      });
       $('blCopy').addEventListener('click', function () {
         var t = [];
         r.companies.forEach(function (c) { c.sites.forEach(function (s, i) { t.push([i === 0 ? c.name : '', s.name, s.day, s.night, s.total].join('\t')); }); });
@@ -1747,6 +1755,182 @@
         $('blBody').insertBefore(box, $('blBody').firstChild); box.focus(); box.select();
         $('blCopy').textContent = 'Ctrl+C を押してください';
       });
+    }
+
+    // ── 請求書（現場ごとにA4横1枚。今までのExcelの請求書と同じ形） ──
+    //  ・数量・単価は「請求単価」シートと出勤簿から（請求集計シートと同じ数）。消費税は現場ごとに10%（切り捨て）
+    //  ・工事件名・施工場所・工期・工事概要・宛名は「請求書の項目」シート。ここで直して「保存」すると次の月も同じものが出る
+    var INV_CO = {
+      licence: '東京都公安委員会認定第30004751号', reg: '登録番号　　T6-0106-0106-1871', zip: '130-0022',
+      addr: '東京都墨田区江東橋2-2-14 東神ビル303号', tel: '03-5655-9512', fax: '03-5655-9513',
+      bank: '東京東信用金庫 錦糸町支店', acType: '普通', acNo: '3762471', acName: 'アイシーケイビホショウ（カ'
+    };
+    var INV_NOTES = ['※残業時間が４時間を超過する場合は当該の日勤・夜勤をご請求申し上げます。',
+      '※上番後中止の場合、もしくは前日の連絡がなく中止の場合は半日分の請求', '　 といたします。', '※福利厚生を含む。'];
+    // 宛名：「請求書の項目」G列 → 「請求単価」N列 → A列（(株)は株式会社に）
+    function invAtena(c, meta) {
+      if (meta && meta.atena) return meta.atena;
+      if (c.disp) return c.disp;
+      return String(c.name).replace(/^[（(]株[)）]\s*(.+)$/, '株式会社 $1').replace(/^(.+?)\s*[（(]株[)）]$/, '$1 株式会社');
+    }
+    // 請求日：締め日（20日締めなら20日、空欄なら月末）
+    function invDate(c) {
+      var ym = String(BL.data.ym || '').split('-').map(Number), y = ym[0], m = ym[1];
+      if (!y || !m) { var mm = String(BL.data.label).match(/令和(\d+)年(\d+)月/); if (mm) { y = Number(mm[1]) + 2018; m = Number(mm[2]); } }
+      if (!y || !m) return '';
+      var d = c.close >= 1 && c.close <= 28 ? c.close : new Date(y, m, 0).getDate();
+      return '令和' + (y - 2018) + '年' + m + '月' + d + '日';
+    }
+    // 請求書の行：日勤・日勤残業・夜勤・夜勤残業・（日曜祝日の単価がある会社は日曜祝日の2行）・2級資格
+    function invRows(c, s) {
+      var q = {};
+      (s.lines || []).forEach(function (l) { q[l.label] = l.qty; });
+      var rt = c.rates || {}, rows = [
+        ['日勤（１人毎）', rt.day, q['日勤']], ['日勤残業', rt.otDay, q['日勤残業(30分)']],
+        ['夜勤（１人毎）', rt.night, q['夜勤']], ['夜勤残業', rt.otNight, q['夜勤残業(30分)']]];
+      if (rt.hDay != null) rows.push(['日曜、祝日昼勤（１人毎）', rt.hDay, q['日曜祝日 日勤']]);
+      if (rt.hNight != null) rows.push(['日曜、祝日夜勤（１人毎）', rt.hNight, q['日曜祝日 夜勤']]);
+      rows.push(['2級資格', rt.qual, q['資格者']]);
+      return rows.map(function (x) { var u = Number(x[1]) || 0, n = Number(x[2]) || 0; return { name: x[0], unit: u, qty: n, yen: Math.round(u * n) }; });
+    }
+    function invMetaOf(ci, si) {
+      var s = BL.data.companies[ci].sites[si], m = s.meta || {};
+      var box = document.querySelector('#invBox [data-site="' + si + '"]');
+      if (!box || Number(box.getAttribute('data-co')) !== ci) return m;
+      var v = function (k) { return box.querySelector('[data-k="' + k + '"]').value.trim(); };
+      return { title: v('title'), place: v('place'), term: v('term'), outline: v('outline'), atena: v('atena') };
+    }
+    // 会社の請求書の項目を、この画面で直す
+    function invEdit(ci) {
+      var c = BL.data.companies[ci];
+      var f = function (k, label, val, wide) {
+        return '<label style="display:flex;flex-direction:column;font-size:12px;color:var(--text2);' + (wide ? 'grid-column:span 2' : '') + '">' + label +
+          '<input data-k="' + k + '" value="' + esc(val || '') + '" style="font:inherit;font-size:14px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--text)"></label>';
+      };
+      var cards = c.sites.map(function (s, si) {
+        var m = s.meta || {}, rows = invRows(c, s), sub = rows.reduce(function (t, x) { return t + x.yen; }, 0), tax = Math.floor(sub * 0.1);
+        return '<div class="step" style="display:block" data-co="' + ci + '" data-site="' + si + '">' +
+          '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px"><b>' + esc(s.name) + '</b><span>請求額（税込）<b>' + yen(sub + tax) + '</b>' +
+          (sub !== s.total ? ' <span style="color:var(--over)">（請求集計 ' + yen(s.total) + ' と違います）</span>' : '') + '</span></div>' +
+          (m.found ? '' : '<div style="font-size:12px;color:var(--warn);margin-top:4px">はじめての現場です。工事件名などを入れて「保存」してください（空欄のままでも印刷できます）。</div>') +
+          '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin-top:8px">' +
+          f('atena', '宛名（○○御中）', m.atena || invAtena(c, null)) + f('title', '工事件名', m.title) + f('place', '施工場所', m.place) +
+          f('term', '工期', m.term) + f('outline', '工事概要', m.outline) + '</div></div>';
+      }).join('');
+      $('invBox').innerHTML = '<div style="margin-top:16px;border-top:2px solid var(--line);padding-top:12px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h3 style="margin:0">' + esc(c.name) + '　請求書（' + esc(invDate(c)) + '・現場ごとにA4横1枚）</h3>' +
+        '<div class="noprint"><button class="btn main" id="invPrint">保存して印刷</button> <button class="btn" id="invSave">保存</button> <button class="btn" id="invClose">閉じる</button></div></div>' +
+        '<div id="invMsg" style="margin-top:6px"></div><div class="steps" style="margin-top:8px">' + cards + '</div></div>';
+      $('invBox').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      $('invClose').addEventListener('click', function () { $('invBox').innerHTML = ''; });
+      $('invSave').addEventListener('click', function () { invSave(ci, null); });
+      $('invPrint').addEventListener('click', function () { invSave(ci, function () { invPrint([ci]); }); });
+    }
+    // 直した現場だけ「請求書の項目」シートに保存する（1つずつ順に）
+    function invSave(ci, then) {
+      var c = BL.data.companies[ci], todo = [];
+      c.sites.forEach(function (s, si) {
+        var now = invMetaOf(ci, si), old = s.meta || {};
+        var same = ['title', 'place', 'term', 'outline', 'atena'].every(function (k) { return String(now[k] || '') === String(old[k] || (k === 'atena' ? '' : '')); });
+        if (!same || !old.found) todo.push({ si: si, m: now });
+      });
+      var msg = $('invMsg');
+      if (!todo.length) { msg.innerHTML = then ? '' : '<div class="ok" style="background:var(--ok-bg);color:var(--ok);border-radius:8px;padding:6px 10px">変わったところはありません。</div>'; if (then) then(); return; }
+      var i = 0;
+      msg.innerHTML = '<div class="run" style="background:var(--primary-bg);color:var(--primary);border-radius:8px;padding:6px 10px">保存しています...</div>';
+      (function next() {
+        if (i >= todo.length) {
+          msg.innerHTML = '<div style="background:var(--ok-bg);color:var(--ok);border-radius:8px;padding:6px 10px">保存しました（' + todo.length + '現場）。次の月からも同じものが出ます。</div>';
+          if (then) then();
+          return;
+        }
+        var t = todo[i++], s = c.sites[t.si];
+        call('adminInvoiceSave', [PIN, DEVICE, c.name, s.name, t.m], function (m) { s.meta = m; next(); },
+          function (e) { msg.innerHTML = '<div class="msg err">' + esc(e) + '</div>'; });
+      })();
+    }
+    function invPrintAll() {
+      var all = BL.data.companies.map(function (c, ci) { return ci; }).filter(function (ci) { return !BL.data.companies[ci].noRate; });
+      if (!confirm(all.length + '社・' + all.reduce(function (t, ci) { return t + BL.data.companies[ci].sites.length; }, 0) + '現場の請求書を印刷します（現場ごとにA4横1枚）。\n工事件名などは「請求書の項目」シートに入っているものを使います。\n\n印刷しますか？')) return;
+      invPrint(all);
+    }
+    // 請求書を印刷する（見えない枠で印刷の画面を出す）
+    function invPrint(cis) {
+      var num = function (n) { return n === 0 ? '0' : (Math.round(n * 100) / 100).toLocaleString('ja-JP'); };
+      var icon = new URL('icon.png', location.href).href, pages = '';
+      cis.forEach(function (ci) {
+        var c = BL.data.companies[ci];
+        c.sites.forEach(function (s, si) {
+          var m = invMetaOf(ci, si), rows = invRows(c, s);
+          var sub = rows.reduce(function (t, x) { return t + x.yen; }, 0), tax = Math.floor(sub * 0.1), all = sub + tax;
+          var body = rows.map(function (x, i) {
+            return '<tr><td class="nm">' + esc(x.name) + '</td><td class="r sm">' + num(x.unit) + '</td><td class="r sm">' + num(x.qty) + '</td><td class="r">' + num(x.yen) + '</td>' +
+              '<td class="nt">' + esc(INV_NOTES[i] || '') + '</td></tr>';
+          }).join('');
+          var item = function (label, val) { return '<div class="it"><span class="lb">' + label + '</span><span class="v">' + esc(val || '') + '</span></div>'; };
+          pages += '<div class="pg">' +
+            '<h1>御　　請　　求　　書</h1>' +
+            '<div class="date">' + esc(invDate(c)) + '</div>' +
+            '<div class="to"><span>' + esc(m.atena || invAtena(c, null)) + '</span><span class="gc">御中</span></div>' +
+            '<div class="lead">下記の通り請求申し上げます。</div>' +
+            '<div class="mid"><div class="left">' +
+              '<div class="amt"><span class="lb">金　　額</span><span class="v">¥' + num(all) + '-</span></div>' +
+              item('工事件名', m.title) + item('施工場所', m.place) + item('工　期', m.term) + item('工事概要', m.outline) +
+            '</div><div class="right">' +
+              '<div class="b">' + esc(INV_CO.licence) + '</div>' +
+              '<div class="co"><img src="' + esc(icon) + '" alt="" onerror="this.style.display=\'none\'"><span>' + esc(BL_OUR_COMPANY) + '</span></div>' +
+              '<div class="b">' + esc(INV_CO.reg) + '</div>' +
+              '<div>〒 ' + esc(INV_CO.zip) + '</div><div>' + esc(INV_CO.addr) + '</div>' +
+              '<div class="tf"><span>TEL:</span>' + esc(INV_CO.tel) + '</div><div class="tf"><span>FAX:</span>' + esc(INV_CO.fax) + '</div>' +
+              '<div class="bk"><span>銀行名称</span>' + esc(INV_CO.bank) + '</div><div class="bk"><span>' + esc(INV_CO.acType) + '</span>' + esc(INV_CO.acNo) + '</div>' +
+              '<div class="bk"><span>口座名義</span>' + esc(INV_CO.acName) + '</div>' +
+            '</div></div>' +
+            '<table><colgroup><col style="width:25.5%"><col style="width:6.6%"><col style="width:6.6%"><col style="width:9.4%"><col style="width:51.9%"></colgroup>' +
+            '<thead><tr><th>名称</th><th>単価</th><th>数量</th><th>金額</th><th>特記事項</th></tr></thead><tbody>' + body +
+            '<tr class="sum"><td class="no"></td><td class="no"></td><td class="r lbl">小計</td><td class="r">' + num(sub) + '</td><td></td></tr>' +
+            '<tr class="sum"><td class="no"></td><td class="no"></td><td class="r lbl">消費税</td><td class="r">' + num(tax) + '</td><td><b style="margin-left:2em">税率</b>　　10%</td></tr>' +
+            '<tr class="sum"><td class="no"></td><td class="no"></td><td class="r lbl">合計</td><td class="r">' + num(all) + '</td><td></td></tr>' +
+            '</tbody></table></div>';
+        });
+      });
+      var html = '<!doctype html><html><head><meta charset="utf-8"><title>請求書 ' + esc(BL.data.label) + '</title><style>' +
+        '@page { size: A4 landscape; margin: 9mm 10mm; }' +
+        '* { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
+        'body { margin: 0; font-family: "MS PMincho", "ＭＳ Ｐ明朝", "Yu Mincho", "YuMincho", "Hiragino Mincho ProN", serif; color: #000; font-size: 11pt; }' +
+        '.pg { width: 277mm; height: 190mm; margin: 0 auto; position: relative; overflow: hidden; }' +
+        '.pg + .pg { break-before: page; page-break-before: always; }' +
+        'h1 { text-align: center; font-size: 24pt; margin: 2mm 0 0; letter-spacing: .1em; text-decoration: underline double; text-underline-offset: 5px; }' +
+        '.date { text-align: right; font-size: 13pt; margin-top: 4mm; }' +
+        '.to { display: flex; gap: 3em; width: 88mm; font-size: 17pt; padding: 0 0 1mm 1em; border-bottom: 1.5px solid #000; margin-top: 2mm; }' +
+        '.lead { margin: 5mm 0 0 .3em; font-size: 11pt; }' +
+        '.mid { display: flex; justify-content: space-between; margin-top: 8mm; }' +
+        '.left { width: 105mm; } .right { width: 92mm; font-size: 11pt; line-height: 1.55; }' +
+        '.amt { display: flex; align-items: flex-end; margin-bottom: 5mm; } .amt .lb { width: 24mm; font-size: 12pt; padding-left: .8em; }' +
+        '.amt .v { flex: 1; font-size: 17pt; text-align: center; border-bottom: 1px solid #000; padding-bottom: 1mm; }' +
+        '.it { display: flex; align-items: flex-end; margin-top: 3.2mm; } .it .lb { width: 20mm; font-size: 12pt; text-align: center; }' +
+        '.it .v { width: 64mm; border-bottom: 1px solid #000; padding: 0 0 .5mm .5em; font-size: 12.5pt; white-space: nowrap; overflow: visible; min-height: 1.4em; }' +
+        '.right .b { font-family: "Yu Gothic", "Meiryo", sans-serif; font-weight: bold; font-size: 10.5pt; }' +
+        '.right .co { display: flex; align-items: center; gap: 2mm; font-size: 18pt; margin: .5mm 0 .5mm -11mm; } .right .co img { height: 9mm; }' +
+        '.tf span { display: inline-block; width: 18mm; text-align: right; margin: 0 6mm 0 10mm; }' +
+        '.bk span { display: inline-block; width: 18mm; text-align: right; margin: 0 4mm 0 3mm; } .bk:first-of-type { margin-top: 3mm; }' +
+        'table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 7mm; font-size: 12.5pt; }' +
+        'th, td { border: 1px solid #000; padding: .3mm 1.2mm; line-height: 1.25; white-space: nowrap; overflow: hidden; }' +
+        'th { font-weight: normal; text-align: left; }' +
+        'td.r { text-align: right; } td.sm { font-size: 9.5pt; } td.nt { font-size: 11pt; border-top-color: #000; }' +
+        'tbody tr:not(.sum) td.nt { border-top: 0; border-bottom: 0; } tbody tr:nth-last-child(4) td.nt { border-bottom: 1px solid #000; }' +
+        'tr.sum td.no { border: 0; } tr.sum td.lbl { text-align: right; }' +
+        '@media print { .pg { margin: 0; } }' +
+        '</style></head><body>' + pages + '</body></html>';
+      var old = $('invFrame');
+      if (old) old.remove();
+      var fr = document.createElement('iframe');
+      fr.id = 'invFrame';
+      fr.setAttribute('aria-hidden', 'true');
+      fr.style.cssText = 'position:fixed;left:-10000px;top:0;width:1100px;height:800px;border:0';
+      document.body.appendChild(fr);
+      var d = fr.contentWindow.document;
+      d.open(); d.write(html); d.close();
+      setTimeout(function () { fr.contentWindow.focus(); fr.contentWindow.print(); }, 400);
     }
 
     // 売上累計表（A4縦1枚）：Excelの「売上累計表」と同じ並び。会社名・現場名・日勤【人数】・夜勤【人数】・金額（税込）、計・合計
