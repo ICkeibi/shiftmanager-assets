@@ -1716,11 +1716,14 @@
         c.sites.forEach(function (s, i) {
           rows += '<tr' + (i === 0 ? ' style="border-top:2px solid var(--line)"' : '') + '><td>' + (i === 0 ? '<b>' + esc(c.name) + '</b>' + (c.noRate ? ' <span style="color:var(--over)">（単価未登録）</span>' : '') +
             '<div style="font-size:11px;color:var(--text3)">' + esc(c.period) + '</div>' +
-            (c.sites[0] && c.sites[0].lines ? '<button class="btn noprint" data-inv="' + ci + '" style="margin-top:4px;padding:3px 10px;font-size:12px">請求書</button>' : '') : '') + '</td><td>' + esc(s.name) + '</td><td class="num">' + s.day + '人</td><td class="num">' + s.night + '人</td><td class="num">' + yen(s.total) + '</td></tr>';
+            (c.sites[0] && c.sites[0].lines ? '<button class="btn main noprint" data-inv="' + ci + '" style="margin-top:6px;padding:5px 12px;font-size:13px;font-weight:bold;white-space:nowrap">🖨 請求書・出面表</button>' : '') : '') + '</td><td>' + esc(s.name) + '</td><td class="num">' + s.day + '人</td><td class="num">' + s.night + '人</td><td class="num">' + yen(s.total) + '</td></tr>';
         });
         if (c.sites.length > 1) rows += '<tr><td></td><td style="color:var(--text2)">小計</td><td class="num">' + c.day + '人</td><td class="num">' + c.night + '人</td><td class="num"><b>' + yen(c.total) + '</b></td></tr>';
       });
       $('blBody').innerHTML = warn +
+        (r.companies.length && r.companies[0].sites[0] && r.companies[0].sites[0].lines
+          ? '<div style="background:var(--primary-bg);color:var(--primary);border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:13px">' +
+            '請求書と出面表は、会社名の下の <b>🖨 請求書・出面表</b> を押すと作れます（全部の会社は右の「請求書と出面表をまとめて印刷」）。</div>' : '') +
         '<div class="wkinfo"><span>' + esc(r.label) + '</span><span>' + r.companies.length + '社</span><span>日勤 <b>' + g.day + '人</b></span><span>夜勤 <b>' + g.night + '人</b></span>' +
         '<span>小計 <b>' + yen(g.total) + '</b></span><span>消費税 ' + yen(g.tax) + '</span><span>税込み <b>' + yen(g.total + g.tax) + '</b></span></div>' +
         '<div class="toolbar" style="margin-bottom:8px"><div class="sub" style="margin:0">売上累計表と同じ並び（会社名・現場名・日勤・夜勤・金額）です。「コピー」でExcelの売上累計表にそのまま貼れます。</div>' +
