@@ -54,6 +54,17 @@
     nav a.on { background: var(--side2); border-bottom-color: #fff; font-weight: bold; }
     nav a .badge { position: absolute; top: 3px; right: 6px; background: var(--over); color: #fff; border-radius: 10px; font-size: 10px; padding: 0 6px; font-weight: bold; }
     nav .soon { opacity: .5; }
+    nav a.warn i { box-shadow: 0 0 0 2px #ffb4ab; }
+    /* その他▾ を押すと出るメニュー（帯の下に重ねて出す） */
+    .moremenu { position: fixed; z-index: 50; background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.18); padding: 6px; min-width: 240px; }
+    .moremenu a { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; color: var(--text); text-decoration: none; font-size: 14px; font-weight: bold; }
+    .moremenu a:hover, .moremenu a.on { background: var(--brand-bg); color: var(--brand); }
+    .moremenu a i { width: 30px; height: 30px; flex-shrink: 0; } .moremenu a i svg { width: 100%; height: 100%; display: block; }
+    .moremenu a small { display: block; font-weight: normal; font-size: 11px; color: var(--text3); }
+    /* よく使うメニューから来たとき、押すボタンを光らせる */
+    .flash { animation: flash 1s ease-in-out 3; }
+    @keyframes flash { 0%, 100% { box-shadow: 0 0 0 0 rgba(64,160,64,0); } 50% { box-shadow: 0 0 0 6px rgba(64,160,64,.55); } }
     nav .foot { margin-left: auto; display: flex; flex-direction: column; justify-content: center; align-items: flex-end; padding-left: 14px; font-size: 12px; white-space: nowrap; }
     nav .foot a { display: inline; padding: 0; min-width: 0; border: 0; text-decoration: underline; font-size: 11px; opacity: .85; }
     main { flex: 1; overflow: auto; }
@@ -263,15 +274,21 @@
       <a href="#" data-go="kintai" title="個人別集計・勤怠書き込み"><i data-icon="kintai"></i><span class="label">勤怠書き込み</span></a>
       <a href="#" data-go="dakoku" title="勤怠打刻の反映"><i data-icon="stamp"></i><span class="label">打刻</span></a>
       <a href="#" data-go="salary" title="給与（弥生給与Next）"><i data-icon="salary"></i><span class="label">給与</span></a>
-      <a href="#" data-go="nencho" title="年末調整"><i data-icon="nencho"></i><span class="label">年末調整</span></a>
       <a href="#" data-go="billing" title="請求書・売上累計表"><i data-icon="billing"></i><span class="label">請求書</span></a>
-      <a href="#" data-go="pay" title="月払い・給与明細"><i data-icon="pay"></i><span class="label">月払い</span></a>
-      <a href="#" data-go="bill" title="会社別請求（スマホ画面）"><i data-icon="bill"></i><span class="label">会社別請求</span></a>
-      <a href="#" data-go="ot" title="定時後残業"><i data-icon="ot"></i><span class="label">残業</span></a>
-      <a href="#" data-go="chart" title="グラフ（売上・人件費）"><i data-icon="chart"></i><span class="label">グラフ</span></a>
+      <!-- 年末調整：11月〜1月と、済んでいない間だけ出す（済んだら「その他」に入る） -->
+      <a href="#" data-go="nencho" id="navNencho" class="hidden" title="年末調整"><i data-icon="nencho"></i><span class="label">年末調整</span><span class="badge hidden" id="navNenchoWarn">!</span></a>
       <a href="#" data-sheet="1" target="_blank" rel="noopener" title="スプレッドシートを開く"><i data-icon="sheet"></i><span class="label">シート ↗</span></a>
+      <!-- その他：月払い・会社別請求・残業・グラフ（と、済んだあとの年末調整） -->
+      <a href="#" id="navMore" title="その他（月払い・会社別請求・残業・グラフ）"><i data-icon="more"></i><span class="label">その他 ▾</span></a>
       <div class="foot"><span id="who"></span><a href="#" id="logout">ログインを解除</a></div>
     </nav>
+    <div id="moreMenu" class="moremenu hidden" role="menu">
+      <a href="#" data-more="pay"><i data-icon="pay"></i><span>月払い<small>全員の一覧・給与明細</small></span></a>
+      <a href="#" data-more="bill"><i data-icon="bill"></i><span>会社別請求<small>請求額（スマホと同じ画面）</small></span></a>
+      <a href="#" data-more="ot"><i data-icon="ot"></i><span>残業<small>定時後残業</small></span></a>
+      <a href="#" data-more="chart"><i data-icon="chart"></i><span>グラフ<small>売上・人件費</small></span></a>
+      <a href="#" data-more="nencho" id="moreNencho"><i data-icon="nencho"></i><span>年末調整<small>源泉徴収票の確認など</small></span></a>
+    </div>
     <main id="main">
       <!-- ホーム -->
       <div class="page" id="pHome">
@@ -300,16 +317,13 @@
             <div class="panel">
               <div class="ph"><span class="pi"><span class="dot"></span>よく使うメニュー</span></div>
               <div class="mtiles">
-                <a class="mtile" data-goto="weekly"><span class="ic" data-icon="weekly"></span>週払いの確認<small>毎週 木曜締め</small><span class="badge hidden" data-badge="weekly"></span></a>
-                <a class="mtile" data-goto="kintai"><span class="ic" data-icon="kintai"></span>勤怠書き込み<small>個人別集計・月初め</small><span class="badge hidden" data-badge="kintai"></span></a>
+                <!-- 押すとそのページへ行き、印刷などのボタンを光らせる（いきなり印刷はしない） -->
+                <a class="mtile" data-goto="billing" data-focus="blBody"><span class="ic" data-icon="billing"></span>請求書・出面表<small>現場ごと・5日まで</small><span class="badge hidden" data-badge="billing"></span></a>
+                <a class="mtile" data-goto="billing" data-focus="blPrint"><span class="ic" data-icon="chart"></span>売上累計表<small>印刷（A4）</small></a>
+                <a class="mtile" data-goto="kintai" data-focus="plPrint"><span class="ic" data-icon="kintai"></span>隊員出勤表<small>全員・印刷（A4）</small><span class="badge hidden" data-badge="kintai"></span></a>
+                <a class="mtile" data-goto="weekly" data-focus="wkPrint"><span class="ic" data-icon="weekly"></span>週払い<small>毎週 木曜締め・印刷</small><span class="badge hidden" data-badge="weekly"></span></a>
                 <a class="mtile" data-goto="salary"><span class="ic" data-icon="salary"></span>給与<small>弥生給与Next・10日まで</small><span class="badge hidden" data-badge="salary"></span></a>
-                <a class="mtile" data-goto="billing"><span class="ic" data-icon="billing"></span>請求書<small>売上累計表・5日まで</small><span class="badge hidden" data-badge="billing"></span></a>
-                <a class="mtile" href="#" data-sheet="1" target="_blank" rel="noopener"><span class="ic" data-icon="sheet"></span>スプレッドシート ↗<small>出勤確認マスター</small></a>
-                <a class="mtile" data-goto="pay"><span class="ic" data-icon="pay"></span>月払い<small>給与明細・試算</small></a>
-                <a class="mtile" data-goto="bill"><span class="ic" data-icon="bill"></span>会社別請求<small>スマホ画面</small></a>
-                <a class="mtile" data-goto="ot"><span class="ic" data-icon="ot"></span>定時後残業<small>残業代と請求</small></a>
-                <a class="mtile" data-goto="chart"><span class="ic" data-icon="chart"></span>グラフ<small>売上・人件費</small></a>
-                <a class="mtile" data-goto="dakoku"><span class="ic" data-icon="stamp"></span>勤怠打刻の反映<small>打刻 → 勤怠管理表</small></a>
+                <a class="mtile hidden" data-goto="nencho" id="tileNencho"><span class="ic" data-icon="nencho"></span>年末調整<small>11月〜1月</small></a>
               </div>
             </div>
             <div class="panel">
@@ -367,7 +381,7 @@
             <div class="res" id="r1"></div></div><button class="btn" data-run="name">更新する</button></div>
           <div class="step"><div class="sn">2</div><div class="sb"><div class="t">出勤簿から個人別一覧を作る</div>
             <div class="note">出勤簿を読んで、1人ずつの日勤・夜勤・残業などの回数を「個人別集計」シートに出します。書き込みの前の確認に。</div>
-            <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn" id="plShow">個人別集計を見る</button><button class="btn" id="plPrint">出面表を印刷（A4）</button></div>
+            <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn" id="plShow">個人別集計を見る</button><button class="btn" id="plPrint">隊員出勤表を印刷（A4）</button></div>
             <div class="res" id="r2"></div>
             <div class="res" id="plView"></div></div><button class="btn" data-run="personal">作る</button></div>
           <div class="step"><div class="sn">3</div><div class="sb"><div class="t">勤怠管理表に書き込む（空いている日だけ）</div>
@@ -427,6 +441,7 @@
           <div><h2 id="nkTitle">年末調整</h2><div class="sub">提出の状況と計算の結果を見る画面です（読むだけ）。チェック表を作る・計算するのは、今までどおり勤怠管理表のメニュー「年末調整」から行います。</div></div>
           <div class="noprint"><button class="btn" id="nkReload">最新にする（読み直す）</button></div>
         </div>
+        <div class="noprint" id="nkDone" style="margin:0 0 10px"></div>
         <div id="nkMsg"><div class="loading">読み込み中...（勤怠管理表と源泉徴収簿を読むので、20秒ほどかかります）</div></div>
         <div id="nkBody"></div>
       </div>
@@ -477,7 +492,8 @@
       chart: S('<path d="M6 42h36" stroke="' + B + '" stroke-width="3.5"/><rect x="9" y="26" width="7" height="13" rx="1.5" fill="' + B + '"/><rect x="20.5" y="16" width="7" height="23" rx="1.5" fill="' + G + '"/><rect x="32" y="8" width="7" height="31" rx="1.5" fill="' + B + '"/>'),
       sheet: S('<rect x="7" y="7" width="34" height="34" rx="4" stroke="' + G + '" stroke-width="3.5"/><path d="M7 18h34M7 29h34M20 7v34" stroke="' + B + '" stroke-width="3"/>'),
       nencho: S('<path d="M11 5h19l8 8v30H11z" stroke="' + B + '" stroke-width="3.5"/><path d="M30 5v8h8" stroke="' + B + '" stroke-width="3"/><path d="M17 22h14M17 29h8" stroke="' + B + '" stroke-width="3"/><path d="M27 36l4 4 8-9" stroke="' + G + '" stroke-width="4"/>'),
-      stamp: S('<circle cx="24" cy="22" r="14" stroke="' + B + '" stroke-width="3.5"/><path d="M24 13v9l6 4" stroke="' + G + '" stroke-width="3.5"/><path d="M12 42h24" stroke="' + B + '" stroke-width="3.5"/>')
+      stamp: S('<circle cx="24" cy="22" r="14" stroke="' + B + '" stroke-width="3.5"/><path d="M24 13v9l6 4" stroke="' + G + '" stroke-width="3.5"/><path d="M12 42h24" stroke="' + B + '" stroke-width="3.5"/>'),
+      more: S('<rect x="6" y="6" width="15" height="15" rx="3" stroke="' + B + '" stroke-width="3.5"/><rect x="27" y="6" width="15" height="15" rx="3" stroke="' + B + '" stroke-width="3.5"/><rect x="6" y="27" width="15" height="15" rx="3" stroke="' + B + '" stroke-width="3.5"/><rect x="27" y="27" width="15" height="15" rx="3" fill="' + G + '"/>')
     };
     Array.prototype.forEach.call(document.querySelectorAll('[data-icon]'), function (el) { el.innerHTML = ICON[el.getAttribute('data-icon')] || ''; });
     // ロゴ（GitHub のアプリの icon.png）
@@ -581,22 +597,94 @@
       if (where === 'billing') blOpen();
       var v = $('view');
       if (VIEW_URL[where]) {
-        // 一度読み込んだら、画面は読み直さずにタブだけ切り替える（月払い・会社別請求・残業・グラフは同じ画面）
-        if (v.getAttribute('data-for')) {
-          try { v.contentWindow.postMessage({ type: 'payTab', tab: where === 'pay' ? 'list' : where }, '*'); } catch (e) {}
-        } else {
-          v.src = VIEW_URL[where](); v.setAttribute('data-for', where);
-        }
+        // 月払い・会社別請求・残業・グラフは同じ画面（月払い）のタブ。押したものが必ず最初に出るように、
+        // 違うものを押したときは、そのタブを指定して開き直す
+        //（Apps Script の画面は中にもう1枚枠があるので、外から「タブを変えて」と送っても届かないことがある）
+        if (v.getAttribute('data-for') !== where) { v.src = VIEW_URL[where](); v.setAttribute('data-for', where); }
         v.classList.remove('hidden');
       } else {
         v.classList.add('hidden');
       }
+      // その他▾：中のものを開いているときは「その他」を光らせる
+      var inMore = !!VIEW_URL[where] || (where === 'nencho' && $('navNencho').classList.contains('hidden'));
+      $('navMore').classList.toggle('on', inMore);
+      Array.prototype.forEach.call(document.querySelectorAll('#moreMenu a[data-more]'), function (a) { a.classList.toggle('on', a.getAttribute('data-more') === where); });
+      $('moreMenu').classList.add('hidden');
       if (where === 'soon') $('soonTitle').textContent = what;
       if (where === 'home') loadHome();
     }
     Array.prototype.forEach.call(document.querySelectorAll('nav a[data-go]'), function (a) {
       a.addEventListener('click', function (e) { e.preventDefault(); go(a.getAttribute('data-go'), a.getAttribute('data-what')); });
     });
+    // その他▾：押すと帯の下にメニューを出す。外を押すか、選ぶと閉じる
+    $('navMore').addEventListener('click', function (e) {
+      e.preventDefault(); e.stopPropagation();
+      var m = $('moreMenu'), r = this.getBoundingClientRect();
+      if (!m.classList.contains('hidden')) { m.classList.add('hidden'); return; }
+      m.classList.remove('hidden');
+      m.style.top = Math.round(r.bottom + 4) + 'px';
+      m.style.left = Math.max(8, Math.min(Math.round(r.left), window.innerWidth - m.offsetWidth - 8)) + 'px';
+    });
+    $('moreMenu').addEventListener('click', function (e) {
+      var a = e.target.closest('a[data-more]');
+      if (!a) return;
+      e.preventDefault();
+      go(a.getAttribute('data-more'));
+    });
+    document.addEventListener('click', function (e) {
+      if (!e.target.closest('#moreMenu') && !e.target.closest('#navMore')) $('moreMenu').classList.add('hidden');
+    });
+    // 年末調整：11月〜1月と、済んでいない間だけ帯とよく使うメニューに出す。済んだら「その他」に入れる
+    function applyNencho(n) {
+      if (!n) return;
+      NENCHO = n;
+      $('navNencho').classList.toggle('hidden', !n.show);
+      $('navNencho').classList.toggle('warn', !!n.warn);
+      $('navNenchoWarn').classList.toggle('hidden', !n.warn);
+      $('moreNencho').classList.toggle('hidden', !!n.show);
+      if (CUR === 'nencho') { $('navNencho').classList.toggle('on', !!n.show); $('navMore').classList.toggle('on', !n.show); }
+      var t = $('tileNencho');
+      if (t) {
+        t.classList.toggle('hidden', !n.show);
+        t.querySelector('small').textContent = n.warn ? '⚠ ' + n.wareki + 'がまだ済んでいません' : n.wareki + '・11月〜1月';
+        t.style.borderColor = n.warn ? 'var(--over)' : '';
+      }
+      nkDoneRender();
+    }
+    var NENCHO = null;
+    // 年末調整の画面の「済」ボタン（全員で共有。済を戻すこともできる）
+    function nkDoneRender() {
+      var n = NENCHO, el = $('nkDone');
+      if (!el || !n) return;
+      el.innerHTML = n.done
+        ? '<span style="color:var(--ok);font-size:13px">✓ ' + esc(n.wareki) + 'は済（' + esc(n.doneBy) + '）</span> <button class="btn" data-nkdone="0" style="padding:3px 10px;font-size:12px">済を戻す</button>'
+        : (n.warn ? '<span style="color:var(--over);font-size:13px;font-weight:bold">⚠ ' + esc(n.wareki) + 'がまだ済んでいません</span> ' : '') +
+          '<button class="btn main" data-nkdone="1">' + esc(n.wareki) + 'の年末調整は済んだ</button>';
+    }
+    document.addEventListener('click', function (e) {
+      var b = e.target.closest('button[data-nkdone]');
+      if (!b || !NENCHO) return;
+      var on = b.getAttribute('data-nkdone') === '1';
+      if (on && !confirm(NENCHO.wareki + 'の年末調整を「済」にします。\n上のメニューとホームから年末調整が消え、「その他」に入ります（いつでも開けます）。\n全員の画面で同じになります。\n\nよろしいですか？')) return;
+      b.disabled = true;
+      call('adminDone', [PIN, DEVICE, NENCHO.key, on], function (h) { HOME = h; applyNencho(h.nencho); },
+        function (m) { b.disabled = false; alert(m); });
+    });
+    // よく使うメニュー：そのページへ行き、押すボタンを光らせる（いきなり印刷はしない）
+    function goFocus(where, id) {
+      go(where);
+      if (!id) return;
+      var tries = 0;
+      (function look() {
+        var el = $(id);
+        if (el && el.offsetParent !== null) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+          return;
+        }
+        if (++tries < 60) setTimeout(look, 500);   // 読み込み中は30秒まで待つ
+      })();
+    }
 
     // ── ホーム ──
     function loadHome() {
@@ -605,7 +693,7 @@
     }
     $('pHome').addEventListener('click', function (e) {
       var a = e.target.closest('a[data-goto]');
-      if (a) { e.preventDefault(); go(a.getAttribute('data-goto')); }
+      if (a) { e.preventDefault(); goFocus(a.getAttribute('data-goto'), a.getAttribute('data-focus')); }
     });
     $('reload').addEventListener('click', function () { $('tasks').innerHTML = '<div class="loading">読み込み中...</div>'; loadHome(); });
 
@@ -617,6 +705,7 @@
     }
     function renderHome(h) {
       HOME = h;
+      applyNencho(h.nencho);
       $('homeMsg').innerHTML = '';
       // 夜の計算（定時後残業・請求額）の結果。エラーがあれば、どの月の何かを出す
       var nt = h.night, ntText = '';
@@ -1098,7 +1187,8 @@
         '<tbody>' + body + foot + '</tbody></table></div>';
     }
 
-    // ── 出面表を印刷（個人別集計から。A4縦・1枚。入らなければ2枚） ──
+    // ── 隊員出勤表を印刷（個人別集計から。全員分。A4縦・1枚。入らなければ2枚） ──
+    //  ・会社に出す「出面表」（請求書とセット・現場ごと）とは別。名前で分ける
     //  ・形は出面の表（Book1.xlsx「10月隊員出面」）に合わせる：左右2段に人を並べ、1行おきに薄い灰色、0 は空欄
     //  ・並びは「個人別集計」シートの順。他社の人は【協力会社】の下に、いちばん下に合計
     //  ・残業・遅刻は時間（1:30）。右上に会社のアイコンと会社名。色はアイコンの青・緑
@@ -1146,11 +1236,11 @@
           rows += '<tr class="' + cls + '">' + side(L[i]).replace('<td class="nm', '<td class="nm L') + side(R[i]).replace('<td class="nm', '<td class="nm Rb') + '</tr>';
         }
         body += '<div class="page"><div class="made">' + esc(made) + '　No. ' + (pg + 1) + '/' + pages + '</div>' +
-          '<div class="head"><div class="ym">' + esc(title) + '</div><div class="t">出面表</div>' +
+          '<div class="head"><div class="ym">' + esc(title) + '</div><div class="t">隊員出勤表</div>' +
           '<div class="co"><img src="' + esc(icon) + '" alt="" onerror="this.style.display=\'none\'"><span>' + esc(BL_OUR_COMPANY) + '</span></div></div>' +
           '<table><colgroup>' + colg + colg + '</colgroup><thead><tr>' + head + head.replace('<th>', '<th class="Rb">') + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
       }
-      var html = '<!doctype html><html><head><meta charset="utf-8"><title>' + esc(title) + ' 出面表</title><style>' +
+      var html = '<!doctype html><html><head><meta charset="utf-8"><title>' + esc(title) + ' 隊員出勤表</title><style>' +
         '@page { size: A4 portrait; margin: 0; }' +   // 余白0：ブラウザの日時・アドレスが出ないように。余白は .page の内側
 
         '* { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
@@ -1160,7 +1250,7 @@
         '.page + .page { break-before: page; page-break-before: always; }' +
         '.made { font-size: .7em; text-align: right; line-height: 1.2; color: #5a6b78; }' +
         '.head { display: flex; align-items: center; padding-bottom: 1.5mm; margin-bottom: 1.5mm; border-bottom: 3px solid #40A040; font-weight: bold; color: #0060A0; }' +
-        '.head > div { flex: 1; } .head .ym { font-size: 1.5em; } .head .t { font-size: 1.7em; letter-spacing: .5em; text-align: center; }' +
+        '.head > div { flex: 1; } .head .ym { font-size: 1.5em; } .head .t { font-size: 1.7em; letter-spacing: .25em; text-align: center; white-space: nowrap; }' +
         '.head .co { display: flex; align-items: center; justify-content: flex-end; gap: .4em; font-size: 1.05em; }' +
         '.head .co img { height: 2.2em; width: auto; }' +
         'table { width: 100%; border-collapse: collapse; table-layout: fixed; border: 1.5px solid #0060A0; }' +
