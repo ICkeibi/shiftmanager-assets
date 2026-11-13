@@ -425,7 +425,7 @@
       <div class="page hidden" id="pNencho">
         <div class="toolbar">
           <div><h2 id="nkTitle">年末調整</h2><div class="sub">提出の状況と計算の結果を見る画面です（読むだけ）。チェック表を作る・計算するのは、今までどおり勤怠管理表のメニュー「年末調整」から行います。</div></div>
-          <div class="noprint"><button class="btn" id="nkReload">読み直す</button></div>
+          <div class="noprint"><button class="btn" id="nkReload">最新にする（読み直す）</button></div>
         </div>
         <div id="nkMsg"><div class="loading">読み込み中...（勤怠管理表と源泉徴収簿を読むので、20秒ほどかかります）</div></div>
         <div id="nkBody"></div>
@@ -1296,12 +1296,21 @@
     // ── 年末調整（読むだけ） ──
     var NK = { data: null, busy: false };
     function nkYen(n) { n = Math.round(Number(n) || 0); return (n < 0 ? '-' : '') + '¥' + Math.abs(n).toLocaleString('ja-JP'); }
+    // 開いたとき：前に読んだ結果があればすぐ出す（読み直さない）。無ければ読む。「最新にする」は必ず読み直す
     function nkOpen(force) {
       if (NK.busy || (NK.data && !force)) { if (NK.data) nkRender(NK.data); return; }
       NK.busy = true;
-      $('nkMsg').innerHTML = '<div class="loading">読み込み中...（勤怠管理表と源泉徴収簿を読むので、20秒ほどかかります）</div>';
-      call('adminNencho', [PIN, DEVICE], function (r) { NK.busy = false; NK.data = r; nkRender(r); },
-        function (m) { NK.busy = false; $('nkMsg').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+      var read = function () {
+        $('nkMsg').innerHTML = '<div class="loading">読み込み中...（勤怠管理表と源泉徴収簿を読むので、20秒ほどかかります）</div>';
+        call('adminNencho', [PIN, DEVICE], function (r) { NK.busy = false; NK.data = r; NK.at = r.savedAt || 0; NK.changed = []; NK.fresh = true; nkRender(r); },
+          function (m) { NK.busy = false; $('nkMsg').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+      };
+      if (force) { read(); return; }
+      $('nkMsg').innerHTML = '<div class="loading">前に読んだ結果を出しています...</div>';
+      call('adminNenchoSaved', [PIN, DEVICE], function (r) {
+        if (r.none) { read(); return; }
+        NK.busy = false; NK.data = r.data; NK.at = r.at; NK.changed = r.changed || []; NK.fresh = false; nkRender(r.data);
+      }, function () { read(); });
     }
     $('nkReload').addEventListener('click', function () { nkOpen(true); });
     function nkCalcHtml(c, label) {
@@ -1357,7 +1366,9 @@
     });
     function nkRender(r) {
       $('nkTitle').textContent = '年末調整（' + r.wareki + '）';
-      $('nkMsg').innerHTML = '<div class="note" style="margin-bottom:8px">' + esc(r.madeAt) + ' 時点。計算や提出チェックを勤怠管理表で直したら「読み直す」を押してください。</div>';
+      $('nkMsg').innerHTML = (NK.at ? savedNote(NK.at, NK.changed, NK.fresh, '読んだ') : '') +
+        '<div class="note" style="margin-bottom:8px">' + esc(r.madeAt) + ' 時点。計算や提出チェックを勤怠管理表で直したら「最新にする」を押してください。</div>';
+      NK.fresh = false;
       // 流れ
       var steps = '<div class="panel"><div class="ph"><span class="pi"><span class="dot"></span>流れ（今どこか）</span></div><div class="res"><table>' +
         r.steps.map(function (s, i) {
@@ -1636,8 +1647,10 @@
           return '<option value="' + esc(m.label) + '">' + esc(m.label) + (m.hasKintai ? '' : '（勤怠管理表なし）') + '</option>';
         }).join('');
         $('slMonth').selectedIndex = r.index;
+        slLateSaved();
       }, function (m) { $('s1').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
     }
+    $('slMonth').addEventListener('change', function () { slLateSaved(); });
     $('pSalary').addEventListener('click', function (e) {
       var b = e.target.closest('button[data-sl]');
       if (!b) return;
@@ -1651,24 +1664,12 @@
         }, function (m) { w.close(); $('s1').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
       }
       if (what === 'late') {
-        b.disabled = true; $('s0').innerHTML = '<div class="run">全員のシートを読んでいます...（70人ほどで30秒〜1分）</div>';
+        b.disabled = true; SL.lateBusy = true; $('s0').innerHTML = '<div class="run">全員のシートを読んでいます...（70人ほどで30秒〜1分）</div>';
         call('adminLateList', [PIN, DEVICE, label], function (r) {
-          b.disabled = false;
-          var late = r.days.filter(function (x) { return x[2].indexOf('遅刻') === 0; }).length, early = r.days.length - late;
-          var sum = '<table><tr><td style="color:var(--text2)">氏名</td><td style="color:var(--text2)">遅刻（回）</td><td style="color:var(--text2)">遅刻時間</td>' +
-            '<td style="color:var(--text2)">早退（日）</td><td style="color:var(--text2)">早退時間</td><td style="color:var(--text2)">遅刻早退控除</td></tr>' +
-            r.people.map(function (p) {
-              return '<tr><td>' + esc(p.name) + '</td><td>' + esc(p.late) + '</td><td>' + esc(p.lateTime) + '</td><td>' + esc(p.early) + '</td><td>' + esc(p.earlyTime) + '</td><td>' + esc(p.ded) + '</td></tr>';
-            }).join('') + '</table>';
-          $('s0').innerHTML = r.days.length || r.people.length
-            ? '<div class="ok">' + esc(r.label) + '：遅刻 <b>' + late + '件</b>・早退 <b>' + early + '件</b>（' + r.people.length + '人）。' +
-              '　<a href="' + esc(r.sheetUrl) + '" target="_blank" rel="noopener">「遅刻早退一覧」シート ↗</a>' +
-              '　<a href="' + esc(r.kintaiUrl) + '" target="_blank" rel="noopener">勤怠管理表を開く ↗</a></div>' +
-              '<details style="margin-top:6px" open><summary>1人ずつ（シートの上の数字）</summary>' + sum + '</details>' +
-              '<details style="margin-top:6px" open><summary>日ごと（' + r.days.length + '件）</summary>' +
-              issueTable(r.days, ['氏名', '日付', '区分', '始業', '終業', '遅れた分・早く上がった分']) + '</details>'
-            : '<div class="ok">' + esc(r.label) + '：遅刻・早退の日はありません。</div>';
-        }, function (m) { b.disabled = false; $('s0').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+          b.disabled = false; SL.lateBusy = false;
+          b.textContent = '最新にする（読み直す）';
+          slLateRender(r, r.savedAt, [], true);
+        }, function (m) { b.disabled = false; SL.lateBusy = false; $('s0').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
       }
       if (what === 'csv') {
         if (!confirm(label + ' の勤怠管理表から、弥生給与Next用のCSVを作ります。\n同じ月のCSVがあれば、新しいものに置き換わります（古いものはゴミ箱へ）。\n\n作りますか？')) return;
@@ -1683,6 +1684,48 @@
         }, function (m) { b.disabled = false; $('s2').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
       }
     });
+    // いつ読んだ結果か（請求書と同じ形）。changed：そのあと直されたファイル
+    function savedNote(at, changed, fresh, what) {
+      if (!at) return '';
+      var d = new Date(at), p = function (n) { return ('0' + n).slice(-2); };
+      var when = (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + d.getHours() + ':' + p(d.getMinutes());
+      return '<div style="font-size:13px;color:var(--text2);margin:4px 0 6px">' + (fresh ? '今' : when + ' に') + what + '結果です' +
+        (fresh ? '（' + when + '。次に開いたときもすぐ出ます）' : '。') + '</div>' +
+        (changed && changed.length
+          ? '<div style="background:#fff3cd;color:#7a5a00;border-radius:8px;padding:8px 12px;margin-bottom:8px">⚠ そのあとに <b>' + esc(changed.join('、')) + '</b> が直されています。「最新にする」を押してください。</div>'
+          : '');
+    }
+    // 遅刻・早退の一覧：前に出した結果があれば、読み直さずにすぐ出す
+    function slLateSaved() {
+      var sel = $('slMonth'), opt = sel.options[sel.selectedIndex];
+      var label = sel.value || (opt ? opt.text.replace(/（勤怠管理表なし）$/, '') : '');
+      var btn = document.querySelector('#pSalary button[data-sl="late"]');
+      if (btn) btn.textContent = '一覧を出す';
+      $('s0').innerHTML = '';
+      if (!label) return;
+      call('adminLateListSaved', [PIN, DEVICE, label], function (r) {
+        if (SL.lateBusy || ($('slMonth').value || '') !== (sel.value || '')) return;
+        if (r.none) return;
+        if (btn) btn.textContent = '最新にする（読み直す）';
+        slLateRender(r.data, r.at, r.changed || [], false);
+      }, function () {});
+    }
+    function slLateRender(r, at, changed, fresh) {
+          var late = r.days.filter(function (x) { return x[2].indexOf('遅刻') === 0; }).length, early = r.days.length - late;
+          var sum = '<table><tr><td style="color:var(--text2)">氏名</td><td style="color:var(--text2)">遅刻（回）</td><td style="color:var(--text2)">遅刻時間</td>' +
+            '<td style="color:var(--text2)">早退（日）</td><td style="color:var(--text2)">早退時間</td><td style="color:var(--text2)">遅刻早退控除</td></tr>' +
+            r.people.map(function (p) {
+              return '<tr><td>' + esc(p.name) + '</td><td>' + esc(p.late) + '</td><td>' + esc(p.lateTime) + '</td><td>' + esc(p.early) + '</td><td>' + esc(p.earlyTime) + '</td><td>' + esc(p.ded) + '</td></tr>';
+            }).join('') + '</table>';
+          $('s0').innerHTML = savedNote(at, changed, fresh, '読んだ') + (r.days.length || r.people.length
+            ? '<div class="ok">' + esc(r.label) + '：遅刻 <b>' + late + '件</b>・早退 <b>' + early + '件</b>（' + r.people.length + '人）。' +
+              '　<a href="' + esc(r.sheetUrl) + '" target="_blank" rel="noopener">「遅刻早退一覧」シート ↗</a>' +
+              '　<a href="' + esc(r.kintaiUrl) + '" target="_blank" rel="noopener">勤怠管理表を開く ↗</a></div>' +
+              '<details style="margin-top:6px" open><summary>1人ずつ（シートの上の数字）</summary>' + sum + '</details>' +
+              '<details style="margin-top:6px" open><summary>日ごと（' + r.days.length + '件）</summary>' +
+              issueTable(r.days, ['氏名', '日付', '区分', '始業', '終業', '遅れた分・早く上がった分']) + '</details>'
+            : '<div class="ok">' + esc(r.label) + '：遅刻・早退の日はありません。</div>');
+    }
 
     // ── 請求書・売上累計表 ──
     var BL = { init: false, data: null };
