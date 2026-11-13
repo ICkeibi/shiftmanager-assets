@@ -950,14 +950,16 @@
           'このまま印刷しますか？\n\n' + sel + ' を印刷するときは「キャンセル」を押して、先に②の「作る」を押してください。')) return;
       plPrint(r);
     }
-    // 並び：漢字の名前の人 → カタカナの名前の人 → 他社。それぞれの中はシートの順のまま
+    // 並び：漢字の名前の人 → カタカナの名前の人 → 他社
+    //  それぞれの中は、勤怠管理表の社員シートの並び順（kOrder）。勤怠管理表にない人は、そのあとにシートの順
     function plOrder(rows) {
       var g = function (p) {
         if (/他社/.test(p.full)) return 2;
         return /^[゠-ヿｦ-ﾟ]/.test(p.full || p.name) ? 1 : 0;
       };
-      return rows.map(function (p, i) { return { p: p, g: g(p), i: i }; })
-        .sort(function (a, b) { return a.g - b.g || a.i - b.i; }).map(function (x) { return x.p; });
+      var ko = function (p) { return p.kOrder === '' || p.kOrder == null ? 1e9 : Number(p.kOrder); };
+      return rows.map(function (p, i) { return { p: p, g: g(p), k: ko(p), i: i }; })
+        .sort(function (a, b) { return a.g - b.g || a.k - b.k || a.i - b.i; }).map(function (x) { return x.p; });
     }
     // 管理画面の中に、シートと同じ列で出す。答え合わせが OK でない人は赤い行
     function plShow(r) {
@@ -977,7 +979,8 @@
       var sel = $('kwMonth').value, title = String(r.title || '');
       $('plView').innerHTML = '<div class="plhead"><b>' + esc(title) + '</b><span>' + r.rows.length + '人</span>' +
         (bad ? '<span style="color:var(--over)">答え合わせが合わない人 <b style="font-size:13px">' + bad + '人</b>（赤い行）</span>' : '<span style="color:var(--ok)">答え合わせ：全員 OK</span>') + '</div>' +
-        (sel && title && title.indexOf(sel) !== 0 ? '<div class="msg err" style="margin-top:6px">シートは「' + esc(title.split(/[\s　]/)[0]) + '」の分です。' + esc(sel) + ' を見るときは、上の「作る」を先に押してください。</div>' : '') +
+        (r.orderNote ? '<div class="msg err" style="margin-top:6px">' + esc(r.orderNote) + '</div>' : '') +
+        (sel && title && title.indexOf(sel) !== 0 ?'<div class="msg err" style="margin-top:6px">シートは「' + esc(title.split(/[\s　]/)[0]) + '」の分です。' + esc(sel) + ' を見るときは、上の「作る」を先に押してください。</div>' : '') +
         '<div class="plwrap"><table class="pl"><thead><tr><th>勤怠管理表の氏名</th><th>出勤確認の名前</th><th>日勤</th><th>夜勤</th><th>合計</th><th>資格</th>' +
         '<th>遅刻(回)</th><th>遅刻(分)</th><th>残業(回)</th><th>残業(分)</th><th>中半</th><th>隊長</th><th>研修</th><th>アプリの回数</th><th>答え合わせ</th></tr></thead>' +
         '<tbody>' + body + foot + '</tbody></table></div>';
