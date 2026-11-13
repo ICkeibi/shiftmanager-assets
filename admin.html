@@ -53,6 +53,7 @@
     nav a:hover { background: var(--side2); }
     nav a.on { background: var(--side2); border-bottom-color: #fff; font-weight: bold; }
     nav a .badge { position: absolute; top: 3px; right: 6px; background: var(--over); color: #fff; border-radius: 10px; font-size: 10px; padding: 0 6px; font-weight: bold; }
+    nav a .badge.unk { background: #8a94a0; }
     nav .soon { opacity: .5; }
     nav a.warn i { box-shadow: 0 0 0 2px #ffb4ab; }
     /* その他▾ を押すと出るメニュー（帯の下に重ねて出す） */
@@ -274,7 +275,7 @@
       <a href="#" data-go="kintai" title="個人別集計・勤怠書き込み"><i data-icon="kintai"></i><span class="label">勤怠書き込み</span></a>
       <a href="#" data-go="dakoku" title="勤怠打刻の反映"><i data-icon="stamp"></i><span class="label">打刻</span></a>
       <!-- 打刻システム（出勤・退勤ボタン）の管理者画面：申請の承認・未退勤・代理修正など。打刻システム自身のログインで入る -->
-      <a href="#" data-go="dakokuAdmin" title="打刻の管理者画面（申請の承認・未退勤・代理修正など）"><i data-icon="stampAdmin"></i><span class="label">打刻の管理</span></a>
+      <a href="#" data-go="dakokuAdmin" title="打刻の管理者画面（申請の承認・未退勤・代理修正など）"><i data-icon="stampAdmin"></i><span class="label">打刻の管理</span><span class="badge hidden" id="navDakokuBadge"></span></a>
       <a href="#" data-go="salary" title="給与（弥生給与Next）"><i data-icon="salary"></i><span class="label">給与</span></a>
       <a href="#" data-go="billing" title="請求書・売上累計表"><i data-icon="billing"></i><span class="label">請求書</span></a>
       <!-- 年末調整：11月〜1月と、済んでいない間だけ出す（済んだら「その他」に入る） -->
@@ -558,6 +559,8 @@
           var v = $('view');
           if (!v.getAttribute('data-for')) { v.src = payUrl(''); v.setAttribute('data-for', 'pay'); }
         }, 1500);
+        // 打刻の管理も裏で読み込んでおく（申請の件数を「打刻の管理」に赤い数字で出すため）
+        setTimeout(dkAdminLoad, 4000);
       }, function (msg) {
         if (String(cred).indexOf('t:') === 0) setToken('');
         showLogin(msg);
@@ -606,7 +609,7 @@
       // 打刻の管理：打刻システムの管理者画面を、この中に出す（初めて押したときに読み込む）
       var dv = $('dakokuView');
       if (where === 'dakokuAdmin' && DAKOKU_URL) {
-        if (!dv.getAttribute('src')) dv.src = DAKOKU_URL + (DAKOKU_URL.indexOf('?') < 0 ? '?' : '&') + 'embed=admin';
+        dkAdminLoad();
         dv.classList.remove('hidden');
       } else {
         dv.classList.add('hidden');
@@ -2403,6 +2406,49 @@
       if (msg.type === 'payHello') ev.source.postMessage({ type: 'payToken', token: getToken() }, ev.origin);
       else if (msg.type === 'paySave') { try { if (msg.token) localStorage.setItem(TOKEN_KEY, msg.token); else localStorage.removeItem(TOKEN_KEY); } catch (e) {} }
     });
+
+    // ── 打刻の管理：申請の件数を、上のメニューの「打刻の管理」に赤い数字で出す ──
+    // 打刻の管理者画面（#dakokuView の中）が件数を知らせてくる。見ていない間は15分ごとに数え直してもらう。
+    var dkAdminWin = null;
+    function dkAdminLoad() {
+      var dv = $('dakokuView');
+      if (DAKOKU_URL && PIN && !dv.getAttribute('src')) {
+        dv.src = DAKOKU_URL + (DAKOKU_URL.indexOf('?') < 0 ? '?' : '&') + 'embed=admin';
+        // 1分たっても打刻の画面から何も届かなければ、「？」にする
+        dkAdminTimer = setTimeout(function () { if (!dkAdminWin) dkAdminUnknown('打刻の管理を読み込めなかったため、申請の件数がわかりません。押して開いてみてください。'); }, 60 * 1000);
+      }
+    }
+    function fromDakokuFrame(src) {
+      var frame = $('dakokuView').contentWindow, w = src;
+      for (var i = 0; w && i < 6; i++) {
+        if (w === frame) return true;
+        if (w === window || w === w.parent) return false;
+        w = w.parent;
+      }
+      return false;
+    }
+    window.addEventListener('message', function (ev) {
+      try { if (!/\.googleusercontent\.com$/.test(new URL(ev.origin).hostname)) return; } catch (e) { return; }
+      var msg = ev.data || {};
+      if (msg.channel !== 'ics-dakoku-admin-count' || !ev.source || !fromDakokuFrame(ev.source)) return;
+      dkAdminWin = { win: ev.source, origin: ev.origin };
+      clearTimeout(dkAdminTimer);
+      if (msg.ok === false) { dkAdminUnknown('打刻の管理にログインしていないため、申請の件数を数えられません。押してログインしてください（「この個人端末でログインを保持する」に ✓）'); return; }
+      var punch = Math.max(0, parseInt(msg.punch, 10) || 0), shift = Math.max(0, parseInt(msg.shift, 10) || 0), n = punch + shift, b = $('navDakokuBadge');
+      b.textContent = n; b.classList.toggle('hidden', !n); b.classList.remove('unk');
+      b.parentNode.title = n ? '打刻の管理（打刻申請 ' + punch + '件・シフト申請 ' + shift + '人が対応待ち）' : '打刻の管理者画面（申請の承認・未退勤・代理修正など）';
+    });
+    // 件数がわからないときは、灰色の「？」を出す（「0件」と見分けるため）
+    var dkAdminTimer = null;
+    function dkAdminUnknown(why) {
+      var b = $('navDakokuBadge');
+      b.textContent = '?'; b.classList.add('unk'); b.classList.remove('hidden');
+      b.parentNode.title = why;
+    }
+    setInterval(function () {
+      if (!dkAdminWin || CUR === 'dakokuAdmin') return;
+      try { dkAdminWin.win.postMessage({ channel: 'ics-dakoku-admin-count', action: 'refresh' }, dkAdminWin.origin); } catch (e) {}
+    }, 15 * 60 * 1000);
   </script>
 </body>
 </html>
