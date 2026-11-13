@@ -1693,21 +1693,62 @@
         BL.init = true;
         $('blMonth').innerHTML = r.months.map(function (m) { return '<option value="' + esc(m.label) + '">' + esc(m.label) + '</option>'; }).join('');
         $('blMonth').selectedIndex = r.index;
+        blLoadSaved();
       }, function (m) { $('blMsg').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
     }
-    $('blRun').addEventListener('click', function () {
-      var sel = $('blMonth'), label = sel.value || (sel.options[sel.selectedIndex] || {}).text || '';
+    // 前に計算した結果があれば、計算せずにすぐ出す（月を選んだとき・ページを開いたとき）
+    function blLabel() { var sel = $('blMonth'); return sel.value || (sel.options[sel.selectedIndex] || {}).text || ''; }
+    function blLoadSaved() {
+      var label = blLabel();
       if (!label) return;
-      var b = this; b.disabled = true;
+      BL.data = null; BL.savedAt = 0; BL.changed = [];
+      $('blRun').textContent = '会社別の請求額を出す';
+      $('blBody').innerHTML = '';
+      $('blMsg').innerHTML = '<div class="msg" style="background:var(--primary-bg);color:var(--primary)">前に計算した結果を読んでいます...</div>';
+      call('adminBillingSaved', [PIN, DEVICE, label], function (r) {
+        if (blLabel() !== label || BL.busy) return;   // 読んでいる間に月を変えた・計算を始めた
+        if (r.none) {
+          $('blMsg').innerHTML = '<div class="msg" style="background:var(--bg);color:var(--text2)">' + esc(label) + ' はまだ計算していません。「会社別の請求額を出す」を押してください（1〜2分）。</div>';
+          return;
+        }
+        BL.data = r.data; BL.savedAt = r.at; BL.changed = r.changed || [];
+        $('blMsg').innerHTML = '';
+        $('blRun').textContent = '最新にする（出勤簿から計算し直す）';
+        blRender();
+      }, function (m) {
+        // 前の結果が読めないときは、今までどおり「出す」を押してもらう
+        $('blMsg').innerHTML = /使えない操作/.test(m) ? '' : '<div class="msg err">' + esc(m) + '</div>';
+      });
+    }
+    $('blMonth').addEventListener('change', function () { blLoadSaved(); });
+    $('blRun').addEventListener('click', function () {
+      var label = blLabel();
+      if (!label) return;
+      var b = this; b.disabled = true; BL.busy = true;
       $('blMsg').innerHTML = '<div class="msg" style="background:var(--primary-bg);color:var(--primary)">出勤簿を読んで計算しています...（1〜2分）</div>';
       $('blBody').innerHTML = '';
       call('adminBilling', [PIN, DEVICE, label], function (r) {
-        b.disabled = false; BL.data = r; $('blMsg').innerHTML = ''; blRender();
-      }, function (m) { b.disabled = false; $('blMsg').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+        b.disabled = false; BL.busy = false; BL.data = r; BL.savedAt = r.savedAt || 0; BL.changed = []; BL.fresh = true;
+        $('blMsg').innerHTML = '';
+        if (r.savedAt) b.textContent = '最新にする（出勤簿から計算し直す）';
+        blRender();
+      }, function (m) { b.disabled = false; BL.busy = false; $('blMsg').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
     });
+    // いつ計算した結果か（と、そのあと出勤簿などが直されていればお知らせ）
+    function blWhen() {
+      if (!BL.savedAt) return '';
+      var d = new Date(BL.savedAt), p = function (n) { return ('0' + n).slice(-2); };
+      var when = (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + d.getHours() + ':' + p(d.getMinutes());
+      var fresh = BL.fresh; BL.fresh = false;
+      return '<div style="font-size:13px;color:var(--text2);margin-bottom:8px">' + (fresh ? '今' : when + ' に') + '計算した結果です' +
+        (fresh ? '（' + when + '。次に開いたときもすぐ出ます）' : '。出勤簿・単価・現場の振り分けを直したときは「最新にする」を押してください。') + '</div>' +
+        (BL.changed && BL.changed.length
+          ? '<div class="unk" style="background:#fff3cd;color:#7a5a00;border-radius:8px;padding:8px 12px;margin-bottom:10px">⚠ 計算したあとに <b>' + esc(BL.changed.join('、')) + '</b> が直されています。印刷の前に「最新にする（出勤簿から計算し直す）」を押してください。</div>'
+          : '');
+    }
     function blRender() {
       var r = BL.data, g = r.grand;
-      var warn = (r.added ? '<div class="unk">「現場の振り分け」シートに、新しい現場の組み合わせを <b>' + r.added + '件</b> 足しました（黄色）。請求先と現場名を確認・修正してから、もう一度「会社別の請求額を出す」を押してください。' +
+      var warn = blWhen() +(r.added ? '<div class="unk">「現場の振り分け」シートに、新しい現場の組み合わせを <b>' + r.added + '件</b> 足しました（黄色）。請求先と現場名を確認・修正してから、もう一度「会社別の請求額を出す」を押してください。' +
         (r.mapUrl ? '　<a href="' + esc(r.mapUrl) + '" target="_blank" rel="noopener">現場の振り分けを開く ↗</a>' : '') + '</div>' : '') +
         (r.note ? '<div class="unk">' + esc(r.note) + '</div>' : '') +
         (r.companies.some(function (c) { return c.noRate; }) ? '<div class="unk">単価が未登録の会社があります（金額が0円）。「請求単価」シートに入れてください。</div>' : '');
