@@ -746,6 +746,7 @@
       }, wkErr);
     }
     function wkFillPeriods(periods, sel) {
+      WK.periods = periods;
       $('wkPeriod').innerHTML = periods.map(function (p) {
         return '<option value="' + esc(p.label) + '">' + esc(p.label === '全' ? '全期間' : p.label + (p.startLabel ? '（' + p.startLabel + '〜）' : '')) + '</option>';
       }).join('');
@@ -758,7 +759,82 @@
     });
     $('wkPeriod').addEventListener('change', function () { wkLoad(false); });
     $('wkReload').addEventListener('click', function () { WK.detail = {}; wkLoad(true); });
-    $('wkPrint').addEventListener('click', function () { window.print(); });
+    $('wkPrint').addEventListener('click', function () { wkPrint(); });
+    // 週払いの範囲（出勤簿の読み方と同じ決まり：木曜締め。前の木曜の夜勤から、その木曜の日勤まで）
+    //  月の最初の期間は月初めの日勤から、月末の期間は最後の木曜の夜勤から月末の夜勤まで
+    function wkRange() {
+      var per = $('wkPeriod').value, list = (WK.periods || []).filter(function (p) { return p.label !== '全'; });
+      if (per === '全') return '月の全期間';
+      var i = -1;
+      list.forEach(function (p, k) { if (p.label === per) i = k; });
+      if (i < 0) return per;
+      var p = list[i], end = String(p.label).replace(/\(月末\)$/, ''), start = p.startLabel || end, isEnd = /\(月末\)$/.test(p.label);
+      if (isEnd && start === end && i > 0) return end + ' 夜勤';
+      return start + ' ' + (i === 0 ? '日勤' : '夜勤') + ' 〜 ' + end + ' ' + (isEnd ? '夜勤' : '日勤');
+    }
+    // 週払いの印刷（A4縦1枚）：左右2段に名前・日勤・夜勤・合計。区分・済・月払いの人は出さない
+    //  上に「令和〇年〇月／週払い／アイコンと会社名」、その下に週払いの範囲。色は会社のアイコン（青・緑）
+    function wkPrint() {
+      var d = WK.data;
+      if (!d) { alert('一覧を読んでから印刷してください'); return; }
+      var mon = {}; (d.monthly || []).forEach(function (n) { mon[nkey(n)] = true; });
+      var rows = d.rows.filter(function (r) { return !mon[nkey(r.name)]; });
+      var m = WK.months[Number($('wkMonth').value)] || {}, now = new Date(), p2 = function (n) { return ('0' + n).slice(-2); };
+      var printed = (now.getMonth() + 1) + '/' + now.getDate() + ' ' + now.getHours() + ':' + p2(now.getMinutes());
+      var sd = 0, sn = 0;
+      rows.forEach(function (r) { sd += r.day; sn += r.night; });
+      var per = Math.max(1, Math.ceil(rows.length / 2));
+      var L = rows.slice(0, per), R = rows.slice(per), body = '';
+      var cell = function (r, cls) {
+        if (!r) return '<td class="nm' + cls + '"></td><td></td><td></td><td></td>';
+        return '<td class="nm' + cls + '">' + esc(r.name) + '</td><td>' + (r.day || '') + '</td><td>' + (r.night || '') + '</td><td class="t">' + (r.total || '') + '</td>';
+      };
+      for (var i = 0; i < per; i++) body += '<tr class="' + (i % 2 ? 'odd' : '') + '">' + cell(L[i], '') + cell(R[i], ' rb') + '</tr>';
+      var colg = '<col style="width:22%"><col style="width:9%"><col style="width:9%"><col style="width:10%">';
+      var head = '<th>名前</th><th>日勤</th><th>夜勤</th><th>合計</th>';
+      var icon = new URL('icon.png', location.href).href;
+      var html = '<!doctype html><html><head><meta charset="utf-8"><title>週払い ' + esc(m.label || '') + '</title><style>' +
+        '@page { size: A4 portrait; margin: 0; }' +   // 余白0：ブラウザの日時・アドレスが出ないように。日時は右上に自分で入れる
+        '* { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
+        'body { margin: 0; font-family: "Yu Gothic", "Meiryo", sans-serif; font-size: 12pt; color: #1b2a36; }' +
+        '.page { width: 210mm; padding: 10mm 10mm 8mm; margin: 0 auto; }' +
+        '.printed { text-align: right; font-size: .7em; color: #5a6b78; }' +
+        '.head { display: flex; align-items: center; padding-bottom: 1.5mm; border-bottom: 3px solid #40A040; font-weight: bold; color: #0060A0; }' +
+        '.head > div { flex: 1; } .head .ym { font-size: 1.4em; } .head .t { font-size: 1.8em; letter-spacing: .5em; text-align: center; }' +
+        '.head .co { display: flex; align-items: center; justify-content: flex-end; gap: .4em; font-size: 1em; } .head .co img { height: 2.2em; width: auto; }' +
+        '.range { display: flex; justify-content: space-between; align-items: baseline; margin: 2.5mm 0 3mm; }' +
+        '.range b { font-size: 1.15em; color: #0060A0; } .range span { font-size: .8em; color: #5a6b78; }' +
+        'table { width: 100%; border-collapse: collapse; table-layout: fixed; border: 1.5px solid #0060A0; }' +
+        'th, td { border-top: 1px solid #9db8cf; border-bottom: 1px solid #9db8cf; border-left: 1px dotted #9db8cf; padding: .3em .45em; text-align: center; white-space: nowrap; overflow: hidden; }' +
+        'th { background: #0060A0; color: #fff; border-color: #0060A0; border-left: 1px solid #3f86bd; font-weight: bold; }' +
+        'th:first-child { border-left: 0; } th.rb, td.rb { border-left: 1.5px solid #0060A0 !important; }' +
+        'td.nm { text-align: left; font-weight: bold; border-left: 1px solid #9db8cf; } td.nm:first-child { border-left: 0; }' +
+        'td.t { font-weight: bold; } tr.odd td { background: #eef5fb; }' +
+        'tr.sum td { background: #40A040; color: #fff; font-weight: bold; border-color: #40A040; }' +
+        '</style></head><body><div class="page">' +
+        '<div class="printed">印刷 ' + esc(printed) + '</div>' +
+        '<div class="head"><div class="ym">' + esc(m.label || '') + '</div><div class="t">週払い</div>' +
+        '<div class="co"><img src="' + esc(icon) + '" alt="" onerror="this.style.display=\'none\'"><span>' + esc(BL_OUR_COMPANY) + '</span></div></div>' +
+        '<div class="range"><b>' + esc(wkRange()) + '</b><span>（' + esc(d.madeAt || '') + ' 時点の出勤簿）</span></div>' +
+        '<table><colgroup>' + colg + colg + '</colgroup><thead><tr>' + head + head.replace('<th>', '<th class="rb">') + '</tr></thead><tbody>' + body +
+        '<tr class="sum"><td colspan="4" style="text-align:left">週払い ' + rows.length + '人</td><td class="rb">合計</td><td>' + sd + '</td><td>' + sn + '</td><td>' + (sd + sn) + '</td></tr>' +
+        '</tbody></table></div>' +
+        // A4の高さ（297mm）に収まるまで文字を小さくする
+        '<script>(function(){var p=document.querySelector(".page"),b=document.body,fs=12;' +
+        'var mm=function(){return p.scrollHeight*25.4/96;};b.style.fontSize=fs+"pt";' +
+        'while(mm()>290&&fs>6){fs-=0.25;b.style.fontSize=fs+"pt";}})();<\/script>' +
+        '</body></html>';
+      var old = $('wkFrame');
+      if (old) old.remove();
+      var f = document.createElement('iframe');
+      f.id = 'wkFrame';
+      f.setAttribute('aria-hidden', 'true');
+      f.style.cssText = 'position:fixed;left:-10000px;top:0;width:820px;height:1200px;border:0';
+      document.body.appendChild(f);
+      var doc = f.contentWindow.document;
+      doc.open(); doc.write(html); doc.close();
+      setTimeout(function () { f.contentWindow.focus(); f.contentWindow.print(); }, 300);
+    }
     $('wkFilter').addEventListener('input', wkRender);
     // 一覧を出す：前に数えた結果があればすぐ出す（出勤簿は読まない）。無ければ数える
     //  refresh（「最新にする」）のときは、出勤簿を必ず読み直す
