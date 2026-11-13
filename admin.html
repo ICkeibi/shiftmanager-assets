@@ -192,6 +192,17 @@
     .res .run { background: var(--primary-bg); color: var(--primary); border-radius: 8px; padding: 8px 12px; }
     .res table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 12px; }
     .res td { border-top: 1px solid var(--line); padding: 4px 6px; }
+    /* 個人別集計を見る */
+    .plwrap { max-height: 560px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; margin-top: 6px; }
+    .res table.pl { margin-top: 0; white-space: nowrap; }
+    table.pl th { position: sticky; top: 0; background: var(--bg); font-weight: normal; color: var(--text2); padding: 5px 6px; text-align: center; border-bottom: 1px solid var(--line); }
+    table.pl td.n { text-align: right; font-variant-numeric: tabular-nums; }
+    table.pl td.z { color: var(--text3); }
+    table.pl tr.bad td { background: var(--over-bg); }
+    table.pl tr.sec td { background: var(--bg); font-weight: bold; }
+    table.pl tr.tot td { font-weight: bold; background: var(--bg); border-top: 2px solid var(--line); }
+    .plhead { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; }
+    .plhead b { font-size: 15px; }
     /* 書き込み結果の「確認してほしいもの」を片付ける */
     .kihead { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-top: 4px; }
     .kihead .left b { font-size: 15px; color: var(--over); }
@@ -356,7 +367,9 @@
             <div class="res" id="r1"></div></div><button class="btn" data-run="name">更新する</button></div>
           <div class="step"><div class="sn">2</div><div class="sb"><div class="t">出勤簿から個人別一覧を作る</div>
             <div class="note">出勤簿を読んで、1人ずつの日勤・夜勤・残業などの回数を「個人別集計」シートに出します。書き込みの前の確認に。</div>
-            <div class="res" id="r2"></div></div><button class="btn" data-run="personal">作る</button></div>
+            <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn" id="plShow">個人別集計を見る</button><button class="btn" id="plPrint">個人別集計を印刷（A4）</button></div>
+            <div class="res" id="r2"></div>
+            <div class="res" id="plView"></div></div><button class="btn" data-run="personal">作る</button></div>
           <div class="step"><div class="sn">3</div><div class="sb"><div class="t">勤怠管理表に書き込む（空いている日だけ）</div>
             <div class="note">すでに入力がある日は書き換えません。時間がかかるときは、画面が自動で続きを書きます（この画面のまま待ってください）。</div>
             <div class="res" id="r3"></div></div><button class="btn" data-run="write">書き込む</button></div>
@@ -882,6 +895,7 @@
           $('r2').innerHTML = '<div class="ok">' + esc(r.label) + '：' + r.rows + ' 勤務を読み取りました。「' + esc(r.sheets[0]) + '」「' + esc(r.sheets[1]) + '」シートで確認できます。' +
             (r.checks ? '　読めなかった書き込みや名前が <b>' + r.checks + '件</b>（「' + esc(r.sheets[2]) + '」シート）' : '') + '</div>' +
             (r.checks ? '<details style="margin-top:6px"><summary>読めなかったもの（' + r.checks + '件）</summary>' + issueTable(r.checkList, ['日付', '昼夜', '現場', '書き込み', '内容']) + '</details>' : '');
+          PL.data = null; plLoad();   // 作り直した個人別集計を、下にそのまま出す
         }, function (m) { kwBusy(false); $('r2').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
       }
       if (what === 'write') {
@@ -910,6 +924,132 @@
           '　<a href="' + esc(r.kintaiUrl) + '" target="_blank" rel="noopener">勤怠管理表を開く ↗</a></div>';
         kiLoad();
       }, function (m) { kwBusy(false); $('r3').innerHTML = '<div class="msg err">' + esc(m) + '<br>もう一度「書き込む」を押すと、続きから書き込みます。</div>'; });
+    }
+
+    // ── 個人別集計を見る・印刷する（「個人別集計」シートを読むだけ） ──
+    var PL = { data: null, busy: false };
+    function plLoad(then) {
+      if (PL.busy) return;
+      PL.busy = true;
+      $('plView').innerHTML = '<div class="run">「個人別集計」シートを読んでいます...</div>';
+      call('adminPersonalSummary', [PIN, DEVICE], function (r) {
+        PL.busy = false; PL.data = r; plShow(r);
+        if (then) then(r);
+      }, function (m) { PL.busy = false; $('plView').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+    }
+    $('plShow').addEventListener('click', function () { plLoad(); });
+    $('plPrint').addEventListener('click', function () {
+      if (PL.data) plPrint(PL.data); else plLoad(plPrint);
+    });
+    // 管理画面の中に、シートと同じ並び・同じ列で出す。答え合わせが OK でない人は赤い行
+    function plShow(r) {
+      var cnt = function (v) { return '<td class="n' + (v ? '' : ' z') + '">' + (v || 0) + '</td>'; };
+      var nm = function (p) { return /他社/.test(p.full) ? '（他社）' : p.full || '<span style="color:var(--text3)">（氏名なし）</span>'; };
+      var bad = 0, tot = {}, keys = ['day', 'night', 'qual', 'late', 'lateMin', 'over', 'overMin', 'chuhan', 'leader', 'training'];
+      var body = r.rows.map(function (p) {
+        var ok = p.check === 'OK';
+        if (!ok) bad++;
+        keys.forEach(function (k) { tot[k] = (tot[k] || 0) + p[k]; });
+        return '<tr class="' + (ok ? '' : 'bad') + '"><td>' + (p.full && !/他社/.test(p.full) ? esc(p.full) : nm(p)) + '</td><td>' + esc(p.name) + '</td>' +
+          cnt(p.day) + cnt(p.night) + cnt(p.day + p.night) + cnt(p.qual) + cnt(p.late) + cnt(p.lateMin) + cnt(p.over) + cnt(p.overMin) +
+          cnt(p.chuhan) + cnt(p.leader) + cnt(p.training) + '<td class="n">' + esc(p.app) + '</td><td>' + esc(p.check) + '</td></tr>';
+      }).join('');
+      var foot = '<tr class="tot"><td>合計</td><td>' + r.rows.length + '人</td>' + cnt(tot.day) + cnt(tot.night) + cnt(tot.day + tot.night) +
+        cnt(tot.qual) + cnt(tot.late) + cnt(tot.lateMin) + cnt(tot.over) + cnt(tot.overMin) + cnt(tot.chuhan) + cnt(tot.leader) + cnt(tot.training) + '<td></td><td></td></tr>';
+      var sel = $('kwMonth').value, title = String(r.title || '');
+      $('plView').innerHTML = '<div class="plhead"><b>' + esc(title) + '</b><span>' + r.rows.length + '人</span>' +
+        (bad ? '<span style="color:var(--over)">答え合わせが合わない人 <b style="font-size:13px">' + bad + '人</b>（赤い行）</span>' : '<span style="color:var(--ok)">答え合わせ：全員 OK</span>') + '</div>' +
+        (sel && title && title.indexOf(sel) !== 0 ? '<div class="msg err" style="margin-top:6px">シートは「' + esc(title.split(/[\s　]/)[0]) + '」の分です。' + esc(sel) + ' を見るときは、上の「作る」を先に押してください。</div>' : '') +
+        '<div class="plwrap"><table class="pl"><thead><tr><th>勤怠管理表の氏名</th><th>出勤確認の名前</th><th>日勤</th><th>夜勤</th><th>合計</th><th>資格</th>' +
+        '<th>遅刻(回)</th><th>遅刻(分)</th><th>残業(回)</th><th>残業(分)</th><th>中半</th><th>隊長</th><th>研修</th><th>アプリの回数</th><th>答え合わせ</th></tr></thead>' +
+        '<tbody>' + body + foot + '</tbody></table></div>';
+    }
+
+    // ── 個人別集計を印刷（A4縦・1枚。入らなければ2枚） ──
+    //  ・形は出面の表（Book1.xlsx「10月隊員出面」）に合わせる：左右2段に人を並べ、1行おきに薄い灰色、0 は空欄
+    //  ・並びは「個人別集計」シートの順。他社の人は【協力会社】の下に、いちばん下に合計
+    //  ・残業・遅刻は「回数」と小さく「分」
+    //  ・新しい画面は開かず、この画面の中の見えない枠で印刷の画面を出す
+    var PL_COLS = [
+      { k: 'day', h: '日勤', c: '#4472C4' }, { k: 'night', h: '夜勤', c: '#222' }, { k: 'over', m: 'overMin', h: '残業', c: '#C00000', wide: 1 },
+      { k: 'qual', h: '資格', c: '#ED7D31' }, { k: 'leader', h: '隊長', c: '#222' }, { k: 'training', h: '研修', c: '#00A0D0' },
+      { k: 'chuhan', h: '中半', c: '#C00000' }, { k: 'late', m: 'lateMin', h: '遅刻', c: '#C00000', wide: 1 }];
+    function plPrint(r) {
+      var title = String(r.title || ''), made = '';
+      var mt = title.match(/^(.*?)[\s　]*[（(]\s*(作成[^）)]*)[）)]/);
+      if (mt) { title = mt[1]; made = mt[2]; }
+      // 並べる行：社員 → 【協力会社】他社 → 合計
+      var staff = [], other = [], tot = { total: true };
+      r.rows.forEach(function (p) {
+        (/他社/.test(p.full) ? other : staff).push(p);
+        PL_COLS.forEach(function (c) { tot[c.k] = (tot[c.k] || 0) + p[c.k]; if (c.m) tot[c.m] = (tot[c.m] || 0) + p[c.m]; });
+      });
+      var items = staff.concat(other.length ? [{ sec: '【協力会社】' }] : [], other, [tot]);
+      // 1枚に左右 MAX 行ずつ。入らなければ2枚
+      var MAX = 52, pages = Math.ceil(items.length / (MAX * 2)), per = Math.ceil(items.length / pages / 2);
+      var cell = function (p, c) {
+        var v = p[c.k], mn = c.m ? p[c.m] : 0;
+        if (!v && !mn) return '<td class="n"></td>';
+        return '<td class="n">' + (v || '') + (mn ? '<small>' + mn + '分</small>' : '') + '</td>';
+      };
+      var side = function (p) {
+        if (!p) return '<td class="nm"></td>' + PL_COLS.map(function () { return '<td class="n"></td>'; }).join('');
+        if (p.sec) return '<td class="nm sec">' + esc(p.sec) + '</td>' + PL_COLS.map(function () { return '<td class="n"></td>'; }).join('');
+        if (p.total) return '<td class="nm tot">合計</td>' + PL_COLS.map(function (c) { return cell(p, c).replace('class="n"', 'class="n t"'); }).join('');
+        var nm = /他社/.test(p.full) || !p.full ? p.name : p.full;
+        return '<td class="nm' + (p.full ? '' : ' nomap') + '">' + esc(nm) + '</td>' + PL_COLS.map(function (c) { return cell(p, c); }).join('');
+      };
+      // 左右で 50% ずつ（氏名 12.6%・数 4.2%・残業と遅刻 6.1%）
+      var colg = '<col style="width:12.6%">' + PL_COLS.map(function (c) { return '<col style="width:' + (c.wide ? 6.1 : 4.2) + '%">'; }).join('');
+      var head = '<th>氏名</th>' + PL_COLS.map(function (c) { return '<th style="color:' + c.c + '">' + c.h + '</th>'; }).join('');
+      var body = '';
+      for (var pg = 0; pg < pages; pg++) {
+        var L = items.slice(pg * per * 2, pg * per * 2 + per), R = items.slice(pg * per * 2 + per, pg * per * 2 + per * 2), rows = '';
+        for (var i = 0; i < per; i++) {
+          var cls = (i % 2 ? 'odd' : '') + ((R[i] && R[i].total) || (L[i] && L[i].total) ? ' totrow' : '');
+          rows += '<tr class="' + cls + '">' + side(L[i]).replace('<td class="nm', '<td class="nm L') + side(R[i]).replace('<td class="nm', '<td class="nm Rb') + '</tr>';
+        }
+        body += '<div class="page"><div class="head"><div class="ym">' + esc(title) + '</div><div class="t">個人別集計</div>' +
+          '<div class="made">' + esc(made) + '<br>No. ' + (pg + 1) + '/' + pages + '</div></div>' +
+          '<table><colgroup>' + colg + colg + '</colgroup><thead><tr>' + head + head.replace('<th>', '<th class="Rb">') + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+      }
+      var html = '<!doctype html><html><head><meta charset="utf-8"><title>' + esc(title) + ' 個人別集計</title><style>' +
+        '@page { size: A4 portrait; margin: 8mm 8mm; }' +
+        '* { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
+        'body { margin: 0; font-family: "Yu Mincho", "YuMincho", "MS PMincho", "Hiragino Mincho ProN", serif; font-size: 10pt; color: #111; }' +
+        '.page { width: 194mm; margin: 0 auto; }' +
+        '.page + .page { break-before: page; page-break-before: always; }' +
+        '.head { display: flex; align-items: flex-end; justify-content: space-between; padding-bottom: 1.5mm; border-bottom: 3px solid #5b5b8a; font-weight: bold; }' +
+        '.head .ym { font-size: 1.5em; } .head .t { font-size: 1.5em; letter-spacing: .3em; } .head .made { font-size: .75em; font-weight: normal; text-align: right; }' +
+        'table { width: 100%; border-collapse: collapse; table-layout: fixed; border: 1.5px solid #222; border-top: 0; }' +
+        'th, td { border-top: 1px solid #888; border-bottom: 1px solid #888; border-left: 1px dotted #999; padding: .22em .25em; line-height: 1.2; white-space: nowrap; overflow: hidden; }' +
+        'th { font-weight: bold; text-align: center; font-size: .9em; border-bottom: 1.5px solid #222; }' +
+        'td.nm { font-weight: bold; border-left: 1px solid #222; text-overflow: clip; }' +
+        'td.nm.L { border-left: 0; } .Rb { border-left: 1.5px solid #222 !important; }' +
+        'td.nm.nomap { color: #777; } td.sec { font-weight: bold; } td.tot { text-align: center; }' +
+        'td.n { text-align: center; font-weight: bold; font-variant-numeric: tabular-nums; }' +
+        'td.n small { font-size: .72em; font-weight: normal; margin-left: .25em; }' +
+        'tr.odd td { background: #f2f2f2; }' +
+        'tr.totrow td { border-top: 1.5px solid #222; }' +
+        'td.n.t { white-space: normal; line-height: 1.05; } td.n.t small { display: block; margin-left: 0; }' +
+        '@media print { .page { width: auto; } }' +
+        '</style></head><body>' + body +
+        // 印刷の幅（194mm）で測って、1枚の高さが A4 の印刷範囲（約281mm）に収まるまで文字を小さくする
+        '<script>(function(){var ps=document.querySelectorAll(".page"),b=document.body,fs=13;' +
+        'var mm=function(){var h=0;Array.prototype.forEach.call(ps,function(p){h=Math.max(h,p.scrollHeight);});return h*25.4/96;};b.style.fontSize=fs+"pt";' +
+        'while(mm()>272&&fs>6){fs-=0.25;b.style.fontSize=fs+"pt";}})();<\/script>' +
+        '</body></html>';
+      // 見えない枠に書いて、その枠の印刷の画面を出す（前の枠は消す）
+      var old = $('plFrame');
+      if (old) old.remove();
+      var f = document.createElement('iframe');
+      f.id = 'plFrame';
+      f.setAttribute('aria-hidden', 'true');
+      f.style.cssText = 'position:fixed;left:-10000px;top:0;width:820px;height:1200px;border:0';
+      document.body.appendChild(f);
+      var d = f.contentWindow.document;
+      d.open(); d.write(html); d.close();
+      setTimeout(function () { f.contentWindow.focus(); f.contentWindow.print(); }, 300);
     }
 
     // ── 4：確認してほしいものを片付ける（書き込み確認.gs） ──
