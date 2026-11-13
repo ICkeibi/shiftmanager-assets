@@ -1310,7 +1310,7 @@
       return out;
     }
     function yyBodyHtml(d) {
-      var tg = d.people.filter(function (p) { return p.kind === '対象'; });
+      var tg = d.people.filter(function (p) { return p.kind.indexOf('対象外') < 0; });
       var head = '<div class="note" style="margin:8px 0 4px">' + esc(d.madeAt) + ' 時点。' +
         (d.calcSheet ? '申告書の中身と計算は「' + esc(d.calcSheet) + '」シートから。' + (d.calcSheet.indexOf('試し') >= 0 ? '<b style="color:#c5221f">まだ試しの計算です。本番の計算のあとに読み直してください。</b>' : '')
           : '<b style="color:#c5221f">勤怠管理表で「年末調整を計算」をまだしていないので、申告書の中身が出ません。</b>') +
@@ -1446,7 +1446,7 @@
           '<td>' + mark(one(r, cYear), c ? [Number(c.yearTax)] : null) + '</td>' +
           '<td>' + diffCell + '</td></tr>');
       });
-      var missing = YY.data.people.filter(function (p) { return p.kind === '対象' && !seen[p.name]; }).map(function (p) { return p.name; });
+      var missing = YY.data.people.filter(function (p) { return p.kind.indexOf('対象外') < 0 && !seen[p.name]; }).map(function (p) { return p.name; });
       var th = ['氏名', '年末調整', '支払金額', '社会保険料等', '源泉徴収税額', '所得控除の合計', '差引課税給与所得', '年調年税額', '過不足'];
       return '<div class="' + (bad || missing.length || unknown.length ? 'msg err' : 'ok') + '">「' + esc(fileName) + '」：' + out.length + '人を見比べました。' +
           (bad ? '<b>合わないところ ' + bad + 'か所</b>' : '全部合っています。') +
