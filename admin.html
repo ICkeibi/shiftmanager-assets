@@ -861,9 +861,32 @@
         }).join('');
         $('kwMonth').selectedIndex = r.index;
         kiLoad();
+        kwSaved();
       }, function (m) { $('kwMsg').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
     }
-    $('kwMonth').addEventListener('change', function () { kiLoad(); });
+    $('kwMonth').addEventListener('change', function () { kiLoad(); kwSaved(); });
+    // 「作る」の結果（何勤務読んだか・読めなかったもの）
+    function kwPersonalMsg(r, at, changed, fresh) {
+      $('r2').innerHTML = (at ? savedNote(at, changed, fresh, '作った') : '') +
+        '<div class="ok">' + esc(r.label) + '：' + r.rows + ' 勤務を読み取りました。「' + esc(r.sheets[0]) + '」「' + esc(r.sheets[1]) + '」シートで確認できます。' +
+        (r.checks ? '　読めなかった書き込みや名前が <b>' + r.checks + '件</b>（「' + esc(r.sheets[2]) + '」シート）' : '') + '</div>' +
+        (r.checks ? '<details style="margin-top:6px"><summary>読めなかったもの（' + r.checks + '件）</summary>' + issueTable(r.checkList, ['日付', '昼夜', '現場', '書き込み', '内容']) + '</details>' : '');
+    }
+    // 2「出勤簿から個人別一覧を作る」：前に作った結果と個人別集計を、作り直さずにすぐ出す（ページを開いたとき・月を選んだとき）
+    function kwSaved() {
+      var label = $('kwMonth').value, btn = document.querySelector('#pKintai button[data-run="personal"]');
+      if (!label) return;
+      if (btn) btn.textContent = '作る';
+      $('r2').innerHTML = ''; $('plView').innerHTML = ''; PL.data = null;
+      call('adminPersonalSaved', [PIN, DEVICE, label], function (r) {
+        if ($('kwMonth').value !== label || KW.busy) return;
+        if (r.build) {
+          kwPersonalMsg(r.build, r.at, r.changed || [], false);
+          if (btn) btn.textContent = '作り直す（最新にする）';
+        }
+        if (r.summary) { r.summary.rows = plOrder(r.summary.rows); PL.data = r.summary; plShow(r.summary); }
+      }, function () {});
+    }
     function issueTable(list, head) {
       if (!list || !list.length) return '';
       return '<table><tr>' + head.map(function (h) { return '<td style="color:var(--text2)">' + h + '</td>'; }).join('') + '</tr>' +
@@ -892,9 +915,8 @@
         kwBusy(true); $('r2').innerHTML = '<div class="run">出勤簿を読んでいます...（1分ほど）</div>';
         call('adminBuildPersonal', [PIN, DEVICE, label], function (r) {
           kwBusy(false);
-          $('r2').innerHTML = '<div class="ok">' + esc(r.label) + '：' + r.rows + ' 勤務を読み取りました。「' + esc(r.sheets[0]) + '」「' + esc(r.sheets[1]) + '」シートで確認できます。' +
-            (r.checks ? '　読めなかった書き込みや名前が <b>' + r.checks + '件</b>（「' + esc(r.sheets[2]) + '」シート）' : '') + '</div>' +
-            (r.checks ? '<details style="margin-top:6px"><summary>読めなかったもの（' + r.checks + '件）</summary>' + issueTable(r.checkList, ['日付', '昼夜', '現場', '書き込み', '内容']) + '</details>' : '');
+          kwPersonalMsg(r, r.savedAt, [], true);
+          if (r.savedAt) b.textContent = '作り直す（最新にする）';
           PL.data = null; plLoad();   // 作り直した個人別集計を、下にそのまま出す
         }, function (m) { kwBusy(false); $('r2').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
       }
