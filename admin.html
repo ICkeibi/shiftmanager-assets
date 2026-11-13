@@ -273,6 +273,8 @@
       <a href="#" data-go="weekly" title="週払いの確認"><i data-icon="weekly"></i><span class="label">週払い</span></a>
       <a href="#" data-go="kintai" title="個人別集計・勤怠書き込み"><i data-icon="kintai"></i><span class="label">勤怠書き込み</span></a>
       <a href="#" data-go="dakoku" title="勤怠打刻の反映"><i data-icon="stamp"></i><span class="label">打刻</span></a>
+      <!-- 打刻システム（出勤・退勤ボタン）の管理者画面：申請の承認・未退勤・代理修正など。打刻システム自身のログインで入る -->
+      <a href="#" data-go="dakokuAdmin" title="打刻の管理者画面（申請の承認・未退勤・代理修正など）"><i data-icon="stampAdmin"></i><span class="label">打刻の管理</span></a>
       <a href="#" data-go="salary" title="給与（弥生給与Next）"><i data-icon="salary"></i><span class="label">給与</span></a>
       <a href="#" data-go="billing" title="請求書・売上累計表"><i data-icon="billing"></i><span class="label">請求書</span></a>
       <!-- 年末調整：11月〜1月と、済んでいない間だけ出す（済んだら「その他」に入る） -->
@@ -461,6 +463,9 @@
       </div>
       <!-- ほかの画面（今あるスマホ用の画面をそのまま表示） -->
       <iframe class="view hidden" id="view" title="画面"></iframe>
+      <!-- 打刻の管理者画面（打刻システムの Apps Script をこの中に出す。一度開いたら、ほかへ移っても残しておく） -->
+      <iframe class="view hidden" id="dakokuView" title="打刻の管理者画面"></iframe>
+      <div class="page hidden" id="pDakokuAdmin"><h2>打刻の管理</h2><div class="msg err">打刻システムのURLが入っていません。admin.html の DAKOKU_URL に、打刻システム（勤怠管理システム）のウェブアプリのURLを入れてください。</div></div>
     </main>
   </div>
 
@@ -468,6 +473,8 @@
     var APP_URL = new URL('./', location.href).href;   // この GitHub のアプリ
     // index.html の API_URL と同じURL（Apps Script のWebアプリ）
     var SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwaakQiOZkfCQaPa6gdRa0qWEpOrnmW_HdDtY4nrzulSVaraO_4tgMQTvUYhjTDoA5a/exec";
+    // 打刻システム（勤怠管理システム：出勤・退勤ボタン）の Apps Script のウェブアプリのURL（…/exec）
+    var DAKOKU_URL = "https://script.google.com/macros/s/AKfycbzuUVbIKZZ5tNmJa-aTHpfUhIuH-fLBd8YwBmeY9OExAk-DJaEjDf7wjv-WXbq-C1nO/exec";
     var TOKEN_KEY = 'payToken';
     var APP_ORIGIN = (APP_URL.match(/^https:\/\/[a-z0-9-]+\.github\.io/i) || [''])[0];
     var DEVICE = 'パソコン（管理画面）';
@@ -493,6 +500,7 @@
       sheet: S('<rect x="7" y="7" width="34" height="34" rx="4" stroke="' + G + '" stroke-width="3.5"/><path d="M7 18h34M7 29h34M20 7v34" stroke="' + B + '" stroke-width="3"/>'),
       nencho: S('<path d="M11 5h19l8 8v30H11z" stroke="' + B + '" stroke-width="3.5"/><path d="M30 5v8h8" stroke="' + B + '" stroke-width="3"/><path d="M17 22h14M17 29h8" stroke="' + B + '" stroke-width="3"/><path d="M27 36l4 4 8-9" stroke="' + G + '" stroke-width="4"/>'),
       stamp: S('<circle cx="24" cy="22" r="14" stroke="' + B + '" stroke-width="3.5"/><path d="M24 13v9l6 4" stroke="' + G + '" stroke-width="3.5"/><path d="M12 42h24" stroke="' + B + '" stroke-width="3.5"/>'),
+      stampAdmin: S('<circle cx="20" cy="20" r="13" stroke="' + B + '" stroke-width="3.5"/><path d="M20 12v8l5 3" stroke="' + B + '" stroke-width="3.5"/><circle cx="35" cy="35" r="10" fill="' + G + '"/><path d="M30 35l4 4 6-7" stroke="#fff" stroke-width="2.8"/>'),
       more: S('<rect x="6" y="6" width="15" height="15" rx="3" stroke="' + B + '" stroke-width="3.5"/><rect x="27" y="6" width="15" height="15" rx="3" stroke="' + B + '" stroke-width="3.5"/><rect x="6" y="27" width="15" height="15" rx="3" stroke="' + B + '" stroke-width="3.5"/><rect x="27" y="27" width="15" height="15" rx="3" fill="' + G + '"/>')
     };
     Array.prototype.forEach.call(document.querySelectorAll('[data-icon]'), function (el) { el.innerHTML = ICON[el.getAttribute('data-icon')] || ''; });
@@ -595,6 +603,15 @@
       if (where === 'nencho') nkOpen(false);
       $('pBilling').classList.toggle('hidden', where !== 'billing');
       if (where === 'billing') blOpen();
+      // 打刻の管理：打刻システムの管理者画面を、この中に出す（初めて押したときに読み込む）
+      var dv = $('dakokuView');
+      if (where === 'dakokuAdmin' && DAKOKU_URL) {
+        if (!dv.getAttribute('src')) dv.src = DAKOKU_URL + (DAKOKU_URL.indexOf('?') < 0 ? '?' : '&') + 'embed=admin';
+        dv.classList.remove('hidden');
+      } else {
+        dv.classList.add('hidden');
+      }
+      $('pDakokuAdmin').classList.toggle('hidden', !(where === 'dakokuAdmin' && !DAKOKU_URL));
       var v = $('view');
       if (VIEW_URL[where]) {
         // 月払い・会社別請求・残業・グラフは同じ画面（月払い）のタブ。押したものが必ず最初に出るように、
