@@ -1039,11 +1039,12 @@
           '<table><colgroup>' + colg + colg + '</colgroup><thead><tr>' + head + head.replace('<th>', '<th class="Rb">') + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
       }
       var html = '<!doctype html><html><head><meta charset="utf-8"><title>' + esc(title) + ' 出面表</title><style>' +
-        '@page { size: A4 portrait; margin: 8mm 8mm; }' +
+        '@page { size: A4 portrait; margin: 0; }' +   // 余白0：ブラウザの日時・アドレスが出ないように。余白は .page の内側
+
         '* { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
         // 色は会社のアイコン（青 #0060A0・緑 #40A040）に合わせる（売上累計表と同じ）
         'body { margin: 0; font-family: "Yu Mincho", "YuMincho", "MS PMincho", "Hiragino Mincho ProN", serif; font-size: 10pt; color: #1b2a36; }' +
-        '.page { width: 194mm; margin: 0 auto; }' +
+        '.page { width: 210mm; padding: 8mm; margin: 0 auto; }' +
         '.page + .page { break-before: page; page-break-before: always; }' +
         '.made { font-size: .7em; text-align: right; line-height: 1.2; color: #5a6b78; }' +
         '.head { display: flex; align-items: center; padding-bottom: 1.5mm; margin-bottom: 1.5mm; border-bottom: 3px solid #40A040; font-weight: bold; color: #0060A0; }' +
@@ -1061,12 +1062,11 @@
         'td.nm.tot { text-align: center; } td.nm.tot, td.n.t { background: #40A040 !important; color: #fff; border-color: #40A040; }' +
         'tr.totrow td { border-top: 1.5px solid #0060A0; }' +
         'td.n.t { white-space: normal; line-height: 1.05; }' +
-        '@media print { .page { width: auto; } }' +
         '</style></head><body>' + body +
         // 印刷の幅（194mm）で測って、1枚の高さが A4 の印刷範囲（約281mm）に収まるまで文字を小さくする
         '<script>(function(){var ps=document.querySelectorAll(".page"),b=document.body,fs=13;' +
         'var mm=function(){var h=0;Array.prototype.forEach.call(ps,function(p){h=Math.max(h,p.scrollHeight);});return h*25.4/96;};b.style.fontSize=fs+"pt";' +
-        'while(mm()>272&&fs>6){fs-=0.25;b.style.fontSize=fs+"pt";}})();<\/script>' +
+        'while(mm()>286&&fs>6){fs-=0.25;b.style.fontSize=fs+"pt";}})();<\/script>' +
         '</body></html>';
       // 見えない枠に書いて、その枠の印刷の画面を出す（前の枠は消す）
       var old = $('plFrame');
@@ -1791,7 +1791,12 @@
       if (rt.hDay != null) rows.push(['日曜、祝日昼勤（１人毎）', rt.hDay, q['日曜祝日 日勤']]);
       if (rt.hNight != null) rows.push(['日曜、祝日夜勤（１人毎）', rt.hNight, q['日曜祝日 夜勤']]);
       rows.push(['2級資格', rt.qual, q['資格者']]);
-      return rows.map(function (x) { var u = Number(x[1]) || 0, n = Number(x[2]) || 0; return { name: x[0], unit: u, qty: n, yen: Math.round(u * n) }; });
+      // 残業は「請求単価」シートでは30分の単価。請求書は今までどおり1時間の単価（×2）と時間（÷2。0.5時間単位）で出す（金額は同じ）
+      return rows.map(function (x) {
+        var u = Number(x[1]) || 0, n = Number(x[2]) || 0, yenN = Math.round(u * n);
+        if (/残業/.test(x[0])) { u = u * 2; n = n / 2; }
+        return { name: x[0], unit: u, qty: n, yen: yenN };
+      });
     }
     function invMetaOf(ci, si) {
       var s = BL.data.companies[ci].sites[si], m = s.meta || {};
@@ -1894,14 +1899,16 @@
         });
       });
       var html = '<!doctype html><html><head><meta charset="utf-8"><title>請求書 ' + esc(BL.data.label) + '</title><style>' +
-        '@page { size: A4 landscape; margin: 9mm 10mm; }' +
+        // 用紙の余白を0にすると、ブラウザが上下に足す日時・アドレス（ヘッダーとフッター）が出ない。余白は .pg の内側で取る
+        '@page { size: A4 landscape; margin: 0; }' +
         '* { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
         'body { margin: 0; font-family: "MS PMincho", "ＭＳ Ｐ明朝", "Yu Mincho", "YuMincho", "Hiragino Mincho ProN", serif; color: #000; font-size: 11pt; }' +
-        '.pg { width: 277mm; height: 190mm; margin: 0 auto; position: relative; overflow: hidden; }' +
+        '.pg { width: 297mm; height: 209mm; padding: 9mm 10mm 0; margin: 0 auto; position: relative; overflow: hidden; }' +
         '.pg + .pg { break-before: page; page-break-before: always; }' +
         'h1 { text-align: center; font-size: 24pt; margin: 2mm 0 0; letter-spacing: .1em; text-decoration: underline double; text-underline-offset: 5px; }' +
         '.date { text-align: right; font-size: 13pt; margin-top: 4mm; }' +
-        '.to { display: flex; gap: 3em; width: 88mm; font-size: 17pt; padding: 0 0 1mm 1em; border-bottom: 1.5px solid #000; margin-top: 2mm; }' +
+        '.to { display: inline-flex; gap: 2.5em; min-width: 88mm; font-size: 17pt; padding: 0 1em 1mm 1em; border-bottom: 1.5px solid #000; margin-top: 2mm; white-space: nowrap; }' +
+        '.to span { flex: none; }' +
         '.lead { margin: 5mm 0 0 .3em; font-size: 11pt; }' +
         '.mid { display: flex; justify-content: space-between; margin-top: 8mm; }' +
         '.left { width: 105mm; } .right { width: 92mm; font-size: 11pt; line-height: 1.55; }' +
@@ -1956,7 +1963,8 @@
       // 色は会社のアイコン（青 #0060A0・緑 #40A040）に合わせる。背景色も印刷されるようにする
       var icon = new URL('icon.png', location.href).href;
       var html = '<!doctype html><html><head><meta charset="utf-8"><title>' + esc(title) + ' 売上累計表</title><style>' +
-        '@page { size: A4 portrait; margin: 12mm 10mm; }' +
+        '@page { size: A4 portrait; margin: 0; }' +   // 余白0：ブラウザの日時・アドレスが出ないように。余白は .page の内側
+
         '* { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
         'body { margin: 0; font-family: "Yu Gothic", "Meiryo", sans-serif; font-size: ' + fs.toFixed(1) + 'pt; color: #1b2a36; }' +
         '.bar { display: flex; gap: 8px; padding: 10px; background: #e6f0f8; } .bar button { font: inherit; font-size: 14px; padding: 6px 16px; cursor: pointer; background: #0060A0; color: #fff; border: 0; border-radius: 6px; }' +
@@ -1973,7 +1981,7 @@
         'tr.co td { border-top: 1.6px solid #0060A0; }' +
         'tr.sum td { font-weight: bold; border-top: 2px solid #0060A0; background: #e6f0f8; color: #0060A0; }' +
         'tr.sum.all td { background: #40A040; color: #fff; border-color: #40A040; }' +
-        '@media print { .bar { display: none; } .page { width: auto; padding: 0; } }' +
+        '@media print { .bar { display: none; } .page { width: 210mm; padding: 12mm 10mm; } }' +
         '</style></head><body><div class="bar"><button onclick="window.print()">印刷する</button><span style="font-size:13px;align-self:center">A4縦・1枚に収まるように文字の大きさを合わせています。印刷の画面で「余白：デフォルト」「倍率：100%」のままにしてください。</span></div>' +
         '<div class="page"><div class="head"><h1>' + esc(title) + '　売上累計表</h1>' +
         '<div class="co-name"><img src="' + esc(icon) + '" alt="" onerror="this.style.display=\'none\'"><span>' + esc(BL_OUR_COMPANY) + '</span></div></div>' +
