@@ -2327,7 +2327,12 @@
     //  ・行が多い月は、文字を小さくして1枚に収める
     var BL_OUR_COMPANY = 'I・C警備保障株式会社';
     function blPrint(r) {
-      var m = String(r.label).match(/(\d+)月/), title = (m ? m[1] + '月分' : r.label);
+      // 見出しは「令和8年10月分」（年は r.ym「2026-10」から。無いときは名前の「2026年」か、今の年）
+      var m = String(r.label).match(/(\d+)月/), ymM = String(r.ym || '').match(/^(\d{4})-(\d{1,2})/);
+      var yM = String(r.label).match(/(\d{4})年/);
+      var yy = ymM ? Number(ymM[1]) : yM ? Number(yM[1]) : new Date().getFullYear();
+      var mo = ymM ? Number(ymM[2]) : m ? Number(m[1]) : 0;
+      var title = mo ? '令和' + (yy - 2018) + '年' + mo + '月分' : r.label;
       var num = function (n) { return Math.round(n).toLocaleString('ja-JP'); };
       var ppl = function (n) { return (Math.round(n * 10) / 10).toLocaleString('ja-JP'); };
       var body = '', rowsN = 0, sum = { day: 0, night: 0, yen: 0 };
