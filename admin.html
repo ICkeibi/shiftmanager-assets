@@ -329,7 +329,8 @@
       <div class="page hidden" id="pSettings">
         <div class="panel">
           <div class="ph"><span class="pi"><span class="dot"></span>設定</span></div>
-          <div class="st-tabs" id="stTabs"><button type="button" data-st="請求単価" class="on">請求単価</button><button type="button" data-st="現場の振り分け">現場の振り分け</button><button type="button" data-st="支払区分">支払区分</button><button type="button" data-st="注意ワード">注意ワード</button></div>
+          <div class="st-tabs" id="stTabs"><button type="button" data-st="請求単価" class="on">請求単価</button><button type="button" data-st="現場の振り分け">現場の振り分け</button><button type="button" data-st="支払区分">支払区分</button><button type="button" data-st="注意ワード">注意ワード</button><button type="button" data-st="管理者">管理者</button></div>
+          <div id="stAdm" class="hidden"></div>
           <p class="sub" id="stNote"></p>
           <div class="st-bar">
             <input type="search" id="stQ" placeholder="さがす（会社名・現場名など）">
@@ -2071,14 +2072,74 @@
       $('stSave').disabled = !n || ST.busy; $('stUndo').disabled = !n || ST.busy;
     }
     function stMsg(t, k) { $('stMsg').innerHTML = t ? '<div class="msg ' + (k || '') + '">' + esc(t) + '</div>' : ''; }
+    // ── 管理者（暗証番号は出さない。足す・番号を変える・止める／もどす。どれも自分の暗証番号を入れ直す） ──
+    function stAdmMode(on) {
+      $('stAdm').classList.toggle('hidden', !on);
+      Array.prototype.forEach.call(document.querySelectorAll('#pSettings .st-bar, #pSettings .st-wrap, #pSettings .st-wrap + .sub'), function (el) { el.classList.toggle('hidden', on); });
+    }
+    function stAdmLoad() {
+      stAdmMode(true); $('stAdm').innerHTML = '<div class="note">読み込んでいます…</div>';
+      call('adminAdminsGet', [PIN, DEVICE], function (r) { if (ST.name !== '管理者') return; ST.adm = r; stAdmDraw(''); }, function (e) { stMsg(e, 'err'); });
+    }
+    function stAdmDraw(form) {
+      var r = ST.adm, h = '<div class="st-wrap" style="max-height:none"><table class="st-tbl"><thead><tr><th>名前</th><th>状態</th><th>覚えている端末</th><th></th></tr></thead><tbody>' +
+        r.admins.map(function (a) {
+          return '<tr><td style="padding:8px 10px"><b>' + esc(a.name) + '</b>' + (a.me ? '（自分）' : '') + '</td>' +
+            '<td style="padding:8px 10px">' + (a.active ? '<span style="color:var(--ok);font-weight:bold">有効</span>' : '<span style="color:var(--text3)">止めている</span>') + '</td>' +
+            '<td style="padding:8px 10px">' + a.devices + '台</td><td style="padding:6px 10px;text-align:right;white-space:nowrap">' +
+            '<button type="button" class="btn" data-adm="pin" data-n="' + esc(a.name) + '">番号を変える</button> ' +
+            (a.me ? '' : a.active ? '<button type="button" class="btn" style="color:var(--over);border-color:var(--over)" data-adm="stop" data-n="' + esc(a.name) + '">止める</button>' : '<button type="button" class="btn" data-adm="start" data-n="' + esc(a.name) + '">有効にもどす</button>') +
+            '</td></tr>';
+        }).join('') + '</tbody></table></div>' +
+        '<div style="margin-top:10px"><button type="button" class="btn" data-adm="add">＋ 管理者を足す</button></div>' +
+        '<div id="stAdmForm">' + (form || '') + '</div>' +
+        '<p class="sub" style="margin-top:10px">暗証番号は、この画面には出しません。どの操作も、最後に<b>自分の暗証番号</b>を入れ直します（まちがいが続くと、ログインと同じようにしばらくロックします）。止めた人・番号を変えた人の「この端末で覚える」は取り消されます。名前は変えられません（変えたいときは、新しく足してから前の人を止めます）。</p>';
+      $('stAdm').innerHTML = h;
+    }
+    function stAdmForm(act, name) {
+      var title = act === 'add' ? '管理者を足す' : act === 'pin' ? '「' + name + '」の暗証番号を変える' : act === 'stop' ? '「' + name + '」を止める' : '「' + name + '」を有効にもどす';
+      var f = '<div class="panel" style="margin-top:10px;padding:14px 16px;border:2px solid var(--brand)"><b>' + esc(title) + '</b><div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;align-items:flex-end">' +
+        (act === 'add' ? '<label>名前<br><input id="admN" maxlength="30" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"></label>' : '') +
+        (act === 'add' || act === 'pin' ? '<label>新しい暗証番号<br><input id="admP1" type="password" autocomplete="new-password" maxlength="20" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"></label><label>もう一度<br><input id="admP2" type="password" autocomplete="new-password" maxlength="20" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"></label>' : '') +
+        '<label>自分の暗証番号<br><input id="admMe" type="password" autocomplete="current-password" maxlength="64" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"></label>' +
+        '<button type="button" class="btn main" data-admgo="' + act + '" data-n="' + esc(name || '') + '">' + (act === 'add' ? '足す' : act === 'pin' ? '変える' : act === 'stop' ? '止める' : 'もどす') + '</button><button type="button" class="btn" data-admx>やめる</button></div>' +
+        '<p class="sub" style="margin:8px 0 0">暗証番号は、数字か英字で4〜20けた。ほかの人と同じ番号は使えません。</p></div>';
+      stAdmDraw(f);
+      var first = $('admN') || $('admP1') || $('admMe'); if (first) first.focus();
+    }
+    function stAdmGo(act, name) {
+      var me = $('admMe').value, p = { action: act, name: name, myPin: me };
+      if (act === 'add') p.name = $('admN').value.trim();
+      if (act === 'add' || act === 'pin') {
+        var a = $('admP1').value, b = $('admP2').value;
+        if (!a || a !== b) { stMsg('新しい暗証番号が、2回とも同じになっていません', 'err'); return; }
+        p.pin = a;
+      }
+      if (act === 'add' && !p.name) { stMsg('名前を入れてください', 'err'); return; }
+      if (!me) { stMsg('自分の暗証番号を入れてください', 'err'); return; }
+      stMsg('処理しています…');
+      call('adminAdminsSave', [PIN, DEVICE, p], function (r) { ST.adm = r; stAdmDraw(''); stMsg(r.message || '変えました', 'ok'); }, function (e) { stMsg(e, 'err'); });
+    }
+    document.addEventListener('click', function (e) {
+      if (!e.target.closest || !e.target.closest('#stAdm')) return;
+      var b = e.target.closest('[data-adm]'); if (b) { stMsg(''); stAdmForm(b.getAttribute('data-adm'), b.getAttribute('data-n')); return; }
+      var g = e.target.closest('[data-admgo]'); if (g) { stAdmGo(g.getAttribute('data-admgo'), g.getAttribute('data-n')); return; }
+      if (e.target.closest('[data-admx]')) { stMsg(''); stAdmDraw(''); }
+    });
     function stLoad() {
-      stReset(); stMsg(''); $('stTbl').tBodies[0].innerHTML = '<tr><td style="padding:20px;color:var(--text3)">読み込んでいます…</td></tr>';
+      stReset(); stMsg('');
+      if (ST.name === '管理者') { ST.data = { name: '管理者' }; stAdmLoad(); return; }
+      stAdmMode(false); $('stTbl').tBodies[0].innerHTML = '<tr><td style="padding:20px;color:var(--text3)">読み込んでいます…</td></tr>';
       var name = ST.name;
       call('adminSettingGet', [PIN, DEVICE, name], function (r) { if (name !== ST.name) return; ST.data = r; $('stNote').textContent = r.note || ''; stDraw(); },
-        function (e) { stMsg(e, 'err'); $('stTbl').tBodies[0].innerHTML = ''; });
+        function (e) {
+          if (name !== ST.name) return;
+          ST.data = null; $('stNote').textContent = ''; $('stTbl').tHead.innerHTML = ''; $('stTbl').tBodies[0].innerHTML = '';
+          stMsg(/画面からは直せません/.test(e) ? e + '（出勤確認の Apps Script の「管理画面.gs」が古いままかもしれません。新しいものを貼って「新バージョン」でデプロイしてください）' : e, 'err');
+        });
     }
     function stDraw() {
-      var d = ST.data; if (!d) return;
+      var d = ST.data; if (!d || !d.heads) return;
       var q = $('stQ').value.trim().toLowerCase(), newOnly = $('stNewOnly').checked;
       var cls = function (t) { return t === 'key' ? 'k' : (/^yen|day/.test(t) ? 'num' : ''); };
       $('stTbl').tHead.innerHTML = '<tr>' + d.heads.map(function (h) { return '<th>' + esc(h) + '</th>'; }).join('') + '<th></th></tr>';
