@@ -192,6 +192,17 @@
       .print-table tr { page-break-inside: avoid; }
       .print-total { margin-top: 8px; font-size: 13px; font-weight: bold; text-align: right; }
     }
+    /* ログインの案内（ログインしていない端末だけ） */
+    #loginGate { position: fixed; inset: 0; z-index: 1000; background: var(--bg); display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; box-sizing: border-box; }
+    #loginGate[hidden] { display: none; }
+    #loginGate .lg-card { background: var(--card-bg); color: var(--text); border-radius: 14px; box-shadow: 0 2px 10px var(--shadow); padding: 24px 20px; max-width: 420px; width: 100%; box-sizing: border-box; }
+    #loginGate .lg-icon { font-size: 34px; text-align: center; }
+    #loginGate h2 { text-align: center; font-size: 20px; margin: 6px 0 12px; }
+    #loginGate p { font-size: 15px; line-height: 1.7; margin: 8px 0; }
+    #loginGate ol { font-size: 15px; line-height: 1.7; padding-left: 22px; margin: 12px 0 18px; }
+    #loginGate .lg-btn { display: block; text-align: center; background: var(--primary); color: #fff; text-decoration: none; font-size: 17px; font-weight: bold; padding: 14px; border-radius: 10px; }
+    #loginGate .lg-btn:active { background: var(--primary-active); }
+    #loginGate .lg-note { font-size: 13px; color: var(--text-secondary); text-align: center; margin-top: 14px; }
   </style>
 </head>
 <body>
@@ -204,7 +215,7 @@
       <a id="billLink" href="pay.html?view=bill">請求額</a>
       <a id="otLink" href="pay.html?view=ot">定時後残業</a>
       <a id="chartLink" href="pay.html?view=chart">グラフ（売上・人件費）</a>
-      <a id="nskLink" href="pay.html?view=nsk">NSK集計</a>   
+      <a id="nskLink" href="pay.html?view=nsk">NSK集計</a>
     </div>
   </div>
   <div class="subtitle" id="subtitle">年月を選択してください</div>
@@ -260,11 +271,36 @@
   <script>
     var API_URL = "https://script.google.com/macros/s/AKfycbwaakQiOZkfCQaPa6gdRa0qWEpOrnmW_HdDtY4nrzulSVaraO_4tgMQTvUYhjTDoA5a/exec";
 
+    // ── ログイン ──
+    // 出勤確認のデータは、月払いの画面で暗証番号を入れて「この端末で覚える」にしたスマホ・パソコンだけが見られる。
+    // 覚えたログイン（payToken）は月払いの画面と同じもの（90日間）。暗証番号そのものは、この画面では送らない
+    function savedToken() { try { return localStorage.getItem('payToken') || ''; } catch (e) { return ''; } }
+    function showLogin(why) {
+      var g = document.getElementById('loginGate');
+      if (!g) {
+        g = document.createElement('div');
+        g.id = 'loginGate';
+        g.setAttribute('role', 'dialog');
+        g.setAttribute('aria-modal', 'true');
+        g.innerHTML = '<div class="lg-card"><div class="lg-icon">🔒</div><h2>ログインしてください</h2>' +
+          '<p id="loginWhy"></p>' +
+          '<ol><li>下の「ログインする」を押します（月払いの画面が開きます）。</li>' +
+          '<li>暗証番号を入れます。「この端末で覚える」には<b>チェックを入れたまま</b>にします。</li>' +
+          '<li>左上の「‹ 出勤確認」で、この画面にもどります。</li></ol>' +
+          '<a class="lg-btn" href="pay.html">ログインする</a>' +
+          '<p class="lg-note">一度ログインすると、このスマホ（パソコン）は90日間覚えています。</p></div>';
+        document.body.appendChild(g);
+      }
+      document.getElementById('loginWhy').textContent = why || '出勤確認を見るには、ログインが必要です。';
+      g.hidden = false;
+      document.body.classList.add('need-login');
+    }
+
     var jsonpCounter = 0;
     function jsonp(params) {
       return new Promise(function (resolve, reject) {
         var callbackName = 'jsonp_cb_' + (jsonpCounter++);
-        var allParams = Object.assign({}, params, { callback: callbackName });
+        var allParams = Object.assign({ token: savedToken() }, params, { callback: callbackName });
         var qs = Object.keys(allParams).map(function (k) {
           return encodeURIComponent(k) + '=' + encodeURIComponent(allParams[k]);
         }).join('&');
@@ -283,6 +319,11 @@
 
         window[callbackName] = function (data) {
           cleanup();
+          if (data && data.error === 'login') {
+            showLogin(savedToken() ? 'ログインの期限が切れたか、ログインが取り消されました。もう一度ログインしてください。' : '');
+            reject(new Error('ログインが必要です'));
+            return;
+          }
           resolve(data);
         };
 
@@ -918,7 +959,12 @@
     document.getElementById('searchBtn').addEventListener('click', function () { doAction(false); });
     document.getElementById('refreshBtn').addEventListener('click', doRefresh);
     document.getElementById('subtitle').textContent = formatToday();
-    loadMonths();
+    // ログインしていない端末は、データを読まずにログインの案内を出す
+    if (savedToken()) loadMonths(); else showLogin('');
+    // 月払いの画面でログインしてから「戻る」でもどったとき（画面が前のまま残っているとき）は、読み直す
+    window.addEventListener('pageshow', function () {
+      if (document.body.classList.contains('need-login') && savedToken()) location.reload();
+    });
 
     // ⋮ メニュー（月払い）
     document.getElementById('moreBtn').addEventListener('click', function (ev) {
