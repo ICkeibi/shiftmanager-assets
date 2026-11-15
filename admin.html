@@ -178,6 +178,11 @@
     .st-tbl tr.isnew td { background: #fff8e1; }
     .st-tbl tr.add td { background: var(--ok-bg); }
     .st-tbl tr.del td input { text-decoration: line-through; color: var(--text3); }
+    .st-tbl td.ro input { color: var(--text3); cursor: default; }
+    .st-tbl td.ro input:focus { outline: 0; background: transparent; }
+    .st-tbl td.clr { position: relative; }
+    .st-tbl td.clr input { padding-left: 30px; }
+    .st-sw { position: absolute; left: 8px; top: 50%; width: 16px; height: 16px; margin-top: -8px; border-radius: 4px; border: 1px solid var(--line); }
     .st-tbl td.rm { width: 36px; text-align: center; }
     .st-tbl td.rm button { border: 0; background: none; color: var(--text3); cursor: pointer; font-size: 15px; padding: 4px 8px; }
     .st-tbl td.rm button:hover { color: var(--over); }
@@ -324,7 +329,7 @@
       <div class="page hidden" id="pSettings">
         <div class="panel">
           <div class="ph"><span class="pi"><span class="dot"></span>設定</span></div>
-          <div class="st-tabs" id="stTabs"><button type="button" data-st="請求単価" class="on">請求単価</button><button type="button" data-st="現場の振り分け">現場の振り分け</button></div>
+          <div class="st-tabs" id="stTabs"><button type="button" data-st="請求単価" class="on">請求単価</button><button type="button" data-st="現場の振り分け">現場の振り分け</button><button type="button" data-st="支払区分">支払区分</button><button type="button" data-st="注意ワード">注意ワード</button></div>
           <p class="sub" id="stNote"></p>
           <div class="st-bar">
             <input type="search" id="stQ" placeholder="さがす（会社名・現場名など）">
@@ -2009,7 +2014,7 @@
     function yen(n) { return (n < 0 ? '-¥' : '¥') + Math.abs(Math.round(n)).toLocaleString('ja-JP'); }
     // ── 設定：請求単価・現場の振り分けを、画面で見る・直す（保存を押したときだけシートに書く） ──
     var ST = { name: '請求単価', data: null, edits: {}, adds: [], dels: {}, busy: false, init: false };
-    var ST_SHEETS = ['請求単価', '現場の振り分け'];   // 画面で直せるシート（ホームの「設定」からも開く）
+    var ST_SHEETS = ['請求単価', '現場の振り分け', '支払区分', '注意ワード'];   // 画面で直せるシート（ホームの「設定」からも開く）
     // ホームの「設定」から：そのシートのタブで設定ページを開く
     function stGo(name) {
       if (ST_SHEETS.indexOf(name) < 0) return;
@@ -2080,7 +2085,10 @@
       var cellsHtml = function (vals, base) {
         return vals.map(function (v, i) {
           var ch = base && String(v) !== String(base[i]);
-          return '<td class="' + cls(d.types[i]) + (ch ? ' ch' : '') + '"><input data-c="' + i + '" value="' + esc(v) + '"' + (d.types[i] === 'time' ? ' placeholder="18:00"' : '') + '></td>';
+          var t = d.types[i], ro = /^(fixPay|autoAt|autoWho)$/.test(t);
+          if (ro) return '<td class="ro"><input data-c="' + i + '" value="' + esc(base ? v : '') + '" readonly tabindex="-1" placeholder="' + (t === 'fixPay' ? '月払い' : '保存すると入ります') + '"></td>';
+          var sw = t === 'color' && /^#[0-9A-Fa-f]{3,6}$/.test(String(v)) ? '<span class="st-sw" style="background:' + esc(v) + '"></span>' : '';
+          return '<td class="' + cls(t) + (ch ? ' ch' : '') + (sw ? ' clr' : '') + '">' + sw + '<input data-c="' + i + '" value="' + esc(v) + '"' + (t === 'time' ? ' placeholder="18:00"' : t === 'color' ? ' placeholder="#FF0000"' : '') + '></td>';
         }).join('');
       };
       var rows = d.rows.filter(function (x) { return (!newOnly || x.isNew) && (!q || x.values.join(' ').toLowerCase().indexOf(q) >= 0 || ST.edits[x.row]); });
