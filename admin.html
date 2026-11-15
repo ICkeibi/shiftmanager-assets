@@ -156,6 +156,32 @@
     .rule td { padding: 5px 8px; border-top: 1px solid var(--line); }
     .rule td:first-child { width: 220px; color: var(--text); }
     .msg { padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; font-size: 13px; }
+    /* 設定（シートを画面で直す） */
+    #stMsg .msg.ok { background: var(--ok-bg); color: var(--ok); }
+    .st-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 6px 0 10px; }
+    .st-tabs button { background: none; border: 0; border-bottom: 3px solid transparent; padding: 9px 14px; font-size: 14px; font-weight: bold; color: var(--text2); cursor: pointer; margin-bottom: -1px; }
+    .st-tabs button.on { color: var(--brand); border-bottom-color: var(--brand); }
+    .st-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+    .st-bar input[type=search] { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; width: 240px; background: var(--card); color: var(--text); font: inherit; }
+    .st-bar .sp { flex: 1; }
+    .st-chk { font-size: 13px; color: var(--text2); display: flex; align-items: center; gap: 4px; }
+    .st-dirty { font-size: 13px; font-weight: bold; color: var(--today); }
+    .st-wrap { border: 1px solid var(--line); border-radius: 10px; overflow: auto; max-height: calc(100vh - 330px); }
+    .st-tbl { border-collapse: separate; border-spacing: 0; font-size: 13px; width: 100%; }
+    .st-tbl th { position: sticky; top: 0; z-index: 1; background: var(--bg); color: var(--text2); font-size: 11px; text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); white-space: normal; min-width: 70px; vertical-align: bottom; }
+    .st-tbl td { border-bottom: 1px solid var(--line); padding: 0; background: var(--card); }
+    .st-tbl td input { width: 100%; min-width: 70px; border: 0; background: transparent; color: var(--text); padding: 7px 8px; font: inherit; }
+    .st-tbl td input:focus { outline: 2px solid var(--brand); outline-offset: -2px; background: var(--brand-bg); }
+    .st-tbl td.num input { text-align: right; }
+    .st-tbl td.k input { font-weight: bold; min-width: 160px; }
+    .st-tbl td.ch { background: var(--warn-bg); }
+    .st-tbl tr.isnew td { background: #fff8e1; }
+    .st-tbl tr.add td { background: var(--ok-bg); }
+    .st-tbl tr.del td input { text-decoration: line-through; color: var(--text3); }
+    .st-tbl td.rm { width: 36px; text-align: center; }
+    .st-tbl td.rm button { border: 0; background: none; color: var(--text3); cursor: pointer; font-size: 15px; padding: 4px 8px; }
+    .st-tbl td.rm button:hover { color: var(--over); }
+    @media (prefers-color-scheme: dark) { .st-tbl tr.isnew td { background: #3a3112; } }
     .msg.err { background: var(--over-bg); color: var(--over); }
     .loading { color: var(--text3); padding: 30px 0; }
     .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
@@ -280,6 +306,7 @@
       <a href="#" data-go="billing" title="請求書・売上累計表"><i data-icon="billing"></i><span class="label">請求書</span></a>
       <!-- 年末調整：11月〜1月と、済んでいない間だけ出す（済んだら「その他」に入る） -->
       <a href="#" data-go="nencho" id="navNencho" class="hidden" title="年末調整"><i data-icon="nencho"></i><span class="label">年末調整</span><span class="badge hidden" id="navNenchoWarn">!</span></a>
+      <a href="#" data-go="settings" title="設定（請求単価・現場の振り分け）を見る・直す"><i data-icon="gear"></i><span class="label">設定</span></a>
       <a href="#" data-sheet="1" target="_blank" rel="noopener" title="スプレッドシートを開く"><i data-icon="sheet"></i><span class="label">シート ↗</span></a>
       <!-- その他：月払い・会社別請求・残業・グラフ（と、済んだあとの年末調整） -->
       <a href="#" id="navMore" title="その他（月払い・会社別請求・残業・グラフ）"><i data-icon="more"></i><span class="label">その他 ▾</span></a>
@@ -293,6 +320,27 @@
       <a href="#" data-more="nencho" id="moreNencho"><i data-icon="nencho"></i><span>年末調整<small>源泉徴収票の確認など</small></span></a>
     </div>
     <main id="main">
+      <!-- 設定（シートを画面で見る・直す） -->
+      <div class="page hidden" id="pSettings">
+        <div class="panel">
+          <div class="ph"><span class="pi"><span class="dot"></span>設定</span></div>
+          <div class="st-tabs" id="stTabs"><button type="button" data-st="請求単価" class="on">請求単価</button><button type="button" data-st="現場の振り分け">現場の振り分け</button></div>
+          <p class="sub" id="stNote"></p>
+          <div class="st-bar">
+            <input type="search" id="stQ" placeholder="さがす（会社名・現場名など）">
+            <label class="st-chk"><input type="checkbox" id="stNewOnly"> 新しく出てきた行（黄色）だけ</label>
+            <button type="button" class="btn" id="stAdd">＋ 行を追加</button>
+            <button type="button" class="btn" id="stReload">読み直す</button>
+            <span class="sp"></span>
+            <span id="stDirty" class="st-dirty hidden"></span>
+            <button type="button" class="btn" id="stUndo" disabled>元に戻す</button>
+            <button type="button" class="btn main" id="stSave" disabled>保存</button>
+          </div>
+          <div id="stMsg"></div>
+          <div class="st-wrap"><table class="st-tbl" id="stTbl"><thead></thead><tbody></tbody></table></div>
+          <p class="sub" style="margin-top:8px">セルを押すと直せます。直したセルは黄色、追加した行は緑、消す行は取り消し線になります。「保存」を押すまでシートは変わりません。</p>
+        </div>
+      </div>
       <!-- ホーム -->
       <div class="page" id="pHome">
         <div id="homeMsg"></div>
@@ -499,6 +547,7 @@
       ot: S('<circle cx="24" cy="25" r="17" stroke="' + B + '" stroke-width="3.5"/><path d="M24 14v11l8 6" stroke="' + G + '" stroke-width="4"/><path d="M19 4h10" stroke="' + B + '" stroke-width="3.5"/>'),
       chart: S('<path d="M6 42h36" stroke="' + B + '" stroke-width="3.5"/><rect x="9" y="26" width="7" height="13" rx="1.5" fill="' + B + '"/><rect x="20.5" y="16" width="7" height="23" rx="1.5" fill="' + G + '"/><rect x="32" y="8" width="7" height="31" rx="1.5" fill="' + B + '"/>'),
       sheet: S('<rect x="7" y="7" width="34" height="34" rx="4" stroke="' + G + '" stroke-width="3.5"/><path d="M7 18h34M7 29h34M20 7v34" stroke="' + B + '" stroke-width="3"/>'),
+      gear: S('<circle cx="24" cy="24" r="7" stroke="' + G + '" stroke-width="3.5"/><path d="M24 5v6M24 37v6M5 24h6M37 24h6M10.6 10.6l4.2 4.2M33.2 33.2l4.2 4.2M10.6 37.4l4.2-4.2M33.2 14.8l4.2-4.2" stroke="' + B + '" stroke-width="3.5"/>'),
       nencho: S('<path d="M11 5h19l8 8v30H11z" stroke="' + B + '" stroke-width="3.5"/><path d="M30 5v8h8" stroke="' + B + '" stroke-width="3"/><path d="M17 22h14M17 29h8" stroke="' + B + '" stroke-width="3"/><path d="M27 36l4 4 8-9" stroke="' + G + '" stroke-width="4"/>'),
       stamp: S('<circle cx="24" cy="22" r="14" stroke="' + B + '" stroke-width="3.5"/><path d="M24 13v9l6 4" stroke="' + G + '" stroke-width="3.5"/><path d="M12 42h24" stroke="' + B + '" stroke-width="3.5"/>'),
       stampAdmin: S('<circle cx="20" cy="20" r="13" stroke="' + B + '" stroke-width="3.5"/><path d="M20 12v8l5 3" stroke="' + B + '" stroke-width="3.5"/><circle cx="35" cy="35" r="10" fill="' + G + '"/><path d="M30 35l4 4 6-7" stroke="#fff" stroke-width="2.8"/>'),
@@ -606,6 +655,8 @@
       if (where === 'nencho') nkOpen(false);
       $('pBilling').classList.toggle('hidden', where !== 'billing');
       if (where === 'billing') blOpen();
+      $('pSettings').classList.toggle('hidden', where !== 'settings');
+      if (where === 'settings') stOpen();
       // 打刻の管理：打刻システムの管理者画面を、この中に出す（初めて押したときに読み込む）
       var dv = $('dakokuView');
       if (where === 'dakokuAdmin' && DAKOKU_URL) {
@@ -1952,6 +2003,92 @@
     // ── 請求書・売上累計表 ──
     var BL = { init: false, data: null };
     function yen(n) { return (n < 0 ? '-¥' : '¥') + Math.abs(Math.round(n)).toLocaleString('ja-JP'); }
+    // ── 設定：請求単価・現場の振り分けを、画面で見る・直す（保存を押したときだけシートに書く） ──
+    var ST = { name: '請求単価', data: null, edits: {}, adds: [], dels: {}, busy: false, init: false };
+    function stOpen() {
+      if (!ST.init) {
+        ST.init = true;
+        $('stTabs').addEventListener('click', function (e) {
+          var b = e.target.closest('[data-st]'); if (!b || b.getAttribute('data-st') === ST.name) return;
+          if (stDirty() && !confirm('保存していない変更があります。捨てて、ほかの表に変えますか？')) return;
+          ST.name = b.getAttribute('data-st');
+          Array.prototype.forEach.call(document.querySelectorAll('#stTabs [data-st]'), function (x) { x.classList.toggle('on', x === b); });
+          stLoad();
+        });
+        $('stQ').addEventListener('input', stDraw); $('stNewOnly').addEventListener('change', stDraw);
+        $('stReload').onclick = function () { if (stDirty() && !confirm('保存していない変更を捨てて、読み直しますか？')) return; stLoad(); };
+        $('stUndo').onclick = function () { if (confirm('保存していない変更を、全部元に戻しますか？')) { stReset(); stDraw(); } };
+        $('stAdd').onclick = function () { ST.adds.push(ST.data.heads.map(function () { return ''; })); $('stQ').value = ''; stDraw(); var w = document.querySelector('.st-wrap'); w.scrollTop = w.scrollHeight; var f = document.querySelector('#stTbl tr.add:last-child input'); if (f) f.focus(); };
+        $('stSave').onclick = stSave;
+        $('stTbl').addEventListener('input', function (e) {
+          var inp = e.target.closest('input[data-c]'); if (!inp) return;
+          var tr = inp.closest('tr'), c = +inp.getAttribute('data-c');
+          if (tr.hasAttribute('data-a')) { ST.adds[+tr.getAttribute('data-a')][c] = inp.value; }
+          else {
+            var r = +tr.getAttribute('data-r'), base = stRow(r).values, cur = ST.edits[r] || base.slice();
+            cur[c] = inp.value; ST.edits[r] = cur;
+            if (cur.every(function (v, i) { return String(v) === String(base[i]); })) delete ST.edits[r];
+            inp.parentElement.classList.toggle('ch', String(inp.value) !== String(base[c]));
+          }
+          stState();
+        });
+        $('stTbl').addEventListener('click', function (e) {
+          var b = e.target.closest('[data-rm]'); if (!b) return;
+          var tr = b.closest('tr');
+          if (tr.hasAttribute('data-a')) { ST.adds.splice(+tr.getAttribute('data-a'), 1); stDraw(); return; }
+          var r = +tr.getAttribute('data-r'); if (ST.dels[r]) delete ST.dels[r]; else ST.dels[r] = 1; stDraw();
+        });
+        window.addEventListener('beforeunload', function (e) { if (stDirty()) { e.preventDefault(); e.returnValue = ''; } });
+      }
+      if (!ST.data || ST.data.name !== ST.name) stLoad();
+    }
+    function stRow(r) { return ST.data.rows.filter(function (x) { return x.row === r; })[0]; }
+    function stDirty() { return Object.keys(ST.edits).length + ST.adds.length + Object.keys(ST.dels).length > 0; }
+    function stReset() { ST.edits = {}; ST.adds = []; ST.dels = {}; stState(); }
+    function stState() {
+      var n = [Object.keys(ST.edits).length && ('変更 ' + Object.keys(ST.edits).length + '行'), ST.adds.length && ('追加 ' + ST.adds.length + '行'), Object.keys(ST.dels).length && ('削除 ' + Object.keys(ST.dels).length + '行')].filter(Boolean).join('・');
+      $('stDirty').textContent = n ? '保存していない変更：' + n : ''; $('stDirty').classList.toggle('hidden', !n);
+      $('stSave').disabled = !n || ST.busy; $('stUndo').disabled = !n || ST.busy;
+    }
+    function stMsg(t, k) { $('stMsg').innerHTML = t ? '<div class="msg ' + (k || '') + '">' + esc(t) + '</div>' : ''; }
+    function stLoad() {
+      stReset(); stMsg(''); $('stTbl').tBodies[0].innerHTML = '<tr><td style="padding:20px;color:var(--text3)">読み込んでいます…</td></tr>';
+      var name = ST.name;
+      call('adminSettingGet', [PIN, DEVICE, name], function (r) { if (name !== ST.name) return; ST.data = r; $('stNote').textContent = r.note || ''; stDraw(); },
+        function (e) { stMsg(e, 'err'); $('stTbl').tBodies[0].innerHTML = ''; });
+    }
+    function stDraw() {
+      var d = ST.data; if (!d) return;
+      var q = $('stQ').value.trim().toLowerCase(), newOnly = $('stNewOnly').checked;
+      var cls = function (t) { return t === 'key' ? 'k' : (/^yen|day/.test(t) ? 'num' : ''); };
+      $('stTbl').tHead.innerHTML = '<tr>' + d.heads.map(function (h) { return '<th>' + esc(h) + '</th>'; }).join('') + '<th></th></tr>';
+      var cellsHtml = function (vals, base) {
+        return vals.map(function (v, i) {
+          var ch = base && String(v) !== String(base[i]);
+          return '<td class="' + cls(d.types[i]) + (ch ? ' ch' : '') + '"><input data-c="' + i + '" value="' + esc(v) + '"' + (d.types[i] === 'time' ? ' placeholder="18:00"' : '') + '></td>';
+        }).join('');
+      };
+      var rows = d.rows.filter(function (x) { return (!newOnly || x.isNew) && (!q || x.values.join(' ').toLowerCase().indexOf(q) >= 0 || ST.edits[x.row]); });
+      var h = rows.map(function (x) {
+        var vals = ST.edits[x.row] || x.values;
+        return '<tr data-r="' + x.row + '" class="' + (ST.dels[x.row] ? 'del' : x.isNew ? 'isnew' : '') + '">' + cellsHtml(vals, x.values) + '<td class="rm"><button type="button" data-rm title="' + (ST.dels[x.row] ? '消すのをやめる' : 'この行を消す') + '">' + (ST.dels[x.row] ? '↺' : '✕') + '</button></td></tr>';
+      }).join('') + ST.adds.map(function (v, i) { return '<tr data-a="' + i + '" class="add">' + cellsHtml(v, null) + '<td class="rm"><button type="button" data-rm title="追加をやめる">✕</button></td></tr>'; }).join('');
+      $('stTbl').tBodies[0].innerHTML = h || '<tr><td colspan="' + (d.heads.length + 1) + '" style="padding:20px;color:var(--text3)">' + (q || newOnly ? '条件に合う行はありません。' : 'まだ行がありません。「＋ 行を追加」で足せます。') + '</td></tr>';
+      stState();
+    }
+    function stSave() {
+      if (ST.busy || !stDirty()) return;
+      var e = Object.keys(ST.edits).filter(function (r) { return !ST.dels[r]; }).map(function (r) { return { row: +r, values: ST.edits[r] }; });
+      var a = ST.adds.filter(function (v) { return v.some(function (x) { return String(x).trim(); }); });
+      var dl = Object.keys(ST.dels).map(Number);
+      var text = ST.name + 'を保存します。\n\n' + (e.length ? '変更 ' + e.length + '行\n' : '') + (a.length ? '追加 ' + a.length + '行\n' : '') + (dl.length ? '削除 ' + dl.length + '行（' + dl.map(function (r) { return stRow(r).values[0]; }).join('、') + '）\n' : '') + '\nよろしいですか？';
+      if (!confirm(text)) return;
+      ST.busy = true; stState(); stMsg('保存しています…');
+      call('adminSettingSave', [PIN, DEVICE, ST.name, { edits: e, adds: a, deletes: dl }, ST.data.version], function (r) {
+        ST.busy = false; ST.data = r; stReset(); stDraw(); stMsg(r.message || '保存しました', 'ok');
+      }, function (err) { ST.busy = false; stState(); stMsg(err, 'err'); });
+    }
+
     function blOpen() {
       if (BL.init) return;
       call('adminMonths', [PIN, DEVICE], function (r) {
