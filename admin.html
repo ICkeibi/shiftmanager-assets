@@ -802,7 +802,11 @@
       });
       if (h.progress && !PG.picked) renderProgress(h.progress);
       // 設定
+      // 画面で直せるもの（設定ページ）は、押すと設定ページを開く。右の「シート↗」でシートも開ける
       $('settings').innerHTML = (h.settings || []).map(function (s) {
+        if (ST_SHEETS.indexOf(s.name) >= 0)
+          return '<div class="slink" style="cursor:pointer" data-stgo="' + esc(s.name) + '" role="button" tabindex="0"><span>' + esc(s.name) + '<br><small>' + esc(s.note) + '（画面で直す）</small></span>' +
+            '<span style="display:flex;gap:10px;align-items:center"><span style="color:var(--brand);font-weight:bold">›</span><a href="' + esc(s.url) + '" target="_blank" rel="noopener" title="シートを開く" style="font-size:12px" onclick="event.stopPropagation()">シート↗</a></span></div>';
         return '<a class="slink" href="' + esc(s.url) + '" target="_blank" rel="noopener"><span>' + esc(s.name) + '<br><small>' + esc(s.note) + '</small></span><span>↗</span></a>';
       }).join('') || '<div class="note">ありません</div>';
       if (!h.tasks.length) {
@@ -2005,6 +2009,17 @@
     function yen(n) { return (n < 0 ? '-¥' : '¥') + Math.abs(Math.round(n)).toLocaleString('ja-JP'); }
     // ── 設定：請求単価・現場の振り分けを、画面で見る・直す（保存を押したときだけシートに書く） ──
     var ST = { name: '請求単価', data: null, edits: {}, adds: [], dels: {}, busy: false, init: false };
+    var ST_SHEETS = ['請求単価', '現場の振り分け'];   // 画面で直せるシート（ホームの「設定」からも開く）
+    // ホームの「設定」から：そのシートのタブで設定ページを開く
+    function stGo(name) {
+      if (ST_SHEETS.indexOf(name) < 0) return;
+      if (ST.name !== name && stDirty() && !confirm('保存していない変更があります。捨てて、ほかの表に変えますか？')) return;
+      if (ST.name !== name) { ST.name = name; ST.data = null; }
+      Array.prototype.forEach.call(document.querySelectorAll('#stTabs [data-st]'), function (x) { x.classList.toggle('on', x.getAttribute('data-st') === name); });
+      go('settings');
+    }
+    document.addEventListener('click', function (e) { var a = e.target.closest('[data-stgo]'); if (a && !e.target.closest('a')) stGo(a.getAttribute('data-stgo')); });
+    document.addEventListener('keydown', function (e) { var a = e.target.closest && e.target.closest('[data-stgo]'); if (a && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); stGo(a.getAttribute('data-stgo')); } });
     function stOpen() {
       if (!ST.init) {
         ST.init = true;
