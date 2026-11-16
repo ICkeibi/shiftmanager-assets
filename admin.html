@@ -27,6 +27,19 @@
       background: var(--bg); color: var(--text); font-size: 15px; }
     button { font: inherit; cursor: pointer; }
     .hidden { display: none !important; }
+    /* 確認・お知らせの画面（askOk / tell） */
+    .askx-ov { position: fixed; inset: 0; z-index: 99999; background: rgba(15, 30, 45, .45); display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .askx { width: 100%; max-width: 460px; background: var(--card); color: var(--text); border-radius: 16px; overflow: hidden; box-shadow: 0 16px 48px rgba(0,0,0,.3); border-top: 5px solid #0060A0; }
+    .askx-head { display: flex; align-items: center; gap: 10px; padding: 16px 20px 6px; }
+    .askx-head b { font-size: 17px; }
+    .askx-ic { width: 28px; height: 28px; border-radius: 50%; background: #0060A0; color: #fff; font-weight: bold; display: flex; align-items: center; justify-content: center; }
+    .askx-msg { padding: 6px 20px 18px 58px; font-size: 15px; line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 60vh; overflow-y: auto; }
+    .askx-btns { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 20px 16px; background: var(--bg); border-top: 1px solid var(--line); }
+    .askx-btns button { min-width: 110px; min-height: 40px; border-radius: 10px; font-weight: bold; font-size: 15px; cursor: pointer; }
+    .askx-no { background: var(--card); color: var(--text2); border: 1px solid var(--line); }
+    .askx-ok { background: #0060A0; color: #fff; border: 1px solid #0060A0; }
+    .askx-ok:hover { background: #40A040; border-color: #40A040; }
+    .askx-btns button:focus-visible { outline: 3px solid #40A040; outline-offset: 2px; }
 
     /* ログイン */
     #login { max-width: 360px; margin: 12vh auto 0; background: var(--card); border-radius: 12px; padding: 28px; box-shadow: 0 2px 12px rgba(0,0,0,.08); }
@@ -665,6 +678,44 @@
 
   <script>
     var APP_URL = new URL('./', location.href).href;   // この GitHub のアプリ
+    // ── 確認・お知らせの画面（ブラウザの確認画面のかわり。管理画面の青と緑の見た目。2026-11-17） ──
+    //  askOk(文) … 「OK／キャンセル」。押したほうを true/false で返す（await で待つ）
+    //  tell(文)  … お知らせ（OK だけ）
+    var ASK_Q = Promise.resolve();
+    function askBox(msg, cancel) {
+      var run = function () {
+        return new Promise(function (resolve) {
+          var text = String(msg == null ? '' : msg), okLabel = 'OK';
+          var m = text.match(/([^\n。、]{1,14})(します|しますか|しても|して)?か？\s*$/);
+          if (cancel) {
+            if (/印刷しますか？\s*$/.test(text)) okLabel = '印刷する';
+            else if (/作りますか？\s*$/.test(text)) okLabel = '作る';
+            else if (/記録しますか？\s*$/.test(text)) okLabel = '記録する';
+            else if (/実行しますか？\s*$/.test(text)) okLabel = '実行する';
+            else if (/更新しますか？\s*$/.test(text)) okLabel = '更新する';
+            else if (/保存します/.test(text)) okLabel = '保存する';
+            else if (/解除します/.test(text)) okLabel = '解除する';
+          }
+          var ov = document.createElement('div'); ov.className = 'askx-ov';
+          ov.innerHTML = '<div class="askx" role="dialog" aria-modal="true" aria-labelledby="askx-t"><div class="askx-head"><span class="askx-ic">' + (cancel ? '?' : '!') + '</span><b id="askx-t">' + (cancel ? '確認' : 'お知らせ') + '</b></div>' +
+            '<div class="askx-msg"></div><div class="askx-btns">' + (cancel ? '<button type="button" class="askx-no">キャンセル</button>' : '') + '<button type="button" class="askx-ok"></button></div></div>';
+          ov.querySelector('.askx-msg').textContent = text;
+          ov.querySelector('.askx-ok').textContent = okLabel;
+          var prev = document.activeElement;
+          var done = function (v) { document.removeEventListener('keydown', key, true); ov.remove(); try { if (prev && prev.focus) prev.focus(); } catch (e) {} resolve(v); };
+          var key = function (e) { if (e.key === 'Escape') { e.preventDefault(); done(false); } else if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); done(true); } };
+          ov.querySelector('.askx-ok').onclick = function () { done(true); };
+          if (cancel) ov.querySelector('.askx-no').onclick = function () { done(false); };
+          ov.addEventListener('click', function (e) { if (e.target === ov) done(!cancel ? true : false); });
+          document.addEventListener('keydown', key, true);
+          document.body.appendChild(ov);
+          ov.querySelector('.askx-ok').focus();
+        });
+      };
+      var p = ASK_Q.then(run); ASK_Q = p.catch(function () {}); return p;
+    }
+    function askOk(msg) { return askBox(msg, true); }
+    function tell(msg) { return askBox(msg, false); }
     // index.html の API_URL と同じURL（Apps Script のWebアプリ）
     var SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwaakQiOZkfCQaPa6gdRa0qWEpOrnmW_HdDtY4nrzulSVaraO_4tgMQTvUYhjTDoA5a/exec";
     // 打刻システム（勤怠管理システム：出勤・退勤ボタン）の Apps Script のウェブアプリのURL（…/exec）
@@ -762,9 +813,9 @@
     }
     $('loginBtn').addEventListener('click', function () { login($('pin').value); });
     $('pin').addEventListener('keydown', function (e) { if (e.key === 'Enter') login(this.value); });
-    $('logout').addEventListener('click', function (e) {
+    $('logout').addEventListener('click', async function (e) {
       e.preventDefault();
-      if (!confirm('このパソコンのログインを解除します。次から暗証番号が必要です。よろしいですか？')) return;
+      if (!await askOk('このパソコンのログインを解除します。次から暗証番号が必要です。よろしいですか？')) return;
       var t = getToken(); setToken('');
       if (t) call('payLogout', [t, DEVICE], function () {}, function () {});
       PIN = ''; showLogin('ログインを解除しました');
@@ -877,14 +928,14 @@
         : (n.warn ? '<span style="color:var(--over);font-size:13px;font-weight:bold">⚠ ' + esc(n.wareki) + 'がまだ済んでいません</span> ' : '') +
           '<button class="btn main" data-nkdone="1">' + esc(n.wareki) + 'の年末調整は済んだ</button>';
     }
-    document.addEventListener('click', function (e) {
+    document.addEventListener('click', async function (e) {
       var b = e.target.closest('button[data-nkdone]');
       if (!b || !NENCHO) return;
       var on = b.getAttribute('data-nkdone') === '1';
-      if (on && !confirm(NENCHO.wareki + 'の年末調整を「済」にします。\n上のメニューとホームから年末調整が消え、「その他」に入ります（いつでも開けます）。\n全員の画面で同じになります。\n\nよろしいですか？')) return;
+      if (on && !await askOk(NENCHO.wareki + 'の年末調整を「済」にします。\n上のメニューとホームから年末調整が消え、「その他」に入ります（いつでも開けます）。\n全員の画面で同じになります。\n\nよろしいですか？')) return;
       b.disabled = true;
       call('adminDone', [PIN, DEVICE, NENCHO.key, on], function (h) { HOME = h; applyNencho(h.nencho); },
-        function (m) { b.disabled = false; alert(m); });
+        function (m) { b.disabled = false; tell(m); });
     });
     // よく使うメニュー：そのページへ行き、押すボタンを光らせる（いきなり印刷はしない）
     function goFocus(where, id) {
@@ -1085,7 +1136,7 @@
     //  上に「令和〇年〇月／週払い／アイコンと会社名」、その下に週払いの範囲。色は会社のアイコン（青・緑）
     function wkPrint() {
       var d = WK.data;
-      if (!d) { alert('一覧を読んでから印刷してください'); return; }
+      if (!d) { tell('一覧を読んでから印刷してください'); return; }
       var mon = {}; (d.monthly || []).forEach(function (n) { mon[nkey(n)] = true; });
       var rows = d.rows.filter(function (r) { return !mon[nkey(r.name)]; });
       var m = WK.months[Number($('wkMonth').value)] || {}, now = new Date(), p2 = function (n) { return ('0' + n).slice(-2); };
@@ -1223,7 +1274,7 @@
           monthly.filter(hit).map(function (r) { return row(r, true); }).join('') : '') +
         '</tbody></table></div><aside class="wkx-side noprint">' + side + '</aside></div>';
     }
-    $('wkBody').addEventListener('click', function (e) {
+    $('wkBody').addEventListener('click', async function (e) {
       var nm = e.target.closest('[data-open]');
       if (nm) {
         var name = nm.getAttribute('data-open'), d = WK.data;
@@ -1247,10 +1298,10 @@
       var tb = e.target.closest('[data-type]');
       if (tb) {
         var n = tb.getAttribute('data-type'), toMon = !tb.classList.contains('on');
-        if (!confirm(toMon ? n + ' さんを「月払い」にしますか？（週払いの合計と印刷から外れます）' : n + ' さんを「週払い」に戻しますか？')) return;
+        if (!await askOk(toMon ? n + ' さんを「月払い」にしますか？（週払いの合計と印刷から外れます）' : n + ' さんを「週払い」に戻しますか？')) return;
         tb.disabled = true;
         call('adminSetPayType', [PIN, DEVICE, n, toMon], function (r) { WK.data.monthly = r.monthly; wkRender(); },
-          function (m) { tb.disabled = false; alert(m); });
+          function (m) { tb.disabled = false; tell(m); });
       }
     });
     $('wkBody').addEventListener('change', function (e) {
@@ -1311,12 +1362,12 @@
       Array.prototype.forEach.call(document.querySelectorAll('#pKintai button[data-run]'), function (b) { b.disabled = on; });
       $('kwMonth').disabled = on;
     }
-    $('pKintai').addEventListener('click', function (e) {
+    $('pKintai').addEventListener('click', async function (e) {
       var b = e.target.closest('button[data-run]');
       if (!b || KW.busy) return;
       var what = b.getAttribute('data-run'), label = $('kwMonth').value;
       if (what === 'name') {
-        if (!confirm(label + ' と前の月の出勤簿・勤怠管理表を読んで、「名前対応」シートを更新します。\nすでに選んである氏名は消えません。\n\n更新しますか？')) return;
+        if (!await askOk(label + ' と前の月の出勤簿・勤怠管理表を読んで、「名前対応」シートを更新します。\nすでに選んである氏名は消えません。\n\n更新しますか？')) return;
         kwBusy(true); $('r1').innerHTML = '<div class="run">更新しています...（1分ほど）</div>';
         call('adminUpdateNameMap', [PIN, DEVICE, label], function (r) {
           kwBusy(false);
@@ -1336,11 +1387,11 @@
       }
       if (what === 'write') {
         kwBusy(true); $('r3').innerHTML = '<div class="run">確認しています...（出勤簿を読むので1分ほど）</div>';
-        call('adminWriteKintai', [PIN, DEVICE, label, true], function (p) {
+        call('adminWriteKintai', [PIN, DEVICE, label, true], async function (p) {
           var msg = (p.resume ? '前回の続きから書き込みます（' + p.resume + ' / ' + p.people + ' 人は済み）。\n\n' : '') +
             '「' + p.file + '」の ' + p.people + ' 人の社員シートに、' + p.label + ' の出勤簿を書き込みます。\n' +
             'すでに入力がある日は書き換えません。\n\n実行しますか？';
-          if (!confirm(msg)) { kwBusy(false); $('r3').innerHTML = ''; return; }
+          if (!await askOk(msg)) { kwBusy(false); $('r3').innerHTML = ''; return; }
           kwWrite(label);
         }, function (m) { kwBusy(false); $('r3').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
       }
@@ -1379,10 +1430,10 @@
       if (PL.data) plPrintCheck(PL.data); else plLoad(plPrintCheck);
     });
     // シートの月と、上で選んでいる月が違うときは、印刷の前に聞く
-    function plPrintCheck(r) {
+    async function plPrintCheck(r) {
       var sel = $('kwMonth').value, t = String(r.title || '');
       if (sel && t && t.indexOf(sel) !== 0 &&
-        !confirm('「個人別集計」シートは「' + t.split(/[\s　]/)[0] + '」の分です（上で選んでいる月は ' + sel + '）。\n\n' +
+        !await askOk('「個人別集計」シートは「' + t.split(/[\s　]/)[0] + '」の分です（上で選んでいる月は ' + sel + '）。\n\n' +
           'このまま印刷しますか？\n\n' + sel + ' を印刷するときは「キャンセル」を押して、先に②の「作る」を押してください。')) return;
       plPrint(r);
     }
@@ -1596,11 +1647,11 @@
         '<div class="msg err hidden" id="kiErr" style="margin-top:6px"></div>';
     }
     // 同じ人の「確認」をまとめてOK（勤怠管理表は書き換えない）
-    function kiOkAll(name) {
+    async function kiOkAll(name) {
       var d = KI.data, idx = [];
       d.list.forEach(function (x, i) { if (x.kind === 'check' && !x.done && x.name === name && !KI.busy[i]) idx.push(i); });
       if (!idx.length) return;
-      if (!confirm(name + ' さんの「確認」' + idx.length + '件を、まとめてOK（このままでよい）にします。\n勤怠管理表は書き換えません。\n\nよろしいですか？')) return;
+      if (!await askOk(name + ' さんの「確認」' + idx.length + '件を、まとめてOK（このままでよい）にします。\n勤怠管理表は書き換えません。\n\nよろしいですか？')) return;
       var items = idx.map(function (i) { var x = d.list[i]; return { row: x.row, name: x.name, date: x.date, shift: x.shift, msg: x.msg }; });
       KI.busy['g:' + name] = true; idx.forEach(function (i) { KI.busy[i] = true; }); KI.edit = null; kiRender();
       call('adminKintaiResolve', [PIN, DEVICE, d.label, {}, 'okmany', items], function (r) {
@@ -1612,10 +1663,10 @@
         kiRender(); kiErr(name + '：' + m);
       });
     }
-    function kiErr(m) { var e = $('kiErr'); if (e) { e.textContent = m; e.classList.remove('hidden'); } else alert(m); }
-    function kiSend(i, action, value, confirmMsg) {
+    function kiErr(m) { var e = $('kiErr'); if (e) { e.textContent = m; e.classList.remove('hidden'); } else tell(m); }
+    async function kiSend(i, action, value, confirmMsg) {
       var d = KI.data, x = d.list[i];
-      if (confirmMsg && !confirm(confirmMsg)) return;
+      if (confirmMsg && !await askOk(confirmMsg)) return;
       KI.busy[i] = true; kiRender();
       var item = { row: x.row, name: x.name, date: x.date, shift: x.shift, msg: x.msg };
       call('adminKintaiResolve', [PIN, DEVICE, d.label, item, action, value], function (r) {
@@ -1696,7 +1747,7 @@
       var what = b.getAttribute('data-dk'), label = $('dkMonth').value, only = $('dkOnly').checked;
       var out = what === 'check' ? $('d2') : $('d3');
       dkBusy(true); out.innerHTML = '<div class="run">打刻を読んでいます...</div>';
-      call('adminDakoku', [PIN, DEVICE, label, only, true], function (p) {
+      call('adminDakoku', [PIN, DEVICE, label, only, true], async function (p) {
         var info = esc(p.src) + '：<b>' + p.people + '人・' + p.items + '件</b>を反映できます。' +
           (only && p.unchecked ? '　本人の確認（✓）がまだの <b>' + p.unchecked + '件</b>は反映しません。' : '');
         var unk = p.unknown.length
@@ -1708,7 +1759,7 @@
           '「' + p.file + '」の ' + p.people + ' 人・' + p.items + ' 件に、' + p.label + ' の打刻を書きます。\n' +
           '出勤簿から書いた時刻と違う日は、打刻の時刻に書き換えます（前の時刻は「打刻の反映結果」シートに残します）。\n\n実行しますか？';
         if (!p.items) { dkBusy(false); out.innerHTML = '<div class="ok">' + info + '</div>' + unk; return; }
-        if (!confirm(msg)) { dkBusy(false); out.innerHTML = ''; return; }
+        if (!await askOk(msg)) { dkBusy(false); out.innerHTML = ''; return; }
         dkRun(label, only);
       }, function (m) { dkBusy(false); out.innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
     });
@@ -1786,13 +1837,13 @@
       var label = b.getAttribute('data-gs');
       NK.busy = true; b.disabled = true;
       $('gsMsg').innerHTML = '<div class="run">' + esc(label) + 'の勤怠管理表を読んでいます...（1分ほど）</div>';
-      call('adminGensenRecord', [PIN, DEVICE, label, true], function (p) {
+      call('adminGensenRecord', [PIN, DEVICE, label, true], async function (p) {
         var lines = p.sample.map(function (x) { return '　' + x[0] + '：総支給 ' + nkYen(x[1]) + '・社会保険料等 ' + nkYen(x[2]) + '・所得税 ' + nkYen(x[3]); }).join('\n');
         var msg = '「' + p.file + '」（' + p.period + '・支給日 ' + p.payday + '）の ' + p.people + '人分を、\n' +
           '「' + p.book + '」の ' + p.payM + '月 の行に記録します。' + (p.already ? '\nこの月はすでに ' + p.already + '人分の記録があり、上書きします。' : '') +
           '\n\n最初の人の数字（勤怠管理表の数字と合っているか見てください）：\n' + lines +
           (p.noTax ? '\n\n※ 所得税が0円の人が ' + p.noTax + '人います（乙欄・学生・少ない月なら普通です）' : '') + '\n\n記録しますか？';
-        if (!confirm(msg)) { NK.busy = false; b.disabled = false; $('gsMsg').innerHTML = ''; return; }
+        if (!await askOk(msg)) { NK.busy = false; b.disabled = false; $('gsMsg').innerHTML = ''; return; }
         $('gsMsg').innerHTML = '<div class="run">' + esc(label) + 'の分を記録しています...（1〜2分。この画面のままお待ちください）</div>';
         call('adminGensenRecord', [PIN, DEVICE, label, false], function (r) {
           NK.busy = false;
@@ -2088,12 +2139,12 @@
       }, function (m) { $('s1').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
     }
     $('slMonth').addEventListener('change', function () { slLateSaved(); });
-    $('pSalary').addEventListener('click', function (e) {
+    $('pSalary').addEventListener('click', async function (e) {
       var b = e.target.closest('button[data-sl]');
       if (!b) return;
       var sel = $('slMonth'), opt = sel.options[sel.selectedIndex];
       var label = sel.value || (opt ? opt.text.replace(/（勤怠管理表なし）$/, '') : ''), what = b.getAttribute('data-sl');
-      if (!label) { alert('対象の月を選んでください'); return; }
+      if (!label) { tell('対象の月を選んでください'); return; }
       if (what === 'open') {
         var w = window.open('', '_blank');   // 先に開いておく（あとから開くとブロックされるため）
         call('adminKintaiUrl', [PIN, DEVICE, label], function (url) {
@@ -2109,7 +2160,7 @@
         }, function (m) { b.disabled = false; SL.lateBusy = false; $('s0').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
       }
       if (what === 'csv') {
-        if (!confirm(label + ' の勤怠管理表から、弥生給与Next用のCSVを作ります。\n同じ月のCSVがあれば、新しいものに置き換わります（古いものはゴミ箱へ）。\n\n作りますか？')) return;
+        if (!await askOk(label + ' の勤怠管理表から、弥生給与Next用のCSVを作ります。\n同じ月のCSVがあれば、新しいものに置き換わります（古いものはゴミ箱へ）。\n\n作りますか？')) return;
         b.disabled = true; $('s2').innerHTML = '<div class="run">作っています...（70人ほどで2〜3分かかります。この画面のままお待ちください）</div>';
         call('adminYayoiCsv', [PIN, DEVICE, label], function (r) {
           b.disabled = false;
@@ -2175,9 +2226,9 @@
     var ST = { name: '請求単価', data: null, edits: {}, adds: [], dels: {}, busy: false, init: false };
     var ST_SHEETS = ['請求単価', '現場の振り分け', '支払区分', '注意ワード'];   // 画面で直せるシート（ホームの「設定」からも開く）
     // ホームの「設定」から：そのシートのタブで設定ページを開く
-    function stGo(name) {
+    async function stGo(name) {
       if (ST_SHEETS.indexOf(name) < 0) return;
-      if (ST.name !== name && stDirty() && !confirm('保存していない変更があります。捨てて、ほかの表に変えますか？')) return;
+      if (ST.name !== name && stDirty() && !await askOk('保存していない変更があります。捨てて、ほかの表に変えますか？')) return;
       if (ST.name !== name) { ST.name = name; ST.data = null; }
       Array.prototype.forEach.call(document.querySelectorAll('#stTabs [data-st]'), function (x) { x.classList.toggle('on', x.getAttribute('data-st') === name); });
       go('settings');
@@ -2187,16 +2238,16 @@
     function stOpen() {
       if (!ST.init) {
         ST.init = true;
-        $('stTabs').addEventListener('click', function (e) {
+        $('stTabs').addEventListener('click', async function (e) {
           var b = e.target.closest('[data-st]'); if (!b || b.getAttribute('data-st') === ST.name) return;
-          if (stDirty() && !confirm('保存していない変更があります。捨てて、ほかの表に変えますか？')) return;
+          if (stDirty() && !await askOk('保存していない変更があります。捨てて、ほかの表に変えますか？')) return;
           ST.name = b.getAttribute('data-st');
           Array.prototype.forEach.call(document.querySelectorAll('#stTabs [data-st]'), function (x) { x.classList.toggle('on', x === b); });
           stLoad();
         });
         $('stQ').addEventListener('input', stDraw); $('stNewOnly').addEventListener('change', stDraw);
-        $('stReload').onclick = function () { if (stDirty() && !confirm('保存していない変更を捨てて、読み直しますか？')) return; stLoad(); };
-        $('stUndo').onclick = function () { if (confirm('保存していない変更を、全部元に戻しますか？')) { stReset(); stDraw(); } };
+        $('stReload').onclick = async function () { if (stDirty() && !await askOk('保存していない変更を捨てて、読み直しますか？')) return; stLoad(); };
+        $('stUndo').onclick = async function () { if (await askOk('保存していない変更を、全部元に戻しますか？')) { stReset(); stDraw(); } };
         $('stAdd').onclick = function () { ST.adds.push(ST.data.heads.map(function () { return ''; })); $('stQ').value = ''; stDraw(); var w = document.querySelector('.st-wrap'); w.scrollTop = w.scrollHeight; var f = document.querySelector('#stTbl tr.add:last-child input'); if (f) f.focus(); };
         $('stSave').onclick = stSave;
         $('stTbl').addEventListener('input', function (e) {
@@ -2318,13 +2369,13 @@
       $('stTbl').tBodies[0].innerHTML = h || '<tr><td colspan="' + (d.heads.length + 1) + '" style="padding:20px;color:var(--text3)">' + (q || newOnly ? '条件に合う行はありません。' : 'まだ行がありません。「＋ 行を追加」で足せます。') + '</td></tr>';
       stState();
     }
-    function stSave() {
+    async function stSave() {
       if (ST.busy || !stDirty()) return;
       var e = Object.keys(ST.edits).filter(function (r) { return !ST.dels[r]; }).map(function (r) { return { row: +r, values: ST.edits[r] }; });
       var a = ST.adds.filter(function (v) { return v.some(function (x) { return String(x).trim(); }); });
       var dl = Object.keys(ST.dels).map(Number);
       var text = ST.name + 'を保存します。\n\n' + (e.length ? '変更 ' + e.length + '行\n' : '') + (a.length ? '追加 ' + a.length + '行\n' : '') + (dl.length ? '削除 ' + dl.length + '行（' + dl.map(function (r) { return stRow(r).values[0]; }).join('、') + '）\n' : '') + '\nよろしいですか？';
-      if (!confirm(text)) return;
+      if (!await askOk(text)) return;
       ST.busy = true; stState(); stMsg('保存しています…');
       call('adminSettingSave', [PIN, DEVICE, ST.name, { edits: e, adds: a, deletes: dl }, ST.data.version], function (r) {
         ST.busy = false; ST.data = r; stReset(); stDraw(); stMsg(r.message || '保存しました', 'ok');
@@ -2577,9 +2628,9 @@
           function (e) { msg.innerHTML = '<div class="msg err">' + esc(e) + '</div>'; });
       })();
     }
-    function invPrintAll() {
+    async function invPrintAll() {
       var all = BL.data.companies.map(function (c, ci) { return ci; }).filter(function (ci) { return !BL.data.companies[ci].noRate; });
-      if (!confirm(all.length + '社・' + all.reduce(function (t, ci) { return t + BL.data.companies[ci].sites.length; }, 0) + '現場の請求書と出面表を印刷します（現場ごとに 請求書A4横1枚＋出面表A4縦1枚）。\n工事件名などは「請求書の項目」シートに入っているものを使います。\n\n印刷しますか？')) return;
+      if (!await askOk(all.length + '社・' + all.reduce(function (t, ci) { return t + BL.data.companies[ci].sites.length; }, 0) + '現場の請求書と出面表を印刷します（現場ごとに 請求書A4横1枚＋出面表A4縦1枚）。\n工事件名などは「請求書の項目」シートに入っているものを使います。\n\n印刷しますか？')) return;
       invPrint(all, 'both');
     }
     // ── 出面表（現場ごとにA4縦1枚。今までのExcelの出面と同じ形） ──
@@ -2794,7 +2845,7 @@
         'while(mm()>262&&fs>6){fs-=0.25;b.style.fontSize=fs+"pt";}p.style.width="";})();<\/script>' +
         '</body></html>';
       var w = window.open('', '_blank');
-      if (!w) { alert('新しい画面を開けませんでした。ブラウザのポップアップを許可してから、もう一度押してください。'); return; }
+      if (!w) { tell('新しい画面を開けませんでした。ブラウザのポップアップを許可してから、もう一度押してください。'); return; }
       w.document.open(); w.document.write(html); w.document.close();
     }
 
