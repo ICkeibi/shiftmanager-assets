@@ -522,21 +522,59 @@
       <div class="page hidden" id="pSalary">
         <h2>給与（弥生給与Next）</h2>
         <div class="sub">勤怠管理表への書き込みが終わったら、上から順に進めます（10日まで）。</div>
+        <style>
+          /* 給与：パソコン用の画面（2026-11-16）。4つの手順を横にならべ、結果は下の広い欄に出す */
+          #pSalary .filters { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; }
+          .slx-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0 0 14px; counter-reset: slx; }
+          .slx-step { position: relative; background: var(--card); border: 1px solid var(--line); border-top: 5px solid #0060A0; border-radius: 14px; padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 8px; }
+          .slx-step:nth-child(2) { border-top-color: #f5b400; } .slx-step:nth-child(3) { border-top-color: #40A040; } .slx-step:nth-child(4) { border-top-color: #0a3c8c; }
+          .slx-step:not(:last-child)::after { content: "›"; position: absolute; right: -11px; top: 44%; width: 18px; height: 18px; border-radius: 50%; background: var(--bg); color: var(--text3); font-size: 18px; line-height: 16px; text-align: center; z-index: 1; }
+          .slx-top { display: flex; align-items: center; gap: 10px; }
+          .slx-num { width: 30px; height: 30px; border-radius: 50%; background: #0060A0; color: #fff; font-weight: bold; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+          .slx-step:nth-child(2) .slx-num { background: #f5b400; color: #3d2a00; } .slx-step:nth-child(3) .slx-num { background: #40A040; } .slx-step:nth-child(4) .slx-num { background: #0a3c8c; }
+          .slx-ic { margin-left: auto; width: 34px; height: 34px; color: var(--text3); } .slx-ic svg { width: 100%; height: 100%; }
+          .slx-t { font-weight: bold; font-size: 15px; line-height: 1.4; }
+          .slx-note { font-size: 12px; color: var(--text2); line-height: 1.6; flex: 1; }
+          .slx-step .btn { align-self: stretch; text-align: center; margin: 0; min-height: 40px; border-radius: 10px; font-weight: bold; background: #0060A0; border-color: #0060A0; color: #fff; text-decoration: none; display: flex; align-items: center; justify-content: center; }
+          .slx-step .btn:disabled { opacity: .55; }
+          .slx-panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 18px; margin: 0 0 14px; }
+          .slx-panel > h3 { margin: 0 0 8px; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+          .slx-panel > h3 i { font-style: normal; width: 24px; height: 24px; border-radius: 50%; color: #fff; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; }
+          .slx-panel:has(> #s0:empty), .slx-panel:has(> #s2:empty) { display: none; }
+          #s1:empty { display: none; }
+          .slx-late-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 180px)); gap: 10px; margin: 8px 0 12px; }
+          .slx-late-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 16px; align-items: start; }
+          .slx-late-grid h4 { margin: 0 0 6px; font-size: 14px; color: #0060A0; }
+          .slx-late-grid table { width: 100%; border-collapse: collapse; font-size: 13px; }
+          .slx-late-grid td, .slx-late-grid th { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+          .slx-late-grid tr:first-child td { color: var(--text2); font-size: 12px; background: var(--bg); }
+          .slx-late-links { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+          .slx-late-links a { border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; font-size: 13px; text-decoration: none; color: #0060A0; }
+          @media (max-width: 1150px) { .slx-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } .slx-step::after { display: none; } .slx-late-grid { grid-template-columns: minmax(0, 1fr); } }
+          @media (prefers-color-scheme: dark) { .slx-late-grid h4, .slx-late-links a { color: #6aa8dc; } }
+        </style>
         <div class="filters"><label>対象の月<select id="slMonth"></select></label></div>
-        <div class="steps">
-          <div class="step"><div class="sn">1</div><div class="sb"><div class="t">勤怠管理表で、個人の出勤を確認する</div>
-            <div class="note">「個人別集計・勤怠書き込み」で書き込んだあと、勤怠管理表を開いて何人か確認します。直したら保存されます。</div>
-            <div class="res" id="s1"></div></div><button class="btn" data-sl="open">勤怠管理表を開く ↗</button></div>
-          <div class="step"><div class="sn">2</div><div class="sb"><div class="t">遅刻・早退の一覧を見る</div>
-            <div class="note">全員のシートから、D列が 3・4（遅刻）・5（早退）の日を集めます。出勤簿の確認の画像と見比べて、控除が合っているか確かめます。「遅刻早退一覧」シートにも出すので、印刷もできます。</div>
-            <div class="res" id="s0"></div></div><button class="btn" data-sl="late">一覧を出す</button></div>
-          <div class="step"><div class="sn">3</div><div class="sb"><div class="t">弥生給与用のCSVを作る</div>
-            <div class="note">勤怠管理表のメニュー「弥生給与用のCSVを作る」と同じものを作ります。①勤怠CSV ②支給控除CSV の2つ。</div>
-            <div class="res" id="s2"></div></div><button class="btn" data-sl="csv">CSVを作る</button></div>
-          <div class="step"><div class="sn">4</div><div class="sb"><div class="t">弥生給与Nextに取り込む</div>
-            <div class="note">2で作ったCSVを開き、右上の「ダウンロード」でパソコンに保存します。弥生給与Nextで ①は「勤怠CSVファイルのインポート」、②は「支給・控除・その他CSVファイルのインポート」で取り込み、給与明細を作ります。</div></div>
+        <div class="slx-steps">
+          <div class="slx-step"><div class="slx-top"><span class="slx-num">1</span><span class="slx-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18"/><path d="M13 14l2 2 4-4" stroke="#40A040" stroke-width="2.2"/></svg></span></div>
+            <div class="slx-t">勤怠管理表で、個人の出勤を確認する</div>
+            <div class="slx-note">「勤怠書き込み」で書き込んだあと、勤怠管理表を開いて何人か確認します。直したら保存されます。</div>
+            <button class="btn" data-sl="open">勤怠管理表を開く ↗</button></div>
+          <div class="slx-step"><div class="slx-top"><span class="slx-num">2</span><span class="slx-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/><path d="M19 5l2-2" stroke="#c98a00" stroke-width="2.2"/></svg></span></div>
+            <div class="slx-t">遅刻・早退の一覧を見る</div>
+            <div class="slx-note">全員のシートから、D列が 3・4（遅刻）・5（早退）の日を集めます。出勤簿と見比べて、控除が合っているか確かめます。結果は下に出ます。</div>
+            <button class="btn" data-sl="late">一覧を出す</button></div>
+          <div class="slx-step"><div class="slx-top"><span class="slx-num">3</span><span class="slx-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h9l4 4v14H6z"/><path d="M9 13h7M9 17h7"/><path d="M12 6v5l-2-2M12 11l2-2" stroke="#40A040" stroke-width="2"/></svg></span></div>
+            <div class="slx-t">弥生給与用のCSVを作る</div>
+            <div class="slx-note">勤怠管理表のメニュー「弥生給与用のCSVを作る」と同じものを作ります。①勤怠CSV ②支給控除CSV の2つ（2〜3分）。</div>
+            <button class="btn" data-sl="csv">CSVを作る</button></div>
+          <div class="slx-step"><div class="slx-top"><span class="slx-num">4</span><span class="slx-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 18v3"/><path d="M12 7v7M9 11l3 3 3-3" stroke="#0a3c8c" stroke-width="2"/></svg></span></div>
+            <div class="slx-t">弥生給与Nextに取り込む</div>
+            <div class="slx-note">3で作ったCSVを開き「ダウンロード」で保存。弥生給与Nextで ①は「勤怠CSVファイルのインポート」、②は「支給・控除・その他CSVファイルのインポート」で取り込みます。</div>
             <a class="btn" href="https://payroll-administrator.yayoi-kk.co.jp/home" target="_blank" rel="noopener">弥生給与Nextを開く ↗</a></div>
         </div>
+        <div class="res" id="s1"></div>
+        <div class="slx-panel"><h3><i style="background:#f5b400;color:#3d2a00">2</i>遅刻・早退の一覧</h3><div class="res" id="s0"></div></div>
+        <div class="slx-panel"><h3><i style="background:#40A040">3</i>弥生給与用のCSV</h3><div class="res" id="s2"></div></div>
       </div>
       <!-- 年末調整 -->
       <div class="page hidden" id="pNencho">
@@ -2116,13 +2154,17 @@
             r.people.map(function (p) {
               return '<tr><td>' + esc(p.name) + '</td><td>' + esc(p.late) + '</td><td>' + esc(p.lateTime) + '</td><td>' + esc(p.early) + '</td><td>' + esc(p.earlyTime) + '</td><td>' + esc(p.ded) + '</td></tr>';
             }).join('') + '</table>';
+          // パソコン用：上に件数のカード、下に「1人ずつ」と「日ごと」を横にならべる（2026-11-16）
           $('s0').innerHTML = savedNote(at, changed, fresh, '読んだ') + (r.days.length || r.people.length
-            ? '<div class="ok">' + esc(r.label) + '：遅刻 <b>' + late + '件</b>・早退 <b>' + early + '件</b>（' + r.people.length + '人）。' +
-              '　<a href="' + esc(r.sheetUrl) + '" target="_blank" rel="noopener">「遅刻早退一覧」シート ↗</a>' +
-              '　<a href="' + esc(r.kintaiUrl) + '" target="_blank" rel="noopener">勤怠管理表を開く ↗</a></div>' +
-              '<details style="margin-top:6px" open><summary>1人ずつ（シートの上の数字）</summary>' + sum + '</details>' +
-              '<details style="margin-top:6px" open><summary>日ごと（' + r.days.length + '件）</summary>' +
-              issueTable(r.days, ['氏名', '日付', '区分', '始業', '終業', '遅れた分・早く上がった分']) + '</details>'
+            ? '<div class="slx-late-kpis">' +
+                '<div class="blx-kpi d"><span>遅刻</span><b>' + late + '件</b></div>' +
+                '<div class="blx-kpi n"><span>早退</span><b>' + early + '件</b></div>' +
+                '<div class="blx-kpi"><span>' + esc(r.label) + '</span><b>' + r.people.length + '人</b></div></div>' +
+              '<div class="slx-late-links"><a href="' + esc(r.sheetUrl) + '" target="_blank" rel="noopener">「遅刻早退一覧」シート（印刷用） ↗</a>' +
+              '<a href="' + esc(r.kintaiUrl) + '" target="_blank" rel="noopener">勤怠管理表を開く ↗</a></div>' +
+              '<div class="slx-late-grid" style="margin-top:12px"><div><h4>1人ずつ（シートの上の数字）</h4>' + sum + '</div>' +
+              '<div><h4>日ごと（' + r.days.length + '件）</h4>' +
+              issueTable(r.days, ['氏名', '日付', '区分', '始業', '終業', '遅れた分・早く上がった分']) + '</div></div>'
             : '<div class="ok">' + esc(r.label) + '：遅刻・早退の日はありません。</div>');
     }
 
