@@ -2802,15 +2802,20 @@
         return '<div class="dz"><div class="ttl">' + esc(m.title || s.name) + '</div><div class="sub">' + esc(BL_OUR_COMPANY) + '　月報</div>' +
           '<table class="dzt a"><colgroup><col style="width:13%"><col style="width:6.5%"><col style="width:8.5%"><col style="width:8.5%"><col style="width:5.5%"><col style="width:5.5%"><col style="width:6.5%">' +
           '<col style="width:8.5%"><col style="width:8.5%"><col style="width:5.5%"><col style="width:5.5%"><col style="width:6.5%"><col style="width:9%"></colgroup>' +
-          '<thead><tr><th>' + y0 + '年</th><th></th><th>隊員（昼）</th><th>日祝(昼)</th><th class="sm">残業（H)</th><th class="sm">残業(人)</th><th>計（H)</th>' +
+          '<thead><tr><th class="yr">' + y0 + '年</th><th></th><th>隊員（昼）</th><th>日祝(昼)</th><th class="sm">残業（H)</th><th class="sm">残業(人)</th><th>計（H)</th>' +
           '<th>隊員（夜）</th><th>日祝(夜)</th><th class="sm">残業（H)</th><th class="sm">残業(人)</th><th>計（H)</th><th class="sm2">2級資格者</th></tr></thead><tbody>' + rows +
           '<tr class="tt"><td></td><td></td><td>' + zero(tot.d) + '</td><td>' + zero(tot.hd) + '</td><td>' + zero(Math.round(tot.pod / 60 * 100) / 100) + '</td><td>' + zero(tot.pd) + '</td><td>' + zero(tot.od / 60) + '</td>' +
           '<td>' + zero(tot.n) + '</td><td>' + zero(tot.hn) + '</td><td>' + zero(Math.round(tot.pon / 60 * 100) / 100) + '</td><td>' + zero(tot.pn) + '</td><td>' + zero(tot.on / 60) + '</td><td>' + zero(tot.q) + '</td></tr>' +
           '</tbody></table></div>';
       }
-      return '<div class="dz"><div class="ttl">' + esc(m.atena || invAtena(c, null)) + '</div><div class="sub">' + esc(BL_OUR_COMPANY) + '　月報</div>' +
+      // 宛名と会社がちがうとき（株式会社S2 など）は、うしろに（会社名）をつける：株式会社S2（長田組土木）
+      var atena = m.atena || invAtena(c, null);
+      var nz = function (t) { return String(t || '').replace(/[（(]株[)）]|株式会社|有限会社|[\s　]/g, ''); };
+      var base = nz(c.name);
+      if (base && nz(atena).indexOf(base) < 0 && base.indexOf(nz(atena)) < 0) atena += '（' + base + '）';
+      return '<div class="dz"><div class="ttl">' + esc(atena) + '</div><div class="sub">' + esc(BL_OUR_COMPANY) + '　月報</div>' +
         '<table class="dzt b"><colgroup><col style="width:13%"><col style="width:9%"><col style="width:18.5%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:12%"></colgroup>' +
-        '<thead><tr><th>' + y0 + '年</th><th></th><th>現場住所</th><th>隊員（昼）</th><th>残業（H)</th><th>隊員（夜）</th><th>残業（H)</th><th>2級資格者</th></tr></thead><tbody>' + rows +
+        '<thead><tr><th class="yr">' + y0 + '年</th><th></th><th>現場住所</th><th>隊員（昼）</th><th>残業（H)</th><th>隊員（夜）</th><th>残業（H)</th><th>2級資格者</th></tr></thead><tbody>' + rows +
         '<tr class="tt"><td></td><td></td><td></td><td>' + zero(tot.d) + '</td><td>' + zero(tot.od / 60) + '</td><td class="nt">' + zero(tot.n) + '</td><td>' + zero(tot.on / 60) + '</td><td>' + zero(tot.q) + '</td></tr>' +
         '</tbody></table></div>';
     }
@@ -2897,8 +2902,10 @@
         'table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 7mm; font-size: 12.5pt; }' +
         'th, td { border: 1px solid #000; padding: .3mm 1.2mm; line-height: 1.25; white-space: nowrap; overflow: hidden; }' +
         'th { font-weight: normal; text-align: left; }' +
-        'td.r { text-align: right; } td.sm { font-size: 9.5pt; } td.nt { font-size: 11pt; border-top-color: #000; }' +
-        'tbody tr:not(.sum) td.nt { border-top: 0; border-bottom: 0; } tbody tr:nth-last-child(4) td.nt { border-bottom: 1px solid #000; }' +
+        // 特記事項の列（請求書だけ）。出面表の夜勤の列（同じ td.nt）には効かせない
+        'td.r { text-align: right; } td.sm { font-size: 9.5pt; } .pg td.nt { font-size: 11pt; border-top-color: #000; }' +
+        '.pg tbody tr:not(.sum) td.nt { border-top: 0; border-bottom: 0; } .pg tbody tr:nth-last-child(4) td.nt { border-bottom: 1px solid #000; }' +
+        '.dzt th.yr { font-size: 14pt; font-weight: bold; }' +
         'tr.sum td.no { border: 0; } tr.sum td.lbl { text-align: right; }' +
         '@media print { .pg { margin: 0; } }' +
         '</style></head><body>' + pages + '</body></html>';
