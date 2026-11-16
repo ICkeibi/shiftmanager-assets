@@ -414,6 +414,52 @@
       <div id="toast" class="toast hidden"><span id="toastText"></span><button id="toastUndo">元に戻す</button></div>
       <!-- 週払いの確認 -->
       <div class="page hidden" id="pWeekly">
+        <style>
+          /* 週払い：パソコン用の画面（2026-11-16）。カードの見た目は請求書のページと同じ（.blx-kpi） */
+          #pWeekly .filters { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; gap: 14px; }
+          #pWeekly .filters input { min-width: 220px; }
+          #wkPrint, #wkReload { min-height: 40px; border-radius: 10px; font-weight: bold; }
+          #wkPrint { background: #0060A0; border-color: #0060A0; color: #fff; }
+          .blx-kpi.ok { background: var(--ok-bg); border-color: transparent; } .blx-kpi.ok span, .blx-kpi.ok b { color: var(--ok); }
+          .blx-kpi.ng { background: var(--over-bg); border-color: transparent; } .blx-kpi.ng span, .blx-kpi.ng b { color: var(--over); }
+          .wkx-bar { display: block; height: 6px; border-radius: 3px; background: rgba(0,0,0,.08); margin-top: 4px; overflow: hidden; }
+          .wkx-bar i { display: block; height: 100%; background: var(--ok); border-radius: 3px; }
+          .wkx-grid { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: start; }
+          .wkx-main { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+          table.wk.wkx { margin: 0; }
+          table.wk.wkx thead th { position: sticky; top: 0; z-index: 2; background: var(--card); }
+          table.wk.wkx tbody tr:not(.total):not(.mon):hover td { background: var(--brand-bg); }
+          table.wk.wkx td.nm { cursor: pointer; color: #0060A0; font-weight: bold; }
+          table.wk.wkx tr.paid td { opacity: .55; }
+          table.wk.wkx tr.paid td.chk { opacity: 1; }
+          table.wk.wkx td.num:nth-of-type(3) { color: #9a6a00; } table.wk.wkx td.num:nth-of-type(4) { color: #0a3c8c; }
+          .wkx-paid { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); cursor: pointer; font-weight: bold; }
+          .wkx-paid:has(input:checked) { background: var(--ok-bg); border-color: var(--ok); color: var(--ok); }
+          .wkx-paid input { width: 17px; height: 17px; accent-color: #40A040; margin: 0; }
+          .wkx-side { position: sticky; top: 12px; background: var(--card); border: 1px solid var(--line); border-top: 4px solid #40A040; border-radius: 14px; padding: 14px 16px; max-height: calc(100vh - 120px); overflow-y: auto; }
+          .wkx-side-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+          .wkx-side-head b { font-size: 18px; color: #0060A0; }
+          .wkx-close { border: none; background: var(--bg); color: var(--text2); width: 30px; height: 30px; border-radius: 50%; font-size: 18px; line-height: 1; }
+          .wkx-side-cnt { display: flex; gap: 6px; margin-bottom: 10px; }
+          .wkx-side-cnt span { flex: 1; text-align: center; background: var(--bg); border-radius: 10px; padding: 6px 4px; font-size: 12px; color: var(--text2); }
+          .wkx-side-cnt b { display: block; font-size: 20px; color: var(--text); }
+          .wkx-side-cnt .d { background: #fff7dc; } .wkx-side-cnt .d b { color: #9a6a00; }
+          .wkx-side-cnt .n { background: #e8f0ff; } .wkx-side-cnt .n b { color: #0a3c8c; }
+          .wkx-side .dlist { display: flex; flex-direction: column; gap: 6px; }
+          .wkx-side-empty { font-size: 13px; color: var(--text2); line-height: 1.7; }
+          .wkx-todo { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 6px; }
+          .wkx-todo span { width: 100%; font-weight: bold; color: var(--over); }
+          .wkx-todo button { border: 1px solid var(--line); background: var(--card); color: #0060A0; border-radius: 999px; padding: 4px 12px; font-size: 13px; }
+          .wkx-todo button:hover { border-color: #0060A0; background: var(--brand-bg); }
+          .wkx-alldone { margin-top: 12px; font-weight: bold; color: var(--ok); }
+          @media (max-width: 1100px) { .wkx-grid { grid-template-columns: minmax(0, 1fr); } .wkx-side { position: static; max-height: none; } }
+          @media (prefers-color-scheme: dark) {
+            table.wk.wkx td.nm, .wkx-side-head b, .wkx-todo button { color: #6aa8dc; }
+            table.wk.wkx td.num:nth-of-type(3) { color: #ffc84a; } table.wk.wkx td.num:nth-of-type(4) { color: #9fc0ff; }
+            .wkx-side-cnt .d { background: #2c2512; } .wkx-side-cnt .d b { color: #ffc84a; }
+            .wkx-side-cnt .n { background: #16243d; } .wkx-side-cnt .n b { color: #9fc0ff; }
+          }
+        </style>
         <div class="toolbar">
           <div><h2>週払いの確認</h2><div class="sub">毎週木曜締め・金曜払い。名前を押すと、日ごとの内訳を開きます。「済」は全員で共有されます。</div></div>
           <div class="noprint"><button class="btn" id="wkPrint">印刷</button> <button class="btn" id="wkReload">最新にする（出勤簿を読み直す）</button></div>
@@ -1106,23 +1152,38 @@
           '<td class="nm" data-open="' + esc(r.name) + '">' + (open ? '▼ ' : '▶ ') + esc(r.name) + '</td>' +
           '<td class="num">' + r.day + '</td><td class="num">' + r.night + '</td><td class="num"><b>' + r.total + '</b></td>' +
           '<td class="chk">' + (isMon ? '<span style="font-size:12px">月払い</span>' :
-            '<label><input type="checkbox" data-paid="' + esc(r.name) + '"' + (p ? ' checked' : '') + '> 済</label>' +
-            (p ? '<span class="paidby">' + esc(p.by + ' ' + p.at) + '</span>' : '')) + '</td></tr>' +
-          (open ? '<tr class="det"><td colspan="6" id="wkDet">' + (WK.detail[d.mid + '|' + d.per + '|' + r.name] || '<div class="loading">読み込み中...</div>') + '</td></tr>' : '');
+            '<label class="wkx-paid"><input type="checkbox" data-paid="' + esc(r.name) + '"' + (p ? ' checked' : '') + '> 済</label>' +
+            (p ? '<span class="paidby">' + esc(p.by + ' ' + p.at) + '</span>' : '')) + '</td></tr>';
       };
+      // 右の欄：名前を押した人の日ごとの内わけ（パソコン用。2026-11-16）
+      var openRow = WK.openName ? d.rows.filter(function (r) { return r.name === WK.openName; })[0] : null;
+      var side = openRow
+        ? '<div class="wkx-side-head"><b>' + esc(openRow.name) + '</b><button type="button" class="wkx-close" data-open="' + esc(openRow.name) + '" title="閉じる">×</button></div>' +
+          '<div class="wkx-side-cnt"><span class="d">日勤 <b>' + openRow.day + '</b></span><span class="n">夜勤 <b>' + openRow.night + '</b></span><span>合計 <b>' + openRow.total + '</b></span></div>' +
+          '<div id="wkDet">' + (WK.detail[d.mid + '|' + d.per + '|' + openRow.name] || '<div class="loading">読み込み中...</div>') + '</div>'
+        : '<div class="wkx-side-empty"><b>名前を押すと</b>、その人の日ごとの勤務（日付・昼夜・現場）がここに出ます。' +
+          ((weekly.length - paidN) ? '<div class="wkx-todo"><span>まだ「済」でない人</span>' + order.filter(function (r) { return !isPaid(r); }).slice(0, 30).map(function (r) {
+            return '<button type="button" data-open="' + esc(r.name) + '">' + esc(r.name) + '</button>'; }).join('') + '</div>' : '<div class="wkx-alldone">全員「済」です</div>') + '</div>';
       var unk = d.unknown && d.unknown.length ? '<details class="unk"><summary>⚠ 名簿にない名前 ' + d.unknown.length + '件（新しい人・表記の違い・入力ミスの可能性）</summary>' +
         d.unknown.map(function (u) { return '<div>' + esc(u.name) + '　<span style="opacity:.8">' + u.count + '回：' + esc(u.where.join('、')) + '</span></div>'; }).join('') + '</details>' : '';
       var note = d.at ? savedNote(d.at, d.changed, d.fresh, '数えた') : '';
       d.fresh = false;
+      var pct = weekly.length ? Math.round(paidN / weekly.length * 100) : 0;
+      var kpi = function (cls, label, val, small) { return '<div class="blx-kpi ' + cls + '"><span>' + label + '</span><b>' + val + '</b>' + (small ? '<small>' + small + '</small>' : '') + '</div>'; };
       $('wkBody').innerHTML = '<div class="noprint">' + note + '</div>' + unk +
-        '<div class="wkinfo"><span>週払い <b>' + weekly.length + '人</b></span><span>済 <b>' + paidN + '人</b></span><span>未確認 <b style="color:var(--over)">' + (weekly.length - paidN) + '人</b></span>' +
-        '<span>（' + esc(d.madeAt) + ' 時点）</span></div>' +
-        '<table class="wk"><thead><tr><th class="typ">区分</th><th>名前</th><th class="num">日勤</th><th class="num">夜勤</th><th class="num">合計</th><th class="chk">済</th></tr></thead><tbody>' +
+        '<div class="blx-kpis">' +
+          kpi('', '週払い', weekly.length + '人', esc(wkRange())) +
+          kpi('ok', '済', paidN + '人', '<span class="wkx-bar"><i style="width:' + pct + '%"></i></span>') +
+          kpi((weekly.length - paidN) ? 'ng' : 'ok', '未確認', (weekly.length - paidN) + '人', (weekly.length - paidN) ? '「済」にしていない人' : '全員おわり') +
+          kpi('d', '日勤', sd) + kpi('n', '夜勤', sn) + kpi('big', '合計', sd + sn, esc(d.madeAt) + ' 時点') +
+        '</div>' +
+        '<div class="wkx-grid"><div class="wkx-main">' +
+        '<table class="wk wkx"><thead><tr><th class="typ">区分</th><th>名前</th><th class="num">日勤</th><th class="num">夜勤</th><th class="num">合計</th><th class="chk">済</th></tr></thead><tbody>' +
         (order.filter(hit).map(function (r) { return row(r, false); }).join('') || '<tr><td colspan="6" class="loading">該当する人はいません</td></tr>') +
         '<tr class="total"><td></td><td>合計 ' + weekly.length + '人</td><td class="num">' + sd + '</td><td class="num">' + sn + '</td><td class="num">' + (sd + sn) + '</td><td></td></tr>' +
         (monthly.length ? '<tr><td colspan="6" style="font-size:12px;color:var(--text2);background:var(--bg)">月払いの人（' + monthly.length + '人・合計と印刷に入りません）</td></tr>' +
           monthly.filter(hit).map(function (r) { return row(r, true); }).join('') : '') +
-        '</tbody></table>';
+        '</tbody></table></div><aside class="wkx-side noprint">' + side + '</aside></div>';
     }
     $('wkBody').addEventListener('click', function (e) {
       var nm = e.target.closest('[data-open]');
