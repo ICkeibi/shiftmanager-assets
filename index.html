@@ -4,35 +4,48 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#0060A0">
   <title>出勤確認</title>
   <link rel="apple-touch-icon" href="icon.png">
   <link rel="icon" type="image/png" href="icon.png">
   <link rel="manifest" href="manifest.json">
   <style>
     :root {
-      --bg: #f5f5f5;
+      --bg: #ffffff;
       --card-bg: #ffffff;
-      --text: #222222;
-      --text-secondary: #666666;
-      --border: #cccccc;
-      --primary: #4A86E8;
-      --primary-active: #3a6fc0;
-      --badge-day: #F5A623;
-      --badge-night: #3F51B5;
+      --text: #16212c;
+      --text-secondary: #5b6875;
+      --border: #d5dfe9;
+      --primary: #0060A0;
+      --primary-active: #004d82;
+      --green: #40A040;
+      --badge-day: #c98a00;
+      --badge-night: #0a3c8c;
+      --field-bg: #f2f6fa;
+      --day-bg: #fff7dc;
+      --night-bg: #e8f0ff;
+      --total-bg: #eef7ee;
+      --total-text: #2a7a2a;
       --shadow: rgba(0,0,0,0.1);
       --alert: #FF0000;
     }
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg: #121212;
-        --card-bg: #1e1e1e;
-        --text: #eeeeee;
-        --text-secondary: #aaaaaa;
-        --border: #444444;
-        --primary: #6fa0f5;
-        --primary-active: #5688dd;
-        --badge-day: #FFB74D;
-        --badge-night: #7986CB;
+        --bg: #101820;
+        --card-bg: #19232e;
+        --text: #e5eaf0;
+        --text-secondary: #a9b6c3;
+        --border: #2c3b4b;
+        --primary: #6aa8dc;
+        --primary-active: #4f8fc6;
+        --green: #6cc46c;
+        --badge-day: #ffc84a;
+        --badge-night: #9fc0ff;
+        --field-bg: #1f2d3b;
+        --day-bg: #2c2512;
+        --night-bg: #16243d;
+        --total-bg: #1b3220;
+        --total-text: #8fd88f;
         --shadow: rgba(0,0,0,0.5);
         --alert: #ff6b6b;
       }
@@ -203,12 +216,64 @@
     #loginGate .lg-btn { display: block; text-align: center; background: var(--primary); color: #fff; text-decoration: none; font-size: 17px; font-weight: bold; padding: 14px; border-radius: 10px; }
     #loginGate .lg-btn:active { background: var(--primary-active); }
     #loginGate .lg-note { font-size: 13px; color: var(--text-secondary); text-align: center; margin-top: 14px; }
+
+    /* ===== 見た目：A シグネチャー（打刻とおそろい：会社の青 #0060A0 と緑 #40A040） ===== */
+    body { padding: 0 14px calc(78px + env(safe-area-inset-bottom, 0px)); max-width: 720px; margin: 0 auto; }
+    .app-bar { position: sticky; top: 0; z-index: 900; display: flex; align-items: center; gap: 9px;
+      margin: 0 -14px 4px; padding: 9px 8px 9px 12px; background: #0060A0; color: #fff; min-height: 54px; }
+    .app-bar .ab-stripe { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+    .app-bar .ab-stripe::after { content: ""; position: absolute; right: -22px; top: 0; bottom: 0; width: 92px; background: #40A040; transform: skewX(-30deg); }
+    .app-bar > *:not(.ab-stripe):not(.more-menu) { position: relative; z-index: 1; }
+    .ab-logo { width: 34px; height: 34px; border-radius: 8px; background: #fff; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .ab-logo img { width: 30px; height: 30px; object-fit: contain; display: block; }
+    .app-bar h1 { font-size: 18px; letter-spacing: .04em; text-align: left; flex: 1; min-width: 0; color: #fff; }
+    .app-bar .refresh-btn, .app-bar .more-btn { position: static; transform: none; color: #fff; width: 40px; height: 40px; padding: 0; font-size: 24px; flex-shrink: 0; }
+    .app-bar .refresh-btn.spinning { animation: abspin 0.8s linear infinite; }
+    @keyframes abspin { to { transform: rotate(360deg); } }
+    .app-bar .more-menu { top: 100%; right: 8px; margin-top: 2px; }
+    .subtitle { text-align: left; font-weight: bold; color: var(--text-secondary); border-left: 5px solid #40A040; padding: 1px 0 1px 9px; margin: 10px 0 12px; }
+    .mode-toggle { background: var(--field-bg); border-radius: 12px; padding: 3px; gap: 3px; }
+    .mode-toggle button { border: none; border-radius: 9px; background: transparent; color: var(--text-secondary); }
+    .mode-toggle button.active { background: var(--card-bg); color: var(--primary); box-shadow: 0 1px 3px var(--shadow); }
+    .period-info:empty { min-height: 0; margin: 0 0 6px; }
+    .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .field { margin-bottom: 10px; }
+    label { font-weight: bold; font-size: 12px; }
+    select { background: var(--field-bg); border-color: var(--border); border-radius: 10px; font-weight: bold; min-height: 46px; }
+    button#searchBtn { border-radius: 12px; min-height: 48px; background: #0060A0; }
+    button#searchBtn:active { background: #004d82; }
+    .counts { gap: 8px; }
+    .count-box { border-radius: 12px; box-shadow: none; }
+    .count-box .label { font-weight: bold; font-size: 12px; }
+    .count-box .num { font-size: 26px; }
+    .count-box.day { background: var(--day-bg); } .count-box.day .label { color: var(--badge-day); }
+    .count-box.night { background: var(--night-bg); } .count-box.night .label { color: var(--badge-night); }
+    .count-box.total { background: var(--total-bg); } .count-box.total .label, .count-box.total .num { color: var(--total-text); }
+    .card { border-radius: 12px; box-shadow: none; border: 1px solid var(--border); border-left: 5px solid #f5b400; }
+    .card.night { border-left-color: var(--badge-night); }
+    .badge { width: 32px; height: 32px; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .badge svg { width: 18px; height: 18px; }
+    .badge.day { background: var(--day-bg); color: #e0a000; }
+    .badge.night { background: var(--night-bg); color: var(--badge-night); }
+    .sum-row, .sum-total { border-radius: 12px; }
+    .sum-total { border-color: #40A040; }
+    .print-btn { border-radius: 12px; }
+    .retry-btn { width: 100%; min-height: 44px; margin: -2px 0 10px; border-radius: 10px; border: 1px solid var(--primary); background: var(--card-bg); color: var(--primary); font-size: 15px; font-weight: bold; }
+    .retry-btn[hidden] { display: none; }
+    /* いちばん下のメニュー */
+    .bottom-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 720px; z-index: 950; display: flex; background: #0060A0; box-shadow: 0 -2px 8px rgba(0,0,0,.15); }
+    .bottom-nav a, .bottom-nav button { flex: 1 1 0; min-width: 0; border: none; background: transparent; color: #d6e6f5; font: inherit; font-size: 12px; font-weight: bold; text-align: center; text-decoration: none; padding: 8px 4px calc(9px + env(safe-area-inset-bottom, 0px)); cursor: pointer; }
+    .bottom-nav svg { width: 22px; height: 22px; display: block; margin: 0 auto 3px; }
+    .bottom-nav .on { background: #40A040; color: #fff; }
+    body.need-login .bottom-nav { display: none; }
   </style>
 </head>
 <body>
-  <div class="header-row">
-    <button id="refreshBtn" class="refresh-btn" title="更新" aria-label="更新">⟳</button>
+  <div class="app-bar">
+    <span class="ab-stripe" aria-hidden="true"></span>
+    <span class="ab-logo"><img src="icon.png" alt=""></span>
     <h1>出勤確認</h1>
+    <button id="refreshBtn" class="refresh-btn" title="更新" aria-label="更新">⟳</button>
     <button id="moreBtn" class="more-btn" title="メニュー" aria-label="メニュー">⋮</button>
     <div id="moreMenu" class="more-menu" hidden>
       <a id="payLink" href="pay.html">月払い</a>
@@ -225,24 +290,26 @@
     <button id="modeWeekly">週払い</button>
   </div>
 
-  <div class="field">
-    <label>年月</label>
-    <select id="monthSelect">
-      <option value="">選択してください</option>
-    </select>
+  <div class="field-row">
+    <div class="field">
+      <label for="monthSelect">年月</label>
+      <select id="monthSelect">
+        <option value="">選択してください</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="periodSelect">期間</label>
+      <select id="periodSelect" disabled>
+        <option value="全">全</option>
+      </select>
+    </div>
   </div>
+  <button type="button" id="retryBtn" class="retry-btn" hidden>⟳ もう一度読む</button>
 
   <div class="field" id="nameField">
-    <label>名前</label>
+    <label for="nameSelect">名前</label>
     <select id="nameSelect" disabled>
       <option value="">先に年月を選択</option>
-    </select>
-  </div>
-
-  <div class="field">
-    <label>期間</label>
-    <select id="periodSelect" disabled>
-      <option value="全">全</option>
     </select>
   </div>
   <div class="period-info" id="periodInfo"></div>
@@ -258,7 +325,7 @@
       <div class="label">夜勤</div>
       <div class="num" id="nightCount">0</div>
     </div>
-    <div class="count-box">
+    <div class="count-box total">
       <div class="label">合計</div>
       <div class="num" id="totalCount">0</div>
     </div>
@@ -267,6 +334,12 @@
 
   <div id="resultsArea"></div>
   <div id="printArea"></div>
+
+  <nav class="bottom-nav" aria-label="メニュー">
+    <button type="button" id="navWeekly"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M7 14h3M7 17h3"/></svg>週払い</button>
+    <a href="pay.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="6" width="20" height="13" rx="2"/><circle cx="12" cy="12.5" r="3"/><path d="M6 9.5v6M18 9.5v6"/></svg>月払い</a>
+    <a href="pay.html?view=bill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7M9 19h4"/></svg>請求額</a>
+  </nav>
 
   <script>
     var API_URL = "https://script.google.com/macros/s/AKfycbwaakQiOZkfCQaPa6gdRa0qWEpOrnmW_HdDtY4nrzulSVaraO_4tgMQTvUYhjTDoA5a/exec";
@@ -372,6 +445,7 @@
       }).catch(function (err) {
         document.getElementById('monthSelect').innerHTML =
           '<option value="">エラー: ' + err.message + '</option>';
+        if (err.message !== 'ログインが必要です') document.getElementById('retryBtn').hidden = false;
       });
     }
 
@@ -404,6 +478,7 @@
       currentMode = mode;
       document.getElementById('modePersonal').classList.toggle('active', mode === 'personal');
       document.getElementById('modeWeekly').classList.toggle('active', mode === 'weekly');
+      document.getElementById('navWeekly').classList.toggle('on', mode === 'weekly');
       document.getElementById('nameField').style.display = mode === 'personal' ? '' : 'none';
       document.getElementById('counts').style.display = mode === 'personal' ? '' : 'none';
       resetResults();
@@ -506,6 +581,8 @@
       });
     }
 
+    var ICON_SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="currentColor"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1"/></svg>';
+    var ICON_MOON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z" fill="currentColor"/></svg>';
     // 個人検索の結果（1日ずつのカード）。週払いで名前を押したときにも使う
     function searchCardsHtml(results) {
       if (!results || results.length === 0) return '<div class="empty">該当するデータがありません</div>';
@@ -526,8 +603,8 @@
         var addressClass = isAlert ? 'address alert' : 'address';
         var alertStyle = isAlert && alertColor ? ' style="color:' + alertColor + '"' : '';
         var timesHtml = g.count > 1 ? '<span class="times">×' + g.count + '</span>' : '';
-        html += '<div class="card">' +
-          '<span class="badge ' + badgeClass + '">' + shift + '</span>' +
+        html += '<div class="card ' + badgeClass + '">' +
+          '<span class="badge ' + badgeClass + '" role="img" aria-label="' + (shift === '夜' ? '夜勤' : '日勤') + '">' + (shift === '夜' ? ICON_MOON : ICON_SUN) + '</span>' +
           '<div class="info">' +
             '<div class="date">' + date + timesHtml + '</div>' +
             '<div class="' + addressClass + '"' + alertStyle + '>' + address + '</div>' +
@@ -954,6 +1031,18 @@
 
     document.getElementById('modePersonal').addEventListener('click', function () { setMode('personal'); });
     document.getElementById('modeWeekly').addEventListener('click', function () { setMode('weekly'); });
+    // 下のメニューの「週払い」：週払いの一覧にして、年月が選んであればすぐ集計する
+    document.getElementById('navWeekly').addEventListener('click', function () {
+      if (currentMode !== 'weekly') setMode('weekly');
+      window.scrollTo(0, 0);
+      if (document.getElementById('monthSelect').value) doAction(false);
+    });
+    // 年月の一覧が読めなかったとき（タイムアウトなど）の「もう一度読む」
+    document.getElementById('retryBtn').addEventListener('click', function () {
+      this.hidden = true;
+      document.getElementById('monthSelect').innerHTML = '<option value="">読み込み中...</option>';
+      loadMonths();
+    });
     document.getElementById('monthSelect').addEventListener('change', onMonthChange);
     document.getElementById('periodSelect').addEventListener('change', updatePeriodInfo);
     document.getElementById('searchBtn').addEventListener('click', function () { doAction(false); });
