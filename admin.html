@@ -504,6 +504,61 @@
       </div>
       <!-- 請求書・売上累計表 -->
       <div class="page hidden" id="pBilling">
+        <style>
+          /* 請求書・売上累計表：パソコン用のカードの画面（2026-11-16） */
+          #pBilling .filters { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; gap: 14px; }
+          #pBilling .filters .btn { min-height: 38px; }
+          .blx-kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin: 0 0 12px; }
+          .blx-kpi { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+          .blx-kpi span { font-size: 12px; color: var(--text2); font-weight: bold; }
+          .blx-kpi b { font-size: 22px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          .blx-kpi small { font-size: 11px; color: var(--text3); }
+          .blx-kpi.d { background: #fff7dc; border-color: #f3dc8a; } .blx-kpi.d span, .blx-kpi.d b { color: #9a6a00; }
+          .blx-kpi.n { background: #e8f0ff; border-color: #c4d6f5; } .blx-kpi.n span, .blx-kpi.n b { color: #0a3c8c; }
+          .blx-kpi.big { background: #0060A0; border-color: #0060A0; position: relative; overflow: hidden; }
+          .blx-kpi.big::after { content: ""; position: absolute; right: -18px; top: 0; bottom: 0; width: 46px; background: #40A040; transform: skewX(-25deg); }
+          .blx-kpi.big span, .blx-kpi.big b { color: #fff; position: relative; z-index: 1; }
+          .blx-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0 0 10px; }
+          .blx-actions .btn { display: flex; align-items: center; gap: 10px; text-align: left; padding: 10px 14px; border-radius: 12px; min-height: 58px; text-decoration: none; margin: 0; }
+          .blx-actions .btn svg { width: 26px; height: 26px; flex-shrink: 0; }
+          .blx-actions .btn span { display: flex; flex-direction: column; font-weight: bold; line-height: 1.3; }
+          .blx-actions .btn small { font-weight: normal; font-size: 11px; opacity: .8; }
+          .blx-actions .btn.main.green { background: #40A040; border-color: #40A040; }
+          .blx-hint { font-size: 13px; color: var(--text2); margin: 0 0 12px; }
+          .blx-cos { display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 14px; }
+          .blx-co { background: var(--card); border: 1px solid var(--line); border-left: 5px solid #0060A0; border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+          .blx-co.norate { border-left-color: var(--over); }
+          .blx-co-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+          .blx-co-name { display: flex; gap: 10px; align-items: flex-start; min-width: 0; }
+          .blx-co-name i { width: 36px; height: 36px; border-radius: 10px; background: var(--brand-bg); color: #0060A0; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+          .blx-co-name i svg { width: 22px; height: 22px; }
+          .blx-co-name b { display: block; font-size: 16px; overflow-wrap: anywhere; }
+          .blx-chip { display: inline-block; font-size: 11px; color: var(--text2); background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; margin: 3px 4px 0 0; }
+          .blx-chip.bad { color: var(--over); background: var(--over-bg); border-color: transparent; }
+          .blx-amt { font-size: 22px; font-weight: bold; color: #0060A0; white-space: nowrap; font-variant-numeric: tabular-nums; text-align: right; }
+          .blx-amt small { display: block; font-size: 11px; color: var(--text3); font-weight: normal; }
+          .blx-cnt { display: flex; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--text2); }
+          .blx-cnt span { display: inline-flex; align-items: center; gap: 4px; background: var(--bg); border-radius: 8px; padding: 4px 10px; }
+          .blx-cnt i { display: inline-flex; width: 15px; height: 15px; } .blx-cnt i svg { width: 15px; height: 15px; }
+          .blx-cnt .d { background: #fff7dc; color: #9a6a00; } .blx-cnt .n { background: #e8f0ff; color: #0a3c8c; }
+          .blx-sites { width: 100%; border-collapse: collapse; font-size: 13px; }
+          .blx-sites th { font-size: 11px; color: var(--text3); font-weight: normal; text-align: left; padding: 2px 6px; border-bottom: 1px solid var(--line); }
+          .blx-sites td { padding: 6px; border-bottom: 1px solid var(--line); }
+          .blx-sites tr:last-child td { border-bottom: none; }
+          .blx-sites .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+          .blx-inv { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; margin: 0; border-radius: 10px; }
+          .blx-inv svg { width: 18px; height: 18px; }
+          .blx-table { margin-top: 16px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; }
+          .blx-table > summary { cursor: pointer; font-weight: bold; color: var(--primary); }
+          .blx-table[open] > summary { margin-bottom: 8px; }
+          @media (max-width: 1100px) { .blx-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } .blx-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+          @media (prefers-color-scheme: dark) {
+            .blx-kpi.d, .blx-cnt .d { background: #2c2512; border-color: #4a3d16; } .blx-kpi.d span, .blx-kpi.d b, .blx-cnt .d { color: #ffc84a; }
+            .blx-kpi.n, .blx-cnt .n { background: #16243d; border-color: #24395e; } .blx-kpi.n span, .blx-kpi.n b, .blx-cnt .n { color: #9fc0ff; }
+            .blx-co-name i { color: #6aa8dc; } .blx-amt { color: #6aa8dc; }
+          }
+          #invBox .step { border-radius: 14px; }
+        </style>
         <h2>請求書・売上累計表</h2>
         <div class="sub">出勤簿から会社別・現場別の請求額を出します。会社ごとの締め日（20日・25日・末）の期間で数えます。</div>
         <div class="filters"><label>対象の月<select id="blMonth"></select></label>
@@ -2247,18 +2302,49 @@
         });
         if (c.sites.length > 1) rows += '<tr><td></td><td style="color:var(--text2)">小計</td><td class="num">' + c.day + '人</td><td class="num">' + c.night + '人</td><td class="num"><b>' + yen(c.total) + '</b></td></tr>';
       });
+      // ── パソコン用のカードの画面（2026-11-16）。ボタンの id・data-inv は今までと同じ ──
+      var hasInv = !!(r.companies.length && r.companies[0].sites[0] && r.companies[0].sites[0].lines);
+      var IC = {
+        sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="4.5" fill="currentColor"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1"/></svg>',
+        moon: '<svg viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z" fill="currentColor"/></svg>',
+        print: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M6 14h12v7H6z"/></svg>',
+        docs: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3h8l4 4v12H8z"/><path d="M4 7v14h12"/><path d="M11 11h6M11 15h6"/></svg>',
+        copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V4H3v13h5"/></svg>',
+        sheet: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>',
+        bld: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21V5l8-3v19M12 9h8v12"/><path d="M7 8h2M7 12h2M7 16h2M15 13h2M15 17h2"/></svg>'
+      };
+      var kpi = function (cls, label, val, small) { return '<div class="blx-kpi ' + cls + '"><span>' + label + '</span><b>' + val + '</b>' + (small ? '<small>' + small + '</small>' : '') + '</div>'; };
+      var cards = r.companies.map(function (c, ci) {
+        var srows = c.sites.map(function (s) {
+          return '<tr><td>' + esc(s.name) + '</td><td class="num">' + s.day + '</td><td class="num">' + s.night + '</td><td class="num">' + yen(s.total) + '</td></tr>';
+        }).join('');
+        return '<div class="blx-co' + (c.noRate ? ' norate' : '') + '">' +
+          '<div class="blx-co-head"><div class="blx-co-name"><i>' + IC.bld + '</i><div><b>' + esc(c.name) + '</b>' +
+          '<span class="blx-chip">' + esc(c.period) + '</span>' + (c.noRate ? '<span class="blx-chip bad">単価未登録</span>' : '') + '</div></div>' +
+          '<div class="blx-amt">' + yen(c.total) + '<small>税抜</small></div></div>' +
+          '<div class="blx-cnt"><span class="d"><i>' + IC.sun + '</i>日勤 <b>' + c.day + '人</b></span><span class="n"><i>' + IC.moon + '</i>夜勤 <b>' + c.night + '人</b></span><span>現場 <b>' + c.sites.length + '</b></span></div>' +
+          '<table class="blx-sites"><thead><tr><th>現場名</th><th class="num">日勤</th><th class="num">夜勤</th><th class="num">金額</th></tr></thead><tbody>' + srows + '</tbody></table>' +
+          (c.sites[0] && c.sites[0].lines ? '<button class="btn main noprint blx-inv" data-inv="' + ci + '">' + IC.docs + ' 請求書・出面表</button>' : '') +
+          '</div>';
+      }).join('');
       $('blBody').innerHTML = warn +
-        (r.companies.length && r.companies[0].sites[0] && r.companies[0].sites[0].lines
-          ? '<div style="background:var(--primary-bg);color:var(--primary);border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:13px">' +
-            '請求書と出面表は、会社名の下の <b>🖨 請求書・出面表</b> を押すと作れます（全部の会社は右の「請求書と出面表をまとめて印刷」）。</div>' : '') +
-        '<div class="wkinfo"><span>' + esc(r.label) + '</span><span>' + r.companies.length + '社</span><span>日勤 <b>' + g.day + '人</b></span><span>夜勤 <b>' + g.night + '人</b></span>' +
-        '<span>小計 <b>' + yen(g.total) + '</b></span><span>消費税 ' + yen(g.tax) + '</span><span>税込み <b>' + yen(g.total + g.tax) + '</b></span></div>' +
-        '<div class="toolbar" style="margin-bottom:8px"><div class="sub" style="margin:0">売上累計表と同じ並び（会社名・現場名・日勤・夜勤・金額）です。「コピー」でExcelの売上累計表にそのまま貼れます。</div>' +
-        '<div class="noprint"><button class="btn main" id="blPrint">売上累計表を印刷（A4）</button> ' +
-        (r.companies.length && r.companies[0].sites[0] && r.companies[0].sites[0].lines ? '<button class="btn main" id="invAll">請求書と出面表をまとめて印刷</button> ' : '') +
-        '<button class="btn" id="blCopy">表をコピー</button> <a class="btn" href="' + esc(r.sheetUrl) + '" target="_blank" rel="noopener">請求集計シートを開く ↗</a></div></div>' +
-        '<table class="wk"><thead><tr><th>会社名</th><th>現場名</th><th class="num">日勤</th><th class="num">夜勤</th><th class="num" style="width:120px">金額（税抜）</th></tr></thead><tbody>' + rows +
-        '<tr class="total"><td>計</td><td></td><td class="num">' + g.day + '人</td><td class="num">' + g.night + '人</td><td class="num">' + yen(g.total) + '</td></tr></tbody></table>' +
+        '<div class="blx-kpis">' +
+          kpi('', esc(r.label), r.companies.length + '社', '会社') +
+          kpi('d', '日勤', g.day + '人') + kpi('n', '夜勤', g.night + '人') +
+          kpi('', '小計（税抜）', yen(g.total)) + kpi('', '消費税', yen(g.tax)) +
+          kpi('big', '税込み', yen(g.total + g.tax)) +
+        '</div>' +
+        '<div class="blx-actions noprint">' +
+          '<button class="btn main" id="blPrint">' + IC.print + '<span>売上累計表を印刷<small>A4・1枚</small></span></button>' +
+          (hasInv ? '<button class="btn main green" id="invAll">' + IC.docs + '<span>請求書と出面表をまとめて印刷<small>全部の会社</small></span></button>' : '') +
+          '<button class="btn" id="blCopy">' + IC.copy + '<span>表をコピー<small>Excelの売上累計表に貼れます</small></span></button>' +
+          '<a class="btn" href="' + esc(r.sheetUrl) + '" target="_blank" rel="noopener">' + IC.sheet + '<span>請求集計シートを開く ↗<small>数量・単価・明細</small></span></a>' +
+        '</div>' +
+        (hasInv ? '<div class="blx-hint noprint">1社ずつ作るときは、会社のカードの <b>請求書・出面表</b> を押します。工事件名などを直して保存・印刷できます。</div>' : '') +
+        '<div class="blx-cos">' + cards + '</div>' +
+        '<details class="blx-table"><summary>売上累計表と同じ並び（表）で見る</summary>' +
+        '<table class="wk"><thead><tr><th>会社名</th><th>現場名</th><th class="num">日勤</th><th class="num">夜勤</th><th class="num" style="width:120px">金額（税抜）</th></tr></thead><tbody>' + rows.replace(/<button[^>]*data-inv[^>]*>[\s\S]*?<\/button>/g, '') +
+        '<tr class="total"><td>計</td><td></td><td class="num">' + g.day + '人</td><td class="num">' + g.night + '人</td><td class="num">' + yen(g.total) + '</td></tr></tbody></table></details>' +
         '<div class="note" style="font-size:12px;color:var(--text2);margin-top:8px">請求書の項目ごとの数量・単価・消費税（現場ごと）は「請求集計」シート、1日ずつの明細は「請求明細」シートで見られます。</div>' +
         '<div id="invBox"></div>';
       $('blPrint').addEventListener('click', function () { blPrint(r); });
@@ -2270,7 +2356,9 @@
         var t = [];
         r.companies.forEach(function (c) { c.sites.forEach(function (s, i) { t.push([i === 0 ? c.name : '', s.name, s.day, s.night, s.total].join('\t')); }); });
         t.push(['計', '', g.day, g.night, g.total].join('\t'));
-        var done = function () { $('blCopy').textContent = 'コピーしました'; setTimeout(function () { $('blCopy').textContent = '表をコピー'; }, 2000); };
+        // ボタンの文字だけ変える（アイコンは残す）
+        var cpLabel = function (s) { var sp = $('blCopy').querySelector('span'); if (sp && sp.firstChild) sp.firstChild.nodeValue = s; else $('blCopy').textContent = s; };
+        var done = function () { cpLabel('コピーしました'); setTimeout(function () { cpLabel('表をコピー'); }, 2000); };
         // この画面は枠の中で動くので、新しいコピーの仕組みが使えないことがある。昔からの方法でコピーする
         var ta = document.createElement('textarea');
         ta.value = t.join('\n'); ta.style.position = 'fixed'; ta.style.top = '0'; ta.style.left = '0'; ta.style.opacity = '0';
@@ -2283,7 +2371,7 @@
         var box = document.createElement('textarea');
         box.value = t.join('\n'); box.style.cssText = 'width:100%;height:160px;margin-top:8px;font-size:12px';
         $('blBody').insertBefore(box, $('blBody').firstChild); box.focus(); box.select();
-        $('blCopy').textContent = 'Ctrl+C を押してください';
+        cpLabel('Ctrl+C を押してください');
       });
     }
 
