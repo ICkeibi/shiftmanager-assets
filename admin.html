@@ -2573,6 +2573,7 @@
       var r = BL.data, g = r.grand;
       var warn = blWhen() +(r.added ? '<div class="unk">「現場の振り分け」シートに、新しい現場の組み合わせを <b>' + r.added + '件</b> 足しました（黄色）。請求先と現場名を確認・修正してから、もう一度「会社別の請求額を出す」を押してください。' +
         (r.mapUrl ? '　<a href="' + esc(r.mapUrl) + '" target="_blank" rel="noopener">現場の振り分けを開く ↗</a>' : '') + '</div>' : '') +
+        (r.addedCo ? '<div class="unk">「請求単価」に、単価のない会社を <b>' + r.addedCo + '社</b> 足しました（黄色）。<span data-stgo="請求単価" role="button" tabindex="0" style="color:var(--primary);text-decoration:underline;cursor:pointer">設定の請求単価</span>で単価を入れてから、もう一度「会社別の請求額を出す」を押してください。</div>' : '') +
         (r.note ? '<div class="unk">' + esc(r.note) + '</div>' : '') +
         (r.companies.some(function (c) { return c.noRate; }) ? '<div class="unk">単価が未登録の会社があります（金額が0円）。「請求単価」シートに入れてください。</div>' : '');
       var rows = '';
@@ -2733,7 +2734,12 @@
           (m.found ? '' : '<div style="font-size:12px;color:var(--warn);margin-top:4px">はじめての現場です。工事件名などを入れて「保存」してください（空欄のままでも印刷できます）。</div>') +
           '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin-top:8px">' +
           f('atena', '宛名（○○御中）', m.atena || invAtena(c, null)) + f('title', '工事件名', m.title) + f('place', '施工場所', m.place) +
-          f('term', '工期', m.term) + f('outline', '工事概要', m.outline) + '</div></div>';
+          f('term', '工期', m.term) + f('outline', '工事概要', m.outline) + '</div>' +
+          // 宛名はどこから来たか（会社名・請求先を変えても、「請求書の項目」に入った宛名は変わらない）
+          '<div style="font-size:12px;color:var(--text2);margin-top:6px">宛名は ' +
+          (m.atena ? '<b>「請求書の項目」シート</b>に保存されたものです（会社名や請求先を変えても、ここは変わりません）。ちがうときは、上の宛名を直して「保存」を押してください。'
+            : c.disp ? '「請求単価」の売上累計表の会社名（N列）から出しています。'
+            : '会社名から出しています。') + '</div></div>';
       }).join('');
       $('invBox').innerHTML = '<div style="margin-top:16px;border-top:2px solid var(--line);padding-top:12px">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h3 style="margin:0">' + esc(c.name) + '　請求書（' + esc(invDate(c)) + '・現場ごとにA4横1枚）</h3>' +
