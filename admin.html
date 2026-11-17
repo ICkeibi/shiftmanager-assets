@@ -2869,9 +2869,9 @@
         out += G.cell(0, nc, 0, 1, esc(atena), 'c', 'c', 'font-size:' + f(18) + LS);
         out += G.cell(0, nc, 2, 3, esc(BL_OUR_COMPANY) + '　月報', 'c', 'c', 'font-size:' + f(16) + LS);
       } else if (kind === 'kt') {
-        // 片倉の形：題名は現場（請求書の施工場所。空なら現場名）。Excelは頭に全角の空白が1つある
+        // 片倉の形：題名は現場名（例：江東区扇橋）。Excelは頭に全角の空白が1つある
         //  Excelでは題名と会社名を A〜H列（表より1列広い）の真ん中に置いている
-        out += G.cell(0, nw, 0, 1, '　' + esc(m.place || s.name), 'c', 'b', 'font-size:' + f(22) + ';letter-spacing:.06em');
+        out += G.cell(0, nw, 0, 1, '　' + esc(s.name), 'c', 'b', 'font-size:' + f(22) + ';letter-spacing:.06em');
         out += G.cell(0, nw, 1, 2, esc(BL_OUR_COMPANY) + '　月報', 'c', 'b', 'font-size:' + f(16) + LS);
       } else {
         out += G.cell(0, nc, 0, 1, esc(atena), 'c', 'b', 'font-size:' + f(18) + LS);
