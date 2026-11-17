@@ -2800,7 +2800,7 @@
       row: [79.88, 23.25, 34.5, 10.88, 38.25, 28.88, 18.38, 29.62, 16.5, 16.5, 16.5, 16.5, 16.5, 16.5, 16.5, 16.5, 16.5, 44.62,
         16.5, 16.5, 16.5, 16.5, 16.5, 16.5, 16.5, 16.5, 16.5, 16.5, 16.5, 16.5]                          // 1〜30行
     };
-    // 出面表の3つの形。x0・y0＝表の左上（紙の左上から pt）、sx・sy＝Excelの値→紙の倍率、fz＝文字の倍率、lw＝線の太さ
+    // 出面表の4つの形（hol＝大峰・addr＝中沢・s2＝S2・kt＝片倉）。x0・y0＝表の左上（紙の左上から pt）、sx・sy＝Excelの値→紙の倍率、fz＝文字の倍率、lw＝線の太さ
     //  row＝表の上の行（題名など）の高さ。そのあと 見出し1行・日付31行・合計1行（18.75）
     var XL_DZ = {
       hol: { x0: 26.36, y0: 71.33, sx: 0.98185, sy: 0.96044, fz: 0.96044, lw: 1.06, hr: 25.12, ls: '.03em', dls: '.06em',
@@ -2811,8 +2811,12 @@
         row: [21, 21, 18.75] },
       s2: { x0: 17.22, y0: 97.09, sx: 0.9822, sy: 0.9603, fz: 0.9603, lw: 0.96, hr: 18.75, ls: '.03em', dls: '.06em',
         col: [70.88, 33, 82.12, 82.12, 58.88, 93.38, 149.62],
-        row: [21, 15, 18.75] }
-    };    // 線や文字を、Excelのセルの位置に置く道具
+        row: [21, 15, 18.75] },
+      kt: { x0: 72.71, y0: 72.62, sx: 0.9819, sy: 0.9603, fz: 0.9603, lw: 0.96, hr: 18.75, ls: '.03em', dls: '.06em',
+        col: [70.88, 50.62, 54, 78, 46.5, 78, 50.62, 50.62], tc: 7,   // 表は7列。題名はH列まで（8列）の真ん中
+        row: [35.25, 18.75] }
+    };
+    // 線や文字を、Excelのセルの位置に置く道具
     function xlGrid(g) {
       var cl = [0], rt = [0];
       g.col.forEach(function (w) { cl.push(cl[cl.length - 1] + w); });
@@ -2841,15 +2845,18 @@
       var zero = function (n) { return String(Math.round((n || 0) * 100) / 100); };
       var dates = dzDates(c), tot = {}, add = function (k, n) { tot[k] = (tot[k] || 0) + (n || 0); };
       var y0 = dates.length ? dates[0].getFullYear() : '';
-      // どの形にするか：日曜祝日の単価がある → hol／宛名と会社がちがう（株式会社S2 など）→ s2／ほか → addr
+      // どの形にするか：「請求単価」O列（出面表の形）に 大峰・中沢・S2・片倉 と書いてあればその形
+      //  空欄なら自動：日曜祝日の単価がある → hol／宛名と会社がちがう（株式会社S2 など）→ s2／ほか → addr
       var nz = function (t) { return String(t || '').replace(/[（(]株[)）]|株式会社|有限会社|[\s　]/g, ''); };
       var atena = m.atena || invAtena(c, null), base = nz(c.name);
-      var kind = hasHol ? 'hol' : (base && nz(atena).indexOf(base) < 0 && base.indexOf(nz(atena)) < 0 ? 's2' : 'addr');
+      var pick = String(c.dz || '').replace(/[Ａ-Ｚａ-ｚ０-９]/g, function (ch) { return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0); });
+      var kind = /大峰/.test(pick) ? 'hol' : /中沢/.test(pick) ? 'addr' : /S2/i.test(pick) ? 's2' : /片倉/.test(pick) ? 'kt'
+        : hasHol ? 'hol' : (base && nz(atena).indexOf(base) < 0 && base.indexOf(nz(atena)) < 0 ? 's2' : 'addr');
       var g0 = XL_DZ[kind], nRow = Math.max(31, dates.length), rows = g0.row.slice();
       rows.push(g0.hr);
       for (var i = 0; i <= nRow; i++) rows.push(18.75);   // 日付の行（31行）＋合計の行
       var G = xlGrid({ x0: g0.x0, y0: g0.y0, sx: g0.sx, sy: nRow > 31 ? g0.sy * 31 / nRow : g0.sy, fz: g0.fz, col: g0.col, row: rows });
-      var f = G.fz, nc = g0.col.length, H0 = g0.row.length, last = H0 + 1 + nRow + 1, out = '';
+      var f = G.fz, nw = g0.col.length, nc = g0.tc || nw, H0 = g0.row.length, last = H0 + 1 + nRow + 1, out = '';
       // ｛文字, 大きさ, 横, 縦, 色｝をセルに置く
       var put = function (c1, r, x) { if (x && x[0] !== '' && x[0] != null) out += G.cell(c1, c1 + 1, r, r + 1, esc(x[0]), x[2] || 'c', x[3] || 'c', 'font-size:' + f(x[1]) + (x[4] ? ';color:' + x[4] : '')); };
       var BLUE = '#4f81bd';
@@ -2861,6 +2868,11 @@
       } else if (kind === 'addr') {
         out += G.cell(0, nc, 0, 1, esc(atena), 'c', 'c', 'font-size:' + f(18) + LS);
         out += G.cell(0, nc, 2, 3, esc(BL_OUR_COMPANY) + '　月報', 'c', 'c', 'font-size:' + f(16) + LS);
+      } else if (kind === 'kt') {
+        // 片倉の形：題名は現場（請求書の施工場所。空なら現場名）。Excelは頭に全角の空白が1つある
+        //  Excelでは題名と会社名を A〜H列（表より1列広い）の真ん中に置いている
+        out += G.cell(0, nw, 0, 1, '　' + esc(m.place || s.name), 'c', 'b', 'font-size:' + f(22) + ';letter-spacing:.06em');
+        out += G.cell(0, nw, 1, 2, esc(BL_OUR_COMPANY) + '　月報', 'c', 'b', 'font-size:' + f(16) + LS);
       } else {
         out += G.cell(0, nc, 0, 1, esc(atena), 'c', 'b', 'font-size:' + f(18) + LS);
         out += G.cell(0, nc, 2, 3, esc(BL_OUR_COMPANY) + '　月報', 'c', 'b', 'font-size:' + f(16) + LS);
@@ -2869,7 +2881,8 @@
       var heads = {
         hol: [[y0 + '年', 14], ['', 16], ['隊員（昼）', 10], ['日祝(昼)', 10], ['残業（H)', 8], ['残業(人)', 8], ['計（H)', 10], ['隊員（夜）', 10], ['日祝(夜)', 10], ['残業（H)', 8], ['残業(人)', 8], ['計（H)', 10], ['2級資格者', 10]],
         addr: [[y0 + '年', 14], ['', 16], ['現場住所', 14], ['隊員（昼）', 14, 'l'], ['残業（H)', 14, 'l'], ['隊員（夜）', 14, 'l'], ['残業（H)', 14, 'l'], ['2級資格者', 14, 'l']],
-        s2: [[y0 + '年', 14], ['', 16], ['隊員（昼）', 15, 'c', 'b'], ['隊員（夜）', 15, 'c', 'b'], ['残業（H)', 15, 'c', 'b'], ['得意先名', 15, 'c', 'b'], ['現場名', 15, 'c', 'b']]
+        s2: [[y0 + '年', 14], ['', 16], ['隊員（昼）', 15, 'c', 'b'], ['隊員（夜）', 15, 'c', 'b'], ['残業（H)', 15, 'c', 'b'], ['得意先名', 15, 'c', 'b'], ['現場名', 15, 'c', 'b']],
+        kt: [[y0 + '年', 14], ['', 16], ['2級資格者', 11, 'c', 'b'], ['隊員（昼）', 12, 'c', 'b'], ['残業（H)', 12, 'c', 'b'], ['隊員（夜）', 12, 'c', 'b'], ['残業（H)', 12, 'c', 'b']]
       }[kind];
       heads.forEach(function (x, k) { put(k, H0, x); });
       // 得意先名（S2の形）：会社名から「株式会社」などを取ったもの
@@ -2894,7 +2907,11 @@
           vals = [v(x.d), v(x.hd), per(x.od, x.pd), v(x.pd), h(x.od), v(x.n), v(x.hn), per(x.on, x.pn), v(x.pn), h(x.on), v(x.q)].map(function (t) { return [t, 14]; });
         } else if (kind === 'addr') {
           add('d', dn); add('n', nn); add('od', x.od); add('on', x.on); add('q', x.q);
-          vals = [[place, 14], [v(dn), 14], [h(x.od), 14], [v(nn), 14], [h(x.on), 14, 'r', 'b'], [v(x.q), 14, 'c', 'b']];
+          // 現場住所：請求書の「施工場所」が入っていればそれ（Excelと同じく番地まで）。空なら出勤簿の町の名前
+          vals = [[dn || nn ? (m.place || place) : '', 14], [v(dn), 14], [h(x.od), 14], [v(nn), 14], [h(x.on), 14, 'r', 'b'], [v(x.q), 14, 'c', 'b']];
+        } else if (kind === 'kt') {
+          add('d', dn); add('n', nn); add('od', x.od); add('on', x.on); add('q', x.q);
+          vals = [[v(x.q), 16], [v(dn), 16], [h(x.od), 16], [v(nn), 16, 'c', 'b'], [h(x.on), 16]];
         } else {
           add('d', dn); add('n', nn); add('o', (x.od || 0) + (x.on || 0));
           vals = [[v(dn), 16], [v(nn), 16, 'c', 'b', BLUE], [h((x.od || 0) + (x.on || 0)), 16, 'c', 'b'], [place ? client : '', 16, 'c', 'b'], [place, 16, 'c', 'b']];
@@ -2905,7 +2922,8 @@
       var tots = {
         hol: [zero(tot.d), zero(tot.hd), zero(Math.round(tot.pod / 60 * 100) / 100), zero(tot.pd), zero(tot.od / 60), zero(tot.n), zero(tot.hn), zero(Math.round(tot.pon / 60 * 100) / 100), zero(tot.pn), zero(tot.on / 60), zero(tot.q)].map(function (t) { return [t, 16]; }),
         addr: [null, [zero(tot.d), 14], [zero(tot.od / 60), 14], [zero(tot.n), 14], [zero(tot.on / 60), 14], [zero(tot.q), 14]],
-        s2: [[zero(tot.d), 16, 'c', 'b'], [zero(tot.n), 16, 'c', 'b', BLUE], [zero(tot.o / 60), 16, 'c', 'b']]
+        s2: [[zero(tot.d), 16, 'c', 'b'], [zero(tot.n), 16, 'c', 'b', BLUE], [zero(tot.o / 60), 16, 'c', 'b']],
+        kt: [[zero(tot.q), 16], [zero(tot.d), 16], [zero(tot.od / 60), 16], [zero(tot.n), 16], [zero(tot.on / 60), 16]]
       }[kind];
       tots.forEach(function (t, k) { put(2 + k, last - 1, t); });
       // 表の線（細線）
