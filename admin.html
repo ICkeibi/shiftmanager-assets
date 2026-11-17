@@ -2023,15 +2023,28 @@
           '<h3 style="margin:14px 0 0;font-size:15px">本番の計算</h3>' + nkCalcHtml(g.final, '本番');
       }
       // 用紙：国税庁のPDF（毎年新しくなるので、いつも国税庁から出す。名前などは書き込まない＝個人情報を画面に出さない）
-      var ny = r.year + 1, nw = '令和' + (ny - 2018) + '年分';
+      //  国税庁のファイル名は「年＋bun_番号.pdf」（入力用は _input）。記入例は nencho＋年 のフォルダ。年が変わっても自動で新しい年になる
+      var ty = r.year, ny = ty + 1, tw = '令和' + (ty - 2018) + '年分', nw = '令和' + (ny - 2018) + '年分';
+      var NTA = 'https://www.nta.go.jp/taxes/tetsuzuki/shinsei/annai/gensen/pdf/', EX = 'https://www.nta.go.jp/publication/pamph/gensen/nencho' + ty + '/pdf/';
+      var fBtn = function (href, label, main) {
+        return '<a class="btn' + (main ? ' main' : '') + '" href="' + esc(href) + '" target="_blank" rel="noopener" style="padding:3px 10px;font-size:12px;margin:2px 4px 2px 0;display:inline-block">' + label + ' ↗</a>';
+      };
+      var fRow = function (no, name, file, ex, who) {
+        return '<tr><td style="width:40px;white-space:nowrap">' + no + '</td><td><b>' + name + '</b><br>' +
+          (file ? fBtn(NTA + file + '.pdf', '用紙（PDF）', true) + fBtn(NTA + file + '_input.pdf', '入力用（PDF）') : '') +
+          fBtn(EX + ex + '.pdf', '記入例') + '</td><td>' + who + '</td></tr>';
+      };
       var forms = '<div class="panel"><div class="ph"><span class="pi"><span class="dot"></span>用紙を印刷する（国税庁）</span></div><div class="res"><table>' +
-        '<tr><td style="width:40px">①</td><td><a href="https://www.nta.go.jp/taxes/tetsuzuki/shinsei/annai/gensen/pdf/' + ny + 'bun_01.pdf" target="_blank" rel="noopener">' +
-          esc(nw) + ' 給与所得者の扶養控除等（異動）申告書（PDF）↗</a></td><td>甲欄の人全員。来年の分。入社した人には、その年の分も</td></tr>' +
-        '<tr><td>②〜⑤</td><td><a href="https://www.nta.go.jp/users/gensen/nencho/shinkokusyo/index.htm" target="_blank" rel="noopener">各種申告書・記載例の一覧（国税庁）↗</a></td>' +
-          '<td>②基礎控除申告書など・③保険料控除申告書・④特定親族特別控除申告書・⑤住宅ローン控除。記入例もここにあります</td></tr>' +
+        fRow('①', esc(nw) + ' 扶養控除等（異動）申告書', ny + 'bun_01', '309', '甲欄の人全員。<b>来年の分</b>') +
+        fRow('①', esc(tw) + ' 扶養控除等（異動）申告書', ty + 'bun_01', '305', '今年入社して、まだ出していない人だけ（今年の分）') +
+        fRow('②④', esc(tw) + ' 基礎控除申告書 兼 配偶者控除等申告書 兼 特定親族特別控除申告書 兼 所得金額調整控除申告書', ty + 'bun_06', '306',
+          '甲欄の人全員。<b>②と④は1枚の同じ用紙</b>です') +
+        fRow('③', esc(tw) + ' 保険料控除申告書', ty + 'bun_04', '307', '生命保険・地震保険・国民年金などを払った人') +
+        fRow('⑤', '住宅借入金等特別控除申告書（住宅ローン控除）', '', '308', '用紙は<b>税務署から本人に届いたもの</b>を使います（ここには用紙はありません）') +
         '<tr><td>外国語</td><td><a href="https://www.nta.go.jp/users/gensen/nencho/shinkokusyo/gaikokugo.htm" target="_blank" rel="noopener">外国語の訳（英語・中国語・ベトナム語・フィリピノ語など）↗</a></td>' +
           '<td>日本語が読みにくい人に、日本語の用紙と一緒に渡す（出すのは日本語の用紙）</td></tr>' +
-        '</table>' + (r.check && r.check.found ? '<div class="note" style="margin-top:6px">配る人数の目安：チェック表の「対象」 <b>' + r.check.total + '人</b>分</div>' : '') +
+        '</table>' +
+        '<div class="note" style="margin-top:6px">入力用（PDF）は、パソコンで字を打ってから印刷できます。ボタンで開けないときは <a href="https://www.nta.go.jp/users/gensen/nencho/shinkokusyo/index.htm" target="_blank" rel="noopener">各種申告書・記載例の一覧（国税庁）↗</a> から開いてください。</div>' + (r.check && r.check.found ? '<div class="note" style="margin-top:6px">配る人数の目安：チェック表の「対象」 <b>' + r.check.total + '人</b>分</div>' : '') +
         '<div class="note" style="margin-top:4px">PDFを開いて、ブラウザの印刷（Ctrl+P）で人数分を印刷します。用紙は毎年変わるので、前の年の紙は使わないでください。</div></div></div>';
       $('nkBody').innerHTML = steps + forms +
         '<div class="panel"><div class="ph"><span class="pi"><span class="dot"></span>書類の提出</span></div><div class="res">' + check + '</div></div>' +
