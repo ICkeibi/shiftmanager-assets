@@ -359,7 +359,6 @@
       <!-- 年末調整：11月〜1月と、済んでいない間だけ出す（済んだら「その他」に入る） -->
       <a href="#" data-go="nencho" id="navNencho" class="hidden" title="年末調整"><i data-icon="nencho"></i><span class="label">年末調整</span><span class="badge hidden" id="navNenchoWarn">!</span></a>
       <a href="#" data-go="settings" title="設定（請求単価・現場の振り分け）を見る・直す"><i data-icon="gear"></i><span class="label">設定</span></a>
-      <a href="#" data-sheet="1" target="_blank" rel="noopener" title="スプレッドシートを開く"><i data-icon="sheet"></i><span class="label">シート ↗</span></a>
       <!-- その他：月払い・会社別請求・残業・グラフ（と、済んだあとの年末調整） -->
       <a href="#" id="navMore" title="その他（月払い・会社別請求・残業・グラフ）"><i data-icon="more"></i><span class="label">その他 ▾</span></a>
       <div class="foot"><span id="who"></span><a href="#" id="logout">ログインを解除</a></div>
@@ -932,7 +931,6 @@
           box.classList.toggle('hidden', !w.length);
         })();
         $('who').textContent = 'ログイン中：' + res.name;
-        Array.prototype.forEach.call(document.querySelectorAll('[data-sheet]'), function (a) { a.href = res.sheetUrl || '#'; a.target = '_blank'; });
         $('login').classList.add('hidden'); $('app').classList.remove('hidden');
         renderHome(res.home);
         // 月払いなどの画面を、ホームを見ている間に裏で読み込んでおく（押したときにすぐ出るように）
@@ -1136,11 +1134,11 @@
       });
       if (h.progress && !PG.picked) renderProgress(h.progress);
       // 設定
-      // 画面で直せるもの（設定ページ）は、押すと設定ページを開く。右の「シート↗」でシートも開ける
+      // 画面で直せるもの（設定ページ）は、押すと設定ページを開く（シートへのリンクは出さない＝シートを直接さわらせない）
       $('settings').innerHTML = (h.settings || []).map(function (s) {
         if (ST_SHEETS.indexOf(s.name) >= 0)
           return '<div class="slink" style="cursor:pointer" data-stgo="' + esc(s.name) + '" role="button" tabindex="0"><span>' + esc(s.name) + '<br><small>' + esc(s.note) + '（画面で直す）</small></span>' +
-            '<span style="display:flex;gap:10px;align-items:center"><span style="color:var(--brand);font-weight:bold">›</span><a href="' + esc(s.url) + '" target="_blank" rel="noopener" title="シートを開く" style="font-size:12px" onclick="event.stopPropagation()">シート↗</a></span></div>';
+            '<span style="color:var(--brand);font-weight:bold">›</span></div>';
         return '<a class="slink" href="' + esc(s.url) + '" target="_blank" rel="noopener"><span>' + esc(s.name) + '<br><small>' + esc(s.note) + '</small></span><span>↗</span></a>';
       }).join('') || '<div class="note">ありません</div>';
       if (!h.tasks.length) {
@@ -1164,7 +1162,7 @@
     }
     $('tasks').addEventListener('click', function (e) {
       var b = e.target.closest('button');
-      if (b && b.getAttribute('data-open')) { go(b.getAttribute('data-open')); return; }
+      if (b && b.getAttribute('data-open')) { var to = b.getAttribute('data-open'); if (to.indexOf('stgo:') === 0) stGo(to.slice(5)); else go(to); return; }
       if (b && b.getAttribute('data-done')) { setDone(b.getAttribute('data-done'), true, b, b.getAttribute('data-title')); }
     });
     $('tasks').addEventListener('change', function (e) {
@@ -1930,7 +1928,6 @@
         }
         dkBusy(false);
         $('d3').innerHTML = '<div class="ok">反映しました：<b>' + r.written + '件</b>（' + r.total + '人）。うち出勤簿の時刻から書き換えた日 <b>' + r.changed + '件</b>。' +
-          '　<a href="' + esc(r.resultUrl) + '" target="_blank" rel="noopener">「打刻の反映結果」シート ↗</a>' +
           '　<a href="' + esc(r.kintaiUrl) + '" target="_blank" rel="noopener">勤怠管理表を開く ↗</a></div>' +
           (r.changed ? '<details style="margin-top:6px"><summary>書き換えた日（' + r.changed + '件）</summary>' + issueTable(r.changedList, ['氏名', '日付', '昼夜', '結果', '内容']) + '</details>' : '') +
           (r.issues ? '<details style="margin-top:6px" open><summary>確認してほしいもの（' + r.issues + '件）</summary>' + issueTable(r.issueList, ['氏名', '日付', '昼夜', '結果', '内容']) + '</details>' : '');
@@ -1961,8 +1958,7 @@
       if (!c) return '<div class="note">まだ「' + label + '」の計算をしていません。</div>';
       return '<div class="ok" style="margin-top:6px">' + esc(c.sheet) + '：<b>' + c.rows.length + '人</b>。返す人 <b>' + c.nBack + '人・' + nkYen(c.back) + '</b>　' +
         '追加で引く人 <b>' + c.nMore + '人・' + nkYen(c.more) + '</b>' +
-        (c.errors ? '　<b style="color:#c5221f">メモ（確認が要る人）' + c.errors + '人</b>' : '') +
-        '　<a href="' + esc(c.url) + '" target="_blank" rel="noopener">シートを開く ↗</a></div>' +
+        (c.errors ? '　<b style="color:#c5221f">メモ（確認が要る人）' + c.errors + '人</b>' : '') + '</div>' +
         '<details style="margin-top:6px"' + (c.errors ? ' open' : '') + '><summary>1人ずつ（' + c.rows.length + '人）</summary>' +
         issueTable(c.rows.map(function (x) { return [x.name, nkYen(x.withheld), x.tax === '' ? '' : nkYen(x.tax), (x.diff > 0 ? '+' : '') + nkYen(x.diff), x.memo]; }),
           ['氏名', '毎月引いた所得税', '年税額', '過不足（＋返す／－引く）', 'メモ']) + '</details>';
@@ -2044,7 +2040,7 @@
         calc = '<div>支給した月の記録（' + g.people + '人分）：' + g.months.map(function (x) {
           return '<span style="display:inline-block;margin:2px 3px;padding:2px 8px;border-radius:10px;font-size:12px;' +
             (x.n ? 'background:var(--ok-bg);color:var(--ok)' : 'background:var(--line);color:var(--text3)') + '">' + x.m + '月' + (x.n ? ' ✓' : '') + '</span>';
-        }).join('') + '　<a href="' + esc(g.url) + '" target="_blank" rel="noopener">源泉徴収簿を開く ↗</a></div>' +
+        }).join('') + '</div>' +
           '<div class="note" style="margin-top:4px">月の名前は支給した月です（10月分の給料を11月に払えば「11月」）。試しの計算の前に、支給した月が全部 ✓ になっているか確かめます。</div>' +
           nkSourcesHtml(g) +
           '<h3 style="margin:14px 0 0;font-size:15px">試しの計算</h3>' + nkCalcHtml(g.trial, '試し') +
@@ -2151,7 +2147,7 @@
       var head = '<div class="note" style="margin:8px 0 4px">' + esc(d.madeAt) + ' 時点。' +
         (d.calcSheet ? '申告書の中身と計算は「' + esc(d.calcSheet) + '」シートから。' + (d.calcSheet.indexOf('試し') >= 0 ? '<b style="color:#c5221f">まだ試しの計算です。本番の計算のあとに読み直してください。</b>' : '')
           : '<b style="color:#c5221f">勤怠管理表で「年末調整を計算」をまだしていないので、申告書の中身が出ません。</b>') +
-        '　<a href="' + esc(d.bookUrl) + '" target="_blank" rel="noopener">源泉徴収簿を開く ↗</a></div>' +
+        '</div>' +
         (d.noCode.length ? '<div class="msg err">弥生の従業員コード（勤怠管理表の社員シート E7）が見つからない人：' + esc(d.noCode.join('、')) + '。見比べは名前で行います。</div>' : '');
       var list = '<h3 style="margin:12px 0 0;font-size:15px">全員（源泉徴収票を出す人 ' + d.people.length + '人・うち年末調整 ' + tg.length + '人）</h3>' +
         issueTable(d.people.map(function (p) {
@@ -2380,12 +2376,24 @@
                 '<div class="blx-kpi d"><span>遅刻</span><b>' + late + '件</b></div>' +
                 '<div class="blx-kpi n"><span>早退</span><b>' + early + '件</b></div>' +
                 '<div class="blx-kpi"><span>' + esc(r.label) + '</span><b>' + r.people.length + '人</b></div></div>' +
-              '<div class="slx-late-links"><a href="' + esc(r.sheetUrl) + '" target="_blank" rel="noopener">「遅刻早退一覧」シート（印刷用） ↗</a>' +
+              // 印刷はシートを開かずに、この画面から（1人ずつと日ごとの表をそのまま印刷する）
+              '<div class="slx-late-links"><a href="#" id="slLatePrint">🖨 この一覧を印刷</a>' +
               '<a href="' + esc(r.kintaiUrl) + '" target="_blank" rel="noopener">勤怠管理表を開く ↗</a></div>' +
               '<div class="slx-late-grid" style="margin-top:12px"><div><h4>1人ずつ（シートの上の数字）</h4>' + sum + '</div>' +
               '<div><h4>日ごと（' + r.days.length + '件）</h4>' +
               issueTable(r.days, ['氏名', '日付', '区分', '始業', '終業', '遅れた分・早く上がった分']) + '</div></div>'
             : '<div class="ok">' + esc(r.label) + '：遅刻・早退の日はありません。</div>');
+          var pb = $('slLatePrint');
+          if (pb) pb.addEventListener('click', function (e) {
+            e.preventDefault();
+            var w = window.open('', '_blank'); if (!w) return;
+            w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>遅刻早退一覧 ' + esc(r.label) + '</title><style>' +
+              'body{font-family:"Yu Gothic UI",Meiryo,sans-serif;margin:12mm;font-size:12px}h2{font-size:16px;margin:0 0 8px}h3{font-size:13px;margin:14px 0 6px}' +
+              'table{border-collapse:collapse;width:100%}td,th{border:1px solid #999;padding:3px 6px;text-align:left}@page{size:A4;margin:10mm}</style></head><body>' +
+              '<h2>遅刻・早退の一覧　' + esc(r.label) + '</h2><h3>1人ずつ</h3>' + sum + '<h3>日ごと（' + r.days.length + '件）</h3>' +
+              issueTable(r.days, ['氏名', '日付', '区分', '始業', '終業', '遅れた分・早く上がった分']) + '</body></html>');
+            w.document.close(); w.focus(); setTimeout(function () { w.print(); }, 300);
+          });
     }
 
     // ── 請求書・売上累計表 ──
@@ -2632,11 +2640,11 @@
     }
     function blRender() {
       var r = BL.data, g = r.grand;
-      var warn = blWhen() +(r.added ? '<div class="unk">「現場の振り分け」シートに、新しい現場の組み合わせを <b>' + r.added + '件</b> 足しました（黄色）。請求先と現場名を確認・修正してから、もう一度「会社別の請求額を出す」を押してください。' +
-        (r.mapUrl ? '　<a href="' + esc(r.mapUrl) + '" target="_blank" rel="noopener">現場の振り分けを開く ↗</a>' : '') + '</div>' : '') +
+      var stLink = function (name) { return '<span data-stgo="' + name + '" role="button" tabindex="0" style="color:var(--primary);text-decoration:underline;cursor:pointer">設定の' + name + '</span>'; };
+      var warn = blWhen() +(r.added ? '<div class="unk">「現場の振り分け」に、新しい現場の組み合わせを <b>' + r.added + '件</b> 足しました（黄色）。' + stLink('現場の振り分け') + 'で請求先と現場名を確認・修正してから、もう一度「会社別の請求額を出す」を押してください。</div>' : '') +
         (r.addedCo ? '<div class="unk">「請求単価」に、単価のない会社を <b>' + r.addedCo + '社</b> 足しました（黄色）。<span data-stgo="請求単価" role="button" tabindex="0" style="color:var(--primary);text-decoration:underline;cursor:pointer">設定の請求単価</span>で単価を入れてから、もう一度「会社別の請求額を出す」を押してください。</div>' : '') +
         (r.note ? '<div class="unk">' + esc(r.note) + '</div>' : '') +
-        (r.companies.some(function (c) { return c.noRate; }) ? '<div class="unk">単価が未登録の会社があります（金額が0円）。「請求単価」シートに入れてください。</div>' : '');
+        (r.companies.some(function (c) { return c.noRate; }) ? '<div class="unk">単価が未登録の会社があります（金額が0円）。' + stLink('請求単価') + 'で入れてください。</div>' : '');
       var rows = '';
       r.companies.forEach(function (c, ci) {
         c.sites.forEach(function (s, i) {
@@ -2684,7 +2692,6 @@
           '<button class="btn main" id="blPrint">' + IC.print + '<span>売上累計表を印刷<small>A4・1枚</small></span></button>' +
           (hasInv ? '<button class="btn main green" id="invAll">' + IC.docs + '<span>請求書と出面表をまとめて印刷<small>全部の会社</small></span></button>' : '') +
           '<button class="btn" id="blCopy">' + IC.copy + '<span>表をコピー<small>Excelの売上累計表に貼れます</small></span></button>' +
-          '<a class="btn" href="' + esc(r.sheetUrl) + '" target="_blank" rel="noopener">' + IC.sheet + '<span>請求集計シートを開く ↗<small>数量・単価・明細</small></span></a>' +
         '</div>' +
         '<div class="blx-views noprint"><span>' + IC.eye + ' 画面で見る（印刷の形で確かめる）</span>' +
           (hasInv ? '<button type="button" class="btn" id="vwDz">出面表（全部の会社）</button><button type="button" class="btn" id="vwInv">請求書（全部の会社）</button>' : '') +
@@ -2694,7 +2701,7 @@
         '<details class="blx-table"><summary>売上累計表と同じ並び（表）で見る</summary>' +
         '<table class="wk"><thead><tr><th>会社名</th><th>現場名</th><th class="num">日勤</th><th class="num">夜勤</th><th class="num" style="width:120px">金額（税抜）</th></tr></thead><tbody>' + rows.replace(/<button[^>]*data-inv[^>]*>[\s\S]*?<\/button>/g, '') +
         '<tr class="total"><td>計</td><td></td><td class="num">' + g.day + '人</td><td class="num">' + g.night + '人</td><td class="num">' + yen(g.total) + '</td></tr></tbody></table></details>' +
-        '<div class="note" style="font-size:12px;color:var(--text2);margin-top:8px">請求書の項目ごとの数量・単価・消費税（現場ごと）は「請求集計」シート、1日ずつの明細は「請求明細」シートで見られます。</div>' +
+        '<div class="note" style="font-size:12px;color:var(--text2);margin-top:8px">請求書の項目ごとの数量・単価・消費税（現場ごと）は各社の「画面で見る」の請求書で、1日ずつの人数は出面表で確かめられます。</div>' +
         '<div id="invBox"></div>';
       $('blPrint').addEventListener('click', function () { blPrint(r); });
       // 画面で見る（出面表 → 請求書 → 売上累計表）
