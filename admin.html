@@ -402,12 +402,14 @@
             <label class="st-chk"><input type="checkbox" id="stNewOnly"> <span id="stNewLbl">新しく出てきた行（黄色）だけ</span></label>
             <button type="button" class="btn" id="stAdd">＋ 行を追加</button>
             <button type="button" class="btn" id="stReload">読み直す</button>
+            <button type="button" class="btn hidden" id="stOrderBtn" title="請求書・売上累計表の会社の並びになります">↕ 並べ替え</button>
             <span class="sp"></span>
             <span id="stDirty" class="st-dirty hidden"></span>
             <button type="button" class="btn" id="stUndo" disabled>元に戻す</button>
             <button type="button" class="btn main" id="stSave" disabled>保存</button>
           </div>
           <div id="stMsg"></div>
+          <div id="stOrder" class="hidden"></div>
           <div class="st-wrap"><table class="st-tbl" id="stTbl"><thead></thead><tbody></tbody></table></div>
           <p class="sub" style="margin-top:8px">セルを押すと直せます。直したセルは黄色、追加した行は緑、消す行は取り消し線になります。「保存」を押すまでシートは変わりません。</p>
         </div>
@@ -3151,7 +3153,7 @@
       if (e.target.closest('[data-admx]')) { stMsg(''); stAdmDraw(''); }
     });
     function stLoad() {
-      stReset(); stMsg('');
+      stReset(); stMsg(''); ST.ord = null; stOrdDraw();
       if (ST.name === '管理者') { ST.data = { name: '管理者' }; stAdmLoad(); return; }
       stAdmMode(false); $('stTbl').tBodies[0].innerHTML = '<tr><td><div class="loading" style="padding:16px 12px">読み込んでいます…</div></td></tr>';
       var name = ST.name;
@@ -3167,6 +3169,8 @@
       var q = $('stQ').value.trim().toLowerCase(), newOnly = $('stNewOnly').checked;
       // シートごとの決まり：行を足せない（名前対応）・「新しく出てきた行」の言い方
       $('stAdd').classList.toggle('hidden', !!d.noAdd);
+      $('stOrderBtn').classList.toggle('hidden', !d.order);
+      if (!d.order) { ST.ord = null; $('stOrder').classList.add('hidden'); }
       $('stNewLbl').textContent = d.newLabel || '新しく出てきた行（黄色）だけ';
       var cls = function (t) { return t === 'key' ? 'k' : (/^yen|day/.test(t) ? 'num' : ''); };
       // seenHead：現場の振り分けだけ。最後に計算した月の「請求明細」で、その行がどの日に出てきたか（見るだけ）
@@ -3215,6 +3219,41 @@
         ST.busy = false; ST.data = r; stReset(); stDraw(); stMsg(r.message || '保存しました', 'ok');
       }, function (err) { ST.busy = false; stState(); stMsg(err, 'err'); });
     }
+
+    // ── 並べ替え（請求単価：請求書・売上累計表の会社の並び）──
+    function stOrdDraw() {
+      var o = ST.ord, box = $('stOrder');
+      if (!o) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+      box.classList.remove('hidden');
+      box.innerHTML = '<div class="panel" style="padding:12px 16px;margin:8px 0;border:2px solid var(--brand)">' +
+        '<b>' + esc(ST.name) + 'の並び順</b><span class="note" style="margin-left:8px">↑↓で動かして「この順で保存」。上から順に、請求書・売上累計表に並びます。</span>' +
+        '<ol style="margin:8px 0;padding-left:28px;max-height:420px;overflow:auto">' + o.map(function (k, i) {
+          return '<li style="padding:3px 0"><span style="display:inline-block;min-width:240px">' + esc(k) + '</span>' +
+            '<button type="button" class="btn" data-ou="' + i + '" style="padding:2px 10px"' + (i ? '' : ' disabled') + '>↑</button> ' +
+            '<button type="button" class="btn" data-od="' + i + '" style="padding:2px 10px"' + (i < o.length - 1 ? '' : ' disabled') + '>↓</button></li>';
+        }).join('') + '</ol>' +
+        '<button type="button" class="btn main" id="stOrdSave">この順で保存</button> <button type="button" class="btn" id="stOrdX">やめる</button></div>';
+    }
+    $('stOrderBtn').addEventListener('click', function () {
+      if (!ST.data || !ST.data.order || ST.busy) return;
+      if (stDirty()) { stMsg('先に、直したところを「保存」するか「元に戻す」を押してください', 'err'); return; }
+      ST.ord = ST.data.rows.map(function (x) { return String(x.values[0]); });
+      stOrdDraw();
+    });
+    $('stOrder').addEventListener('click', function (e) {
+      var t = e.target, o = ST.ord; if (!o) return;
+      var u = t.getAttribute('data-ou'), dn = t.getAttribute('data-od');
+      if (u !== null) { u = +u; if (u > 0) { var a = o[u - 1]; o[u - 1] = o[u]; o[u] = a; stOrdDraw(); } return; }
+      if (dn !== null) { dn = +dn; if (dn < o.length - 1) { var b = o[dn + 1]; o[dn + 1] = o[dn]; o[dn] = b; stOrdDraw(); } return; }
+      if (t.id === 'stOrdX') { ST.ord = null; stOrdDraw(); return; }
+      if (t.id === 'stOrdSave' && !ST.busy) {
+        ST.busy = true; t.disabled = true; stMsg('並び順を保存しています…', 'run');
+        call('adminSettingOrder', [PIN, DEVICE, ST.name, o, ST.data.version], function (r) {
+          ST.busy = false; ST.ord = null; stOrdDraw(); ST.data = r; stReset(); stDraw();
+          stMsg((r.message || '並び順を変えました') + '。請求書の画面で「最新にする」を押すと、新しい並びになります。', 'ok');
+        }, function (err) { ST.busy = false; t.disabled = false; stMsg(err, 'err'); });
+      }
+    });
 
     function blOpen() {
       if (BL.init) return;
