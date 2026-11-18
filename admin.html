@@ -371,6 +371,7 @@
       <a href="#" data-more="bill"><i data-icon="bill"></i><span>会社別請求<small>請求額（スマホと同じ画面）</small></span></a>
       <a href="#" data-more="ot"><i data-icon="ot"></i><span>残業<small>定時後残業</small></span></a>
       <a href="#" data-more="chart"><i data-icon="chart"></i><span>グラフ<small>売上・人件費</small></span></a>
+      <a href="#" data-more="leave"><i data-icon="nencho"></i><span>有給管理<small>付与・取得・年5日の確認</small></span></a>
       <a href="#" data-more="nencho" id="moreNencho"><i data-icon="nencho"></i><span>年末調整<small>源泉徴収票の確認など</small></span></a>
     </div>
     <main id="main">
@@ -699,6 +700,16 @@
         <div id="blMsg"></div>
         <div id="blBody"></div>
       </div>
+      <!-- 有給管理（労務チェック.gs。シートは開かずに、この画面で作る・入社日を入れる） -->
+      <div class="page hidden" id="pLeave">
+        <div class="toolbar">
+          <div><h2>有給管理</h2><div class="sub">全部の月の勤怠管理表から、有給の付与・取得・年5日の義務を確かめます。入社日と週の所定日数だけ、ここで入れます。</div></div>
+          <div class="noprint"><button class="btn" id="lvSave" disabled>入社日などを保存して作り直す</button> <button class="btn main" id="lvRun">最新にする（作り直す）</button></div>
+        </div>
+        <div id="lvMsg"></div>
+        <div id="lvBody"><div class="loading">読み込み中...</div></div>
+        <p class="sub" style="margin-top:8px">入社日から6か月で付与（そのあと1年ごと）。日数は労働基準法の表（週5日以上は10日、少ない人は比例付与）。取得は勤怠管理表のD列が9（有給休暇）の日です。10日以上付与された人は、付与から1年以内に5日取らせる義務があります（赤＝期限まで90日以内で足りない）。出勤率8割の条件は確かめていないので、手で確かめてください。</p>
+      </div>
       <!-- これから作る -->
       <div class="page hidden" id="pSoon">
         <h2 id="soonTitle"></h2>
@@ -992,6 +1003,8 @@
       if (where === 'billing') blOpen();
       $('pSettings').classList.toggle('hidden', where !== 'settings');
       if (where === 'settings') stOpen();
+      $('pLeave').classList.toggle('hidden', where !== 'leave');
+      if (where === 'leave') lvOpen();
       // 打刻の管理：打刻システムの管理者画面を、この中に出す（初めて押したときに読み込む）
       var dv = $('dakokuView');
       if (where === 'dakokuAdmin' && DAKOKU_URL) {
@@ -1012,7 +1025,7 @@
         v.classList.add('hidden');
       }
       // その他▾：中のものを開いているときは「その他」を光らせる
-      var inMore = !!VIEW_URL[where] || (where === 'nencho' && $('navNencho').classList.contains('hidden'));
+      var inMore = !!VIEW_URL[where] || where === 'leave' || (where === 'nencho' && $('navNencho').classList.contains('hidden'));
       $('navMore').classList.toggle('on', inMore);
       Array.prototype.forEach.call(document.querySelectorAll('#moreMenu a[data-more]'), function (a) { a.classList.toggle('on', a.getAttribute('data-more') === where); });
       $('moreMenu').classList.add('hidden');
@@ -2402,6 +2415,57 @@
     // ── 請求書・売上累計表 ──
     var BL = { init: false, data: null };
     function yen(n) { return (n < 0 ? '-¥' : '¥') + Math.abs(Math.round(n)).toLocaleString('ja-JP'); }
+    // ── 有給管理（シートは開かない。入社日・週の所定日数だけ、この画面で入れる） ──
+    var LV = { init: false, data: null, edits: {}, busy: false };
+    function lvOpen() {
+      if (!LV.init) {
+        LV.init = true;
+        $('lvRun').addEventListener('click', function () { lvRun(false); });
+        $('lvSave').addEventListener('click', function () { lvRun(true); });
+        $('lvBody').addEventListener('input', function (e) {
+          var t = e.target, tr = t.closest('tr[data-n]'); if (!tr) return;
+          var n = tr.getAttribute('data-n'), x = LV.data.rows.filter(function (r) { return r.values[0] === n; })[0]; if (!x) return;
+          var hire = tr.querySelector('[data-k="hire"]').value, wk = tr.querySelector('[data-k="wk"]').value.trim();
+          if (hire === x.hire && wk === String(x.values[2] || '').trim()) delete LV.edits[n]; else LV.edits[n] = { name: n, hire: hire, weekly: wk };
+          t.parentElement.style.background = 'var(--warn-bg)';
+          lvState();
+        });
+      }
+      if (!LV.data && !LV.busy) {
+        $('lvBody').innerHTML = '<div class="loading">読み込み中...</div>';
+        call('adminLeaveSaved', [PIN, DEVICE], function (r) { LV.data = r; lvRender(); }, function (m) { $('lvBody').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+      }
+    }
+    function lvState() { var n = Object.keys(LV.edits).length; $('lvSave').disabled = !n || LV.busy; $('lvSave').textContent = n ? '入社日などを保存して作り直す（' + n + '人）' : '入社日などを保存して作り直す'; $('lvRun').disabled = LV.busy; }
+    async function lvRun(withEdits) {
+      if (LV.busy) return;
+      var inputs = withEdits ? Object.keys(LV.edits).map(function (k) { return LV.edits[k]; }) : [];
+      if (!withEdits && Object.keys(LV.edits).length && !await askOk('入れた入社日などが保存されていません。捨てて作り直しますか？（保存するときは「入社日などを保存して作り直す」）')) return;
+      if (!await askOk((inputs.length ? inputs.length + '人の入社日などを保存してから、' : '') + '全部の月の勤怠管理表を読んで、有給管理を作り直します（1〜2分）。\n\nよろしいですか？')) return;
+      LV.busy = true; lvState(); $('lvMsg').innerHTML = '<div class="run">勤怠管理表を読んでいます...（1〜2分）</div>';
+      call('adminLeave', [PIN, DEVICE, inputs], function (r) {
+        LV.busy = false; LV.data = r; LV.edits = {}; lvRender(); lvState();
+        $('lvMsg').innerHTML = '<div class="ok">作り直しました。</div>';
+      }, function (m) { LV.busy = false; lvState(); $('lvMsg').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+    }
+    function lvRender() {
+      var r = LV.data;
+      if (!r || r.none || !r.rows) { $('lvBody').innerHTML = '<div class="note">まだ有給管理の表がありません。「最新にする（作り直す）」を押してください。</div>'; return; }
+      var bad = r.rows.filter(function (x) { return x.bad; }).length, warn = r.rows.filter(function (x) { return x.warn && !x.bad; }).length;
+      var noHire = r.rows.filter(function (x) { return !x.hire; }).length;
+      var h = '<div class="note" style="margin-bottom:8px">' + esc(r.made || '') + '　<b>' + r.rows.length + '人</b>' +
+        (bad ? '　<b style="color:var(--over)">期限が近くて5日に足りない ' + bad + '人</b>' : '') + (warn ? '　<b style="color:#9a6a00">確認が要る ' + warn + '人</b>' : '') +
+        (noHire ? '　（入社日が入っていない ' + noHire + '人）' : '') + '</div>' +
+        '<div style="overflow-x:auto"><table class="wk"><thead><tr>' + r.head.map(function (x) { return '<th>' + esc(x) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+        r.rows.map(function (x) {
+          var v = x.values;
+          return '<tr data-n="' + esc(v[0]) + '"' + (x.bad ? ' style="background:var(--over-bg)"' : '') + '><td style="white-space:nowrap"><b>' + esc(v[0]) + '</b></td>' +
+            '<td><input type="date" data-k="hire" value="' + esc(x.hire) + '" style="font:inherit;padding:3px 4px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--text)"></td>' +
+            '<td><input data-k="wk" value="' + esc(v[2]) + '" placeholder="自動" maxlength="1" style="width:56px;font:inherit;padding:3px 4px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--text)"></td>' +
+            v.slice(3).map(function (c, j) { return '<td' + (j === 7 && x.warn ? ' style="background:#fff3cd;color:#7a5a00"' : '') + '>' + esc(c) + '</td>'; }).join('') + '</tr>';
+        }).join('') + '</tbody></table></div>';
+      $('lvBody').innerHTML = h;
+    }
     // ── 設定：請求単価・現場の振り分けを、画面で見る・直す（保存を押したときだけシートに書く） ──
     var ST = { name: '請求単価', data: null, edits: {}, adds: [], dels: {}, busy: false, init: false };
     var ST_SHEETS = ['請求単価', '現場の振り分け', '支払区分', '注意ワード', '名前対応', '打刻対応', '月一覧', '予定'];   // 画面で直せるシート（ホームの「設定」からも開く）
