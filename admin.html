@@ -380,6 +380,7 @@
       <a href="#" data-more="bill"><i data-icon="bill"></i><span>会社別請求<small>請求額（スマホと同じ画面）</small></span></a>
       <a href="#" data-more="ot"><i data-icon="ot"></i><span>残業<small>定時後残業</small></span></a>
       <a href="#" data-more="chart"><i data-icon="chart"></i><span>グラフ<small>売上・人件費</small></span></a>
+      <a href="#" data-more="wage"><i data-icon="bill"></i><span>賃金台帳<small>1人1枚・5年保存</small></span></a>
       <a href="#" data-more="otc"><i data-icon="ot"></i><span>残業チェック<small>月45時間・年360時間の確認</small></span></a>
       <a href="#" data-more="leave"><i data-icon="nencho"></i><span>有給管理<small>付与・取得・年5日の確認</small></span></a>
       <a href="#" data-more="nencho" id="moreNencho"><i data-icon="nencho"></i><span>年末調整<small>源泉徴収票の確認など</small></span></a>
@@ -710,6 +711,15 @@
         <div id="blMsg"></div>
         <div id="blBody"></div>
       </div>
+      <!-- 賃金台帳（労務チェック.gs。「賃金台帳_○年」のファイルは開かずに、この画面で作る・見る・性別を入れる・印刷する） -->
+      <div class="page hidden" id="pWage">
+        <div class="toolbar">
+          <div><h2>賃金台帳</h2><div class="sub">選んだ年の勤怠管理表を全部読んで、1人1枚の賃金台帳を作ります（労働基準法108条・5年保存）。</div></div>
+          <div class="noprint"><label>年 <select id="wgYear"></select></label> <button class="btn main" id="wgRun">作る（作り直す）</button></div>
+        </div>
+        <div id="wgMsg"></div>
+        <div id="wgBody"><div class="loading">読み込み中...</div></div>
+      </div>
       <!-- 残業チェック（労務チェック.gs。シートは開かずに、この画面で作る・見る） -->
       <div class="page hidden" id="pOtc">
         <div class="toolbar">
@@ -1027,6 +1037,8 @@
       if (where === 'leave') lvOpen();
       $('pOtc').classList.toggle('hidden', where !== 'otc');
       if (where === 'otc') ocOpen();
+      $('pWage').classList.toggle('hidden', where !== 'wage');
+      if (where === 'wage') wgOpen();
       // 打刻の管理：打刻システムの管理者画面を、この中に出す（初めて押したときに読み込む）
       var dv = $('dakokuView');
       if (where === 'dakokuAdmin' && DAKOKU_URL) {
@@ -1047,7 +1059,7 @@
         v.classList.add('hidden');
       }
       // その他▾：中のものを開いているときは「その他」を光らせる
-      var inMore = !!VIEW_URL[where] || where === 'leave' || where === 'otc' || (where === 'nencho' && $('navNencho').classList.contains('hidden'));
+      var inMore = !!VIEW_URL[where] || where === 'leave' || where === 'otc' || where === 'wage' || (where === 'nencho' && $('navNencho').classList.contains('hidden'));
       $('navMore').classList.toggle('on', inMore);
       Array.prototype.forEach.call(document.querySelectorAll('#moreMenu a[data-more]'), function (a) { a.classList.toggle('on', a.getAttribute('data-more') === where); });
       $('moreMenu').classList.add('hidden');
@@ -2437,6 +2449,97 @@
     // ── 請求書・売上累計表 ──
     var BL = { init: false, data: null };
     function yen(n) { return (n < 0 ? '-¥' : '¥') + Math.abs(Math.round(n)).toLocaleString('ja-JP'); }
+    // ── 賃金台帳（ファイルは開かない。作る・1人ずつ見る・性別を入れる・印刷する） ──
+    var WG = { init: false, info: null, year: 0, busy: false, sex: {}, cur: null };
+    function wgOpen() {
+      if (!WG.init) {
+        WG.init = true;
+        $('wgYear').addEventListener('change', function () { WG.year = Number(this.value); wgLoad(); });
+        $('wgRun').addEventListener('click', async function () {
+          if (WG.busy || !await askOk(WG.year + '年の勤怠管理表を全部読んで、賃金台帳を作ります（作ってあれば作り直します。入れた性別は残ります）。\n人数が多いと数分かかります。この画面のままお待ちください。\n\nよろしいですか？')) return;
+          WG.busy = true; $('wgRun').disabled = true; wgBuild();
+        });
+        $('wgBody').addEventListener('click', function (e) {
+          var a = e.target.closest('[data-wgp]'); if (a) { e.preventDefault(); wgPerson(a.getAttribute('data-wgp')); return; }
+          if (e.target.closest('#wgSexSave')) wgSaveSex();
+          if (e.target.closest('#wgPrint')) wgPrint();
+        });
+        $('wgBody').addEventListener('change', function (e) {
+          var s = e.target.closest('select[data-sex]'); if (!s) return;
+          var n = s.getAttribute('data-sex'), p = (WG.info.people || []).filter(function (x) { return x.name === n; })[0];
+          if (p && s.value !== p.sex) WG.sex[n] = s.value; else delete WG.sex[n];
+          var k = Object.keys(WG.sex).length, b = $('wgSexSave'); b.disabled = !k; b.textContent = k ? '性別を保存（' + k + '人）' : '性別を保存';
+        });
+      }
+      if (!WG.info) { WG.year = WG.year || new Date().getFullYear(); wgLoad(); }
+    }
+    function wgLoad() {
+      WG.sex = {}; WG.cur = null;
+      $('wgBody').innerHTML = '<div class="loading">読み込み中...</div>';
+      call('adminWageInfo', [PIN, DEVICE, WG.year], function (r) { WG.info = r; wgRender(); }, function (m) { $('wgBody').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+    }
+    function wgBuild() {
+      $('wgMsg').innerHTML = '<div class="run">' + WG.year + '年の勤怠管理表を読んで、賃金台帳を作っています...（数分）</div>';
+      call('adminWageBuild', [PIN, DEVICE, WG.year], function (r) {
+        if (!r.done) {   // 時間切れ：続きを自動で作る
+          $('wgMsg').innerHTML = '<div class="run">' + r.made + ' / ' + r.total + ' 人まで作りました。続きを作っています...</div>';
+          setTimeout(wgBuild, 500); return;
+        }
+        WG.busy = false; $('wgRun').disabled = false;
+        $('wgMsg').innerHTML = '<div class="ok">' + r.total + '人分の「' + esc(r.title) + '」を作りました。</div>';
+        wgLoad();
+      }, function (m) { WG.busy = false; $('wgRun').disabled = false; $('wgMsg').innerHTML = '<div class="msg err">' + esc(m) + '<br>もう一度「作る」を押すと、続きから作ります。</div>'; });
+    }
+    function wgRender() {
+      var r = WG.info, ys = (r.years || []).slice();
+      if (ys.indexOf(WG.year) < 0) ys.push(WG.year);
+      ys.sort();
+      $('wgYear').innerHTML = ys.map(function (y) { return '<option value="' + y + '"' + (y === WG.year ? ' selected' : '') + '>' + y + '年</option>'; }).join('');
+      if (r.none) { $('wgBody').innerHTML = '<div class="note">' + WG.year + '年の賃金台帳は、まだありません。「作る（作り直す）」を押してください。</div>'; return; }
+      var noSex = r.people.filter(function (p) { return !p.sex; }).length;
+      $('wgBody').innerHTML = '<div class="note" style="margin-bottom:8px">' + WG.year + '年　作成 ' + esc(r.made) + '　<b>' + r.people.length + '人</b>' +
+        (r.building ? '　<b style="color:var(--over)">作っている途中です（「作る」をもう一度押すと続きから作ります）</b>' : '') +
+        (noSex ? '　（性別が入っていない ' + noSex + '人）' : '') + '</div>' +
+        '<div style="display:grid;grid-template-columns:minmax(220px,280px) 1fr;gap:14px;align-items:start">' +
+          '<div class="panel" style="padding:10px 12px"><table class="wk"><thead><tr><th>氏名</th><th>性別</th></tr></thead><tbody>' +
+            r.people.map(function (p) {
+              return '<tr><td><a href="#" data-wgp="' + esc(p.name) + '">' + esc(p.name) + '</a></td><td><select data-sex="' + esc(p.name) + '" style="font:inherit;padding:2px 4px">' +
+                ['', '男', '女'].map(function (s) { return '<option value="' + s + '"' + (s === p.sex ? ' selected' : '') + '>' + (s || '（未入力）') + '</option>'; }).join('') + '</select></td></tr>';
+            }).join('') + '</tbody></table>' +
+            '<button class="btn" id="wgSexSave" disabled style="margin-top:8px">性別を保存</button></div>' +
+          '<div id="wgPerson"><div class="note">左の名前を押すと、その人の賃金台帳が出ます。</div></div></div>';
+    }
+    function wgPerson(name) {
+      WG.cur = null;
+      $('wgPerson').innerHTML = '<div class="loading">' + esc(name) + 'さんの台帳を読んでいます...</div>';
+      call('adminWagePerson', [PIN, DEVICE, WG.year, name], function (r) {
+        WG.cur = r;
+        var rows = r.rows, head = rows[2] || [], body = rows.slice(3);
+        $('wgPerson').innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px"><b>' + esc(rows[1] && rows[1][0] || '') + '　' + esc(r.name) +
+          (rows[0] && rows[0][3] ? '（' + esc(rows[0][3]) + '）' : '') + '</b><button class="btn" id="wgPrint">この人を印刷</button></div>' +
+          '<div style="overflow-x:auto"><table class="wk" id="wgTbl"><thead><tr>' + head.map(function (h) { return '<th>' + esc(h) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+          body.map(function (row, i) {
+            var total = i === body.length - 1;
+            return '<tr' + (total ? ' style="font-weight:bold;border-top:2px solid var(--line)"' : '') + '>' + row.map(function (c, j) { return '<td' + (j ? ' class="num" style="white-space:nowrap"' : ' style="white-space:nowrap"') + '>' + esc(c) + '</td>'; }).join('') + '</tr>';
+          }).join('') + '</tbody></table></div>';
+      }, function (m) { $('wgPerson').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+    }
+    function wgSaveSex() {
+      var list = Object.keys(WG.sex).map(function (n) { return { name: n, sex: WG.sex[n] }; }); if (!list.length) return;
+      $('wgMsg').innerHTML = '<div class="run">性別を保存しています...</div>';
+      call('adminWageSex', [PIN, DEVICE, WG.year, list], function (r) { WG.info = r; WG.sex = {}; wgRender(); $('wgMsg').innerHTML = '<div class="ok">' + list.length + '人の性別を保存しました。</div>'; },
+        function (m) { $('wgMsg').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+    }
+    function wgPrint() {
+      var r = WG.cur; if (!r) return;
+      var rows = r.rows, w = window.open('', '_blank'); if (!w) return;
+      w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>賃金台帳 ' + esc(r.name) + '</title><style>body{font-family:"Yu Gothic UI",Meiryo,sans-serif;margin:6mm;font-size:9.5px}' +
+        'h3{margin:0 0 4px;font-size:13px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #888;padding:2px 3px;text-align:right;white-space:nowrap}td:first-child,th:first-child{text-align:left}' +
+        'th{background:#eef2f8;white-space:normal}tr:last-child td{font-weight:bold}@page{size:A4 landscape;margin:6mm}</style></head><body>' +
+        '<h3>' + esc(rows[1] && rows[1][0] || '') + '</h3><div style="margin-bottom:4px">氏名：<b>' + esc(r.name) + '</b>　性別：' + esc(rows[0] && rows[0][3] || '') + '</div>' +
+        $('wgTbl').outerHTML + '</body></html>');
+      w.document.close(); w.focus(); setTimeout(function () { w.print(); }, 300);
+    }
     // ── 残業チェック（シートは開かない。この画面で作る・見る・印刷する） ──
     var OC = { init: false, data: null, busy: false };
     function ocOpen() {
