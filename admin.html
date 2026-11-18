@@ -381,6 +381,7 @@
       <a href="#" data-more="bill"><i data-icon="bill"></i><span>会社別請求<small>請求額（スマホと同じ画面）</small></span></a>
       <a href="#" data-more="ot"><i data-icon="ot"></i><span>残業<small>定時後残業</small></span></a>
       <a href="#" data-more="chart"><i data-icon="chart"></i><span>グラフ<small>売上・人件費</small></span></a>
+      <a href="#" data-more="nsk" id="moreNsk" class="hidden"><i data-icon="chart"></i><span>NSK<small>別の会社（暗証番号をもう一度入れる）</small></span></a>
       <a href="#" data-more="tools"><i data-icon="gear"></i><span>ツール<small>バックアップ・備考・予定</small></span></a>
       <a href="#" data-more="wage"><i data-icon="bill"></i><span>賃金台帳<small>1人1枚・5年保存</small></span></a>
       <a href="#" data-more="otc"><i data-icon="ot"></i><span>残業チェック<small>月45時間・年360時間の確認</small></span></a>
@@ -983,6 +984,7 @@
           box.classList.toggle('hidden', !w.length);
         })();
         $('who').textContent = 'ログイン中：' + res.name;
+        $('moreNsk').classList.toggle('hidden', !res.nsk);
         $('login').classList.add('hidden'); $('app').classList.remove('hidden');
         renderHome(res.home);
         // 月払いなどの画面を、ホームを見ている間に裏で読み込んでおく（押したときにすぐ出るように）
@@ -1012,7 +1014,8 @@
     // ── メニュー ──
     var VIEW_URL = {
       pay: function () { return payUrl(''); }, bill: function () { return payUrl('bill'); },
-      ot: function () { return payUrl('ot'); }, chart: function () { return payUrl('chart'); }
+      ot: function () { return payUrl('ot'); }, chart: function () { return payUrl('chart'); },
+      nsk: function () { return payUrl('nsk'); }   // NSK（見てよい人だけメニューに出る。開くと暗証番号をもう一度聞く）
     };
     function payUrl(view) {
       var t = getToken() || (String(PIN).indexOf('t:') === 0 ? PIN : '');
@@ -3037,7 +3040,7 @@
       call('adminAdminsGet', [PIN, DEVICE], function (r) { if (ST.name !== '管理者') return; ST.adm = r; stAdmDraw(''); }, function (e) { stMsg(e, 'err'); });
     }
     function stAdmDraw(form) {
-      var r = ST.adm, h = '<div class="st-wrap" style="max-height:none"><table class="st-tbl"><thead><tr><th>名前</th><th>状態</th><th>暗証番号</th><th>確認コードの送り先</th><th>覚えている端末</th><th>NSK（スマホ）</th><th></th></tr></thead><tbody>' +
+      var r = ST.adm, h = '<div class="st-wrap" style="max-height:none"><table class="st-tbl"><thead><tr><th>名前</th><th>状態</th><th>暗証番号</th><th>確認コードの送り先</th><th>覚えている端末</th><th>NSK</th><th></th></tr></thead><tbody>' +
         r.admins.map(function (a) {
           return '<tr><td style="padding:8px 10px"><b>' + esc(a.name) + '</b>' + (a.me ? '（自分）' : '') + '</td>' +
             '<td style="padding:8px 10px">' + (a.active ? '<span style="color:var(--ok);font-weight:bold">有効</span>' : '<span style="color:var(--text3)">止めている</span>') + '</td>' +
@@ -3056,11 +3059,11 @@
         '<div id="stAdmForm">' + (form || '') + '</div>' +
         '<p class="sub" style="margin-top:10px">暗証番号は、この画面には出しません。どの操作も、最後に<b>自分の暗証番号</b>を入れ直します（まちがいが続くと、ログインと同じようにしばらくロックします）。止めた人・番号を変えた人の「この端末で覚える」は取り消されます。名前は変えられません（変えたいときは、新しく足してから前の人を止めます）。<br>' +
         '<b>確認コード</b>：メールが入っている人は、暗証番号でログインするときに、そのメールに届く6けたのコードも入れます。「この端末で覚える」にした端末は、次から（90日間）コードはいりません。メールアドレスは画面には一部しか出しません。<br>' +
-        '<b>NSK</b>：「見られる」の人だけ、スマホの月払いの画面に「NSK」のタブが出ます。開くときに暗証番号をもう一度入れると、30分だけ見られます。パソコンの管理画面には出ません。</p>';
+        '<b>NSK</b>：「見られる」の人だけ見られます。スマホ（月払いの画面）は今までどおりすぐ見られます。パソコンは「その他 ▾」→「NSK」から、暗証番号をもう一度入れると30分だけ見られます。</p>';
       $('stAdm').innerHTML = h;
     }
     function stAdmForm(act, name) {
-      var title = act === 'add' ? '管理者を足す' : act === 'pin' ? '「' + name + '」の暗証番号を変える' : act === 'mail' ? '「' + name + '」の確認コードの送り先（メール）を変える' : act === 'stop' ? '「' + name + '」を止める' : act === 'nskOn' ? '「' + name + '」が NSK を見られるようにする（スマホの月払いの画面だけ）'
+      var title = act === 'add' ? '管理者を足す' : act === 'pin' ? '「' + name + '」の暗証番号を変える' : act === 'mail' ? '「' + name + '」の確認コードの送り先（メール）を変える' : act === 'stop' ? '「' + name + '」を止める' : act === 'nskOn' ? '「' + name + '」が NSK を見られるようにする'
         : act === 'nskOff' ? '「' + name + '」が NSK を見られないようにする' : '「' + name + '」を有効にもどす';
       var inp = 'padding:7px 10px;border:1px solid var(--line);border-radius:8px';
       var f = '<div class="panel" style="margin-top:10px;padding:14px 16px;border:2px solid var(--brand)"><b>' + esc(title) + '</b><div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;align-items:flex-end">' +
