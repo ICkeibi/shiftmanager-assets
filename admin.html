@@ -2547,7 +2547,7 @@
           $('blMsg').innerHTML = '<div class="msg" style="background:var(--bg);color:var(--text2)">' + esc(label) + ' はまだ計算していません。「会社別の請求額を出す」を押してください（1〜2分）。</div>';
           return;
         }
-        BL.data = r.data; BL.savedAt = r.at; BL.changed = r.changed || [];
+        BL.data = r.data; BL.savedAt = r.at; BL.changed = r.changed || []; invSetCo(r.co || (r.data && r.data.co));
         $('blMsg').innerHTML = '';
         $('blRun').textContent = '最新にする（出勤簿から計算し直す）';
         blRender();
@@ -2564,7 +2564,7 @@
       $('blMsg').innerHTML = '<div class="msg" style="background:var(--primary-bg);color:var(--primary)">出勤簿を読んで計算しています...（1〜2分）</div>';
       $('blBody').innerHTML = '';
       call('adminBilling', [PIN, DEVICE, label], function (r) {
-        b.disabled = false; BL.busy = false; BL.data = r; BL.savedAt = r.savedAt || 0; BL.changed = []; BL.fresh = true;
+        b.disabled = false; BL.busy = false; BL.data = r; BL.savedAt = r.savedAt || 0; BL.changed = []; BL.fresh = true; invSetCo(r.co);
         $('blMsg').innerHTML = '';
         if (r.savedAt) b.textContent = '最新にする（出勤簿から計算し直す）';
         blRender();
@@ -2687,11 +2687,10 @@
     // ── 請求書（現場ごとにA4横1枚。今までのExcelの請求書と同じ形） ──
     //  ・数量・単価は「請求単価」シートと出勤簿から（請求集計シートと同じ数）。消費税は現場ごとに10%（切り捨て）
     //  ・工事件名・施工場所・工期・工事概要・宛名は「請求書の項目」シート。ここで直して「保存」すると次の月も同じものが出る
-    var INV_CO = {
-      licence: '東京都公安委員会認定第30004751号', reg: '登録番号　　T6-0106-0106-1871', zip: '130-0022',
-      addr: '東京都墨田区江東橋2-2-14 東神ビル303号', tel: '03-5655-9512', fax: '03-5655-9513',
-      bank: '東京東信用金庫 錦糸町支店', acType: '普通', acNo: '3762471', acName: 'アイシーケイビホショウ（カ'
-    };
+    //  ・会社の情報（認定番号・登録番号・住所・電話・振込先）は、この画面（公開されている）には書かない。
+    //    ログインしたあと、請求額といっしょに Apps Script（請求額.gs の BL_CO）から受け取る
+    var INV_CO = { licence: '', reg: '', zip: '', addr: '', tel: '', fax: '', bank: '', acType: '', acNo: '', acName: '' };
+    function invSetCo(co) { if (co && typeof co === 'object') Object.keys(INV_CO).forEach(function (k) { if (co[k] != null) INV_CO[k] = String(co[k]); }); }
     var INV_NOTES = ['※残業時間が４時間を超過する場合は当該の日勤・夜勤をご請求申し上げます。',
       '※上番後中止の場合、もしくは前日の連絡がなく中止の場合は半日分の請求', '　 といたします。', '※福利厚生を含む。'];
     // 宛名：「請求書の項目」G列 → 「請求単価」N列 → A列（(株)は株式会社に）
@@ -3064,6 +3063,11 @@
       return { html: html, labels: labels };
     }
     function invPrint(cis, mode) {
+      // 会社の情報（振込先など）がまだ届いていない＝請求額.gs が古い。そのまま印刷すると空欄の請求書になるので止める
+      if (mode !== 'dz' && !INV_CO.acNo) {
+        alert('請求書に出す会社の情報（住所・振込先など）が読めていません。\n出勤確認の Apps Script の「請求額.gs」を新しくして「新バージョン」でデプロイしたあと、「最新にする」を押してください。');
+        return;
+      }
       var html = invBuild(cis, mode).html;
       var old = $('invFrame');
       if (old) old.remove();
