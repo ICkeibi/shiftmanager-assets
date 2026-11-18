@@ -3037,13 +3037,16 @@
       call('adminAdminsGet', [PIN, DEVICE], function (r) { if (ST.name !== '管理者') return; ST.adm = r; stAdmDraw(''); }, function (e) { stMsg(e, 'err'); });
     }
     function stAdmDraw(form) {
-      var r = ST.adm, h = '<div class="st-wrap" style="max-height:none"><table class="st-tbl"><thead><tr><th>名前</th><th>状態</th><th>暗証番号</th><th>確認コードの送り先</th><th>覚えている端末</th><th></th></tr></thead><tbody>' +
+      var r = ST.adm, h = '<div class="st-wrap" style="max-height:none"><table class="st-tbl"><thead><tr><th>名前</th><th>状態</th><th>暗証番号</th><th>確認コードの送り先</th><th>覚えている端末</th><th>NSK（スマホ）</th><th></th></tr></thead><tbody>' +
         r.admins.map(function (a) {
           return '<tr><td style="padding:8px 10px"><b>' + esc(a.name) + '</b>' + (a.me ? '（自分）' : '') + '</td>' +
             '<td style="padding:8px 10px">' + (a.active ? '<span style="color:var(--ok);font-weight:bold">有効</span>' : '<span style="color:var(--text3)">止めている</span>') + '</td>' +
             '<td style="padding:8px 10px">' + (a.weak ? '<span style="color:var(--over);font-weight:bold">短い（変えてください）</span>' : '<span style="color:var(--ok)">OK</span>') + '</td>' +
             '<td style="padding:8px 10px">' + (a.mail ? esc(a.mail) : '<span style="color:var(--over);font-weight:bold">未登録</span>') + '</td>' +
-            '<td style="padding:8px 10px">' + a.devices + '台</td><td style="padding:6px 10px;text-align:right;white-space:nowrap">' +
+            '<td style="padding:8px 10px">' + a.devices + '台</td>' +
+            '<td style="padding:6px 10px;white-space:nowrap">' + (a.nsk ? '<b style="color:var(--ok)">見られる</b> ' : '<span style="color:var(--text3)">見られない</span> ') +
+              '<button type="button" class="btn" style="padding:3px 8px;font-size:12px" data-adm="' + (a.nsk ? 'nskOff' : 'nskOn') + '" data-n="' + esc(a.name) + '">' + (a.nsk ? '外す' : '見られるにする') + '</button></td>' +
+            '<td style="padding:6px 10px;text-align:right;white-space:nowrap">' +
             '<button type="button" class="btn" data-adm="pin" data-n="' + esc(a.name) + '">番号を変える</button> ' +
             '<button type="button" class="btn" data-adm="mail" data-n="' + esc(a.name) + '">メールを変える</button> ' +
             (a.me ? '' : a.active ? '<button type="button" class="btn" style="color:var(--over);border-color:var(--over)" data-adm="stop" data-n="' + esc(a.name) + '">止める</button>' : '<button type="button" class="btn" data-adm="start" data-n="' + esc(a.name) + '">有効にもどす</button>') +
@@ -3052,19 +3055,22 @@
         '<div style="margin-top:10px"><button type="button" class="btn" data-adm="add">＋ 管理者を足す</button></div>' +
         '<div id="stAdmForm">' + (form || '') + '</div>' +
         '<p class="sub" style="margin-top:10px">暗証番号は、この画面には出しません。どの操作も、最後に<b>自分の暗証番号</b>を入れ直します（まちがいが続くと、ログインと同じようにしばらくロックします）。止めた人・番号を変えた人の「この端末で覚える」は取り消されます。名前は変えられません（変えたいときは、新しく足してから前の人を止めます）。<br>' +
-        '<b>確認コード</b>：メールが入っている人は、暗証番号でログインするときに、そのメールに届く6けたのコードも入れます。「この端末で覚える」にした端末は、次から（90日間）コードはいりません。メールアドレスは画面には一部しか出しません。</p>';
+        '<b>確認コード</b>：メールが入っている人は、暗証番号でログインするときに、そのメールに届く6けたのコードも入れます。「この端末で覚える」にした端末は、次から（90日間）コードはいりません。メールアドレスは画面には一部しか出しません。<br>' +
+        '<b>NSK</b>：「見られる」の人だけ、スマホの月払いの画面に「NSK」のタブが出ます。開くときに暗証番号をもう一度入れると、30分だけ見られます。パソコンの管理画面には出ません。</p>';
       $('stAdm').innerHTML = h;
     }
     function stAdmForm(act, name) {
-      var title = act === 'add' ? '管理者を足す' : act === 'pin' ? '「' + name + '」の暗証番号を変える' : act === 'mail' ? '「' + name + '」の確認コードの送り先（メール）を変える' : act === 'stop' ? '「' + name + '」を止める' : '「' + name + '」を有効にもどす';
+      var title = act === 'add' ? '管理者を足す' : act === 'pin' ? '「' + name + '」の暗証番号を変える' : act === 'mail' ? '「' + name + '」の確認コードの送り先（メール）を変える' : act === 'stop' ? '「' + name + '」を止める' : act === 'nskOn' ? '「' + name + '」が NSK を見られるようにする（スマホの月払いの画面だけ）'
+        : act === 'nskOff' ? '「' + name + '」が NSK を見られないようにする' : '「' + name + '」を有効にもどす';
       var inp = 'padding:7px 10px;border:1px solid var(--line);border-radius:8px';
       var f = '<div class="panel" style="margin-top:10px;padding:14px 16px;border:2px solid var(--brand)"><b>' + esc(title) + '</b><div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;align-items:flex-end">' +
         (act === 'add' ? '<label>名前<br><input id="admN" maxlength="30" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"></label>' : '') +
         (act === 'add' || act === 'pin' ? '<label>新しい暗証番号<br><input id="admP1" type="password" autocomplete="new-password" maxlength="20" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"></label><label>もう一度<br><input id="admP2" type="password" autocomplete="new-password" maxlength="20" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"></label>' : '') +
         (act === 'add' || act === 'mail' ? '<label>メールアドレス（確認コードの送り先）<br><input id="admM" type="email" autocomplete="off" maxlength="100" style="' + inp + ';min-width:240px"></label><label>もう一度<br><input id="admM2" type="email" autocomplete="off" maxlength="100" style="' + inp + ';min-width:240px"></label>' : '') +
         '<label>自分の暗証番号<br><input id="admMe" type="password" autocomplete="current-password" maxlength="64" style="' + inp + '"></label>' +
-        '<button type="button" class="btn main" data-admgo="' + act + '" data-n="' + esc(name || '') + '">' + (act === 'add' ? '足す' : act === 'pin' || act === 'mail' ? '変える' : act === 'stop' ? '止める' : 'もどす') + '</button><button type="button" class="btn" data-admx>やめる</button></div>' +
-        '<p class="sub" style="margin:8px 0 0">' + (act === 'mail' ? '入れたメールに、ログインのときの確認コードが届きます。まちがえると届かないので、2回入れて確かめます。自分のメールは空にできません。'
+        '<button type="button" class="btn main" data-admgo="' + act + '" data-n="' + esc(name || '') + '">' + (act === 'add' ? '足す' : act === 'pin' || act === 'mail' ? '変える' : act === 'stop' ? '止める' : act === 'nskOn' ? '見られるにする' : act === 'nskOff' ? '外す' : 'もどす') + '</button><button type="button" class="btn" data-admx>やめる</button></div>' +
+        '<p class="sub" style="margin:8px 0 0">' + (act === 'nskOn' || act === 'nskOff' ? 'NSKは別の会社の数字です。見られるのは、ここで「見られる」にした人だけです。'
+          : act === 'mail' ? '入れたメールに、ログインのときの確認コードが届きます。まちがえると届かないので、2回入れて確かめます。自分のメールは空にできません。'
           : '暗証番号は、<b>英字と数字の両方を入れて8〜20文字</b>（例：ab12cd34 のような形。これは例なので使わないでください）。ほかの人と同じ番号は使えません。') + '</p></div>';
       stAdmDraw(f);
       var first = $('admN') || $('admP1') || $('admMe'); if (first) first.focus();
