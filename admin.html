@@ -2150,7 +2150,7 @@
           '<span class="note" style="margin-left:8px">今までに支給した分だけで計算します。各人の年税額（D22）は変えません。何度でもできます。</span></div><div id="nkJobTrial"></div>' +
           nkCalcHtml(g.trial, '試し') +
           '<h3 style="margin:14px 0 0;font-size:15px">本番の計算</h3>' +
-          '<div style="margin-top:4px"><button class="btn" data-nkjob="final" style="padding:4px 12px;font-size:12px">本番の計算をする</button>' +
+          '<div style="margin-top:4px"><button class="btn main" data-nkjob="final" style="padding:4px 12px;font-size:12px">本番の計算をする</button>' +
           '<span class="note" style="margin-left:8px">12月支給の分を記録してから押します。源泉徴収簿の各人の年税額（D22）に書きます。</span></div><div id="nkJobFinal"></div>' +
           nkCalcHtml(g.final, '本番') +
           '<h3 style="margin:14px 0 0;font-size:15px">申告書の中身を入れる</h3>' +
@@ -2428,7 +2428,7 @@
         YY_FLOW.map(function (f, i) { return '<tr><td style="width:24px">' + (i + 1) + '</td><td style="white-space:nowrap;width:230px"><b>' + esc(f[0]) + '</b></td><td>' + esc(f[1]) + '</td></tr>'; }).join('') +
         '</table><div class="note" style="margin-top:4px">弥生には、扶養や保険料をCSVで取り込む方法がありません（従業員情報のCSVで入るのは前職・障害者・寡婦などだけ）。なので申告書の中身は手で入れます。入れる数字は、この画面の「申告書の中身を入れる」で入れた数字と同じです。</div></details>';
       return '<div class="panel"><div class="ph"><span class="pi"><span class="dot"></span>弥生給与Nextに入れる（源泉徴収票）</span>' +
-        '<span class="noprint"><button class="btn" id="yyLoad" style="padding:4px 10px;font-size:12px">' + (YY.data ? '読み直す' : '入れる数字を出す') + '</button></span></div>' +
+        '<span class="noprint"><button class="btn main" id="yyLoad" style="padding:4px 10px;font-size:12px">' + (YY.data ? '読み直す' : '入れる数字を出す') + '</button></span></div>' +
         '<div class="res">' + flow + '<div id="yyMsg"></div><div id="yyBody">' + (YY.data ? yyBodyHtml(YY.data) : '') + '</div></div></div>';
     }
     function yyVal(v) {
