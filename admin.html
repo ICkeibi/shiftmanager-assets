@@ -378,7 +378,7 @@
       <div class="page hidden" id="pSettings">
         <div class="panel">
           <div class="ph"><span class="pi"><span class="dot"></span>設定</span></div>
-          <div class="st-tabs" id="stTabs"><button type="button" data-st="請求単価" class="on">請求単価</button><button type="button" data-st="現場の振り分け">現場の振り分け</button><button type="button" data-st="支払区分">支払区分</button><button type="button" data-st="注意ワード">注意ワード</button><button type="button" data-st="名前対応">名前対応</button><button type="button" data-st="月一覧">月一覧</button><button type="button" data-st="予定">予定</button><button type="button" data-st="管理者">管理者</button></div>
+          <div class="st-tabs" id="stTabs"><button type="button" data-st="請求単価" class="on">請求単価</button><button type="button" data-st="現場の振り分け">現場の振り分け</button><button type="button" data-st="支払区分">支払区分</button><button type="button" data-st="注意ワード">注意ワード</button><button type="button" data-st="名前対応">名前対応</button><button type="button" data-st="打刻対応">打刻対応</button><button type="button" data-st="月一覧">月一覧</button><button type="button" data-st="予定">予定</button><button type="button" data-st="管理者">管理者</button></div>
           <div id="stAdm" class="hidden"></div>
           <p class="sub" id="stNote"></p>
           <div class="st-bar">
@@ -1882,7 +1882,7 @@
     function dkShowFile(url, file) {
       $('dkUrl').value = url || '';
       $('dkFile').innerHTML = url
-        ? '読むファイル：<b>' + esc(file) + '</b>（<a href="' + esc(url) + '" target="_blank" rel="noopener">開く ↗</a>）。変えるときだけ、下にURLを貼って「保存」を押します。'
+        ? '読むファイル：<b>' + esc(file) + '</b>。変えるときだけ、下にURLを貼って「保存」を押します。'
         : '<b style="color:#c5221f">まだ入っていません。</b>勤怠管理システムのスプレッドシートを開き、アドレス欄のURLを下に貼って「保存」を押してください。';
     }
     function dkBusy(on) {
@@ -1909,8 +1909,8 @@
           (only && p.unchecked ? '　本人の確認（✓）がまだの <b>' + p.unchecked + '件</b>は反映しません。' : '');
         var unk = p.unknown.length
           ? '<div class="msg err" style="margin-top:6px">勤怠管理表の氏名が決まっていない社員IDが <b>' + p.unknown.length + '人</b>あります（この人の打刻は反映しません）：' +
-            esc(p.unknown.join('、')) + '<br><a href="' + esc(p.mapUrl) + '" target="_blank" rel="noopener">「打刻対応」シートを開く ↗</a>（赤い行のC列に、勤怠管理表のシート名を入れてください）</div>'
-          : '<div style="margin-top:4px"><a href="' + esc(p.mapUrl) + '" target="_blank" rel="noopener">「打刻対応」シートを開く ↗</a>（黄色の行は自動で入れた氏名です。合っているか確認してください）</div>';
+            esc(p.unknown.join('、')) + '<br><span data-stgo="打刻対応" role="button" tabindex="0" style="color:var(--primary);text-decoration:underline;cursor:pointer">設定の打刻対応</span>で、赤い行の勤怠管理表の氏名を ▼ から選んでください。</div>'
+          : '<div style="margin-top:4px"><span data-stgo="打刻対応" role="button" tabindex="0" style="color:var(--primary);text-decoration:underline;cursor:pointer">設定の打刻対応</span>（黄色の行は自動で入れた氏名です。合っているか確認してください）</div>';
         if (what === 'check') { dkBusy(false); out.innerHTML = '<div class="ok">' + info + '</div>' + unk; return; }
         var msg = (p.resume ? '前回の続きから反映します（' + p.resume + ' / ' + p.people + ' 人は済み）。\n\n' : '') +
           '「' + p.file + '」の ' + p.people + ' 人・' + p.items + ' 件に、' + p.label + ' の打刻を書きます。\n' +
@@ -2404,7 +2404,7 @@
     function yen(n) { return (n < 0 ? '-¥' : '¥') + Math.abs(Math.round(n)).toLocaleString('ja-JP'); }
     // ── 設定：請求単価・現場の振り分けを、画面で見る・直す（保存を押したときだけシートに書く） ──
     var ST = { name: '請求単価', data: null, edits: {}, adds: [], dels: {}, busy: false, init: false };
-    var ST_SHEETS = ['請求単価', '現場の振り分け', '支払区分', '注意ワード', '名前対応', '月一覧', '予定'];   // 画面で直せるシート（ホームの「設定」からも開く）
+    var ST_SHEETS = ['請求単価', '現場の振り分け', '支払区分', '注意ワード', '名前対応', '打刻対応', '月一覧', '予定'];   // 画面で直せるシート（ホームの「設定」からも開く）
     // ホームの「設定」から：そのシートのタブで設定ページを開く（「管理者」のタブも開ける）
     async function stGo(name) {
       if (ST_SHEETS.indexOf(name) < 0 && name !== '管理者') return;
