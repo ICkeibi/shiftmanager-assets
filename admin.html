@@ -641,7 +641,7 @@
       <!-- 年末調整 -->
       <div class="page hidden" id="pNencho">
         <div class="toolbar">
-          <div><h2 id="nkTitle">年末調整</h2><div class="sub">提出の状況と計算の結果を見る画面です（読むだけ）。チェック表を作る・計算するのは、今までどおり勤怠管理表のメニュー「年末調整」から行います。</div></div>
+          <div><h2 id="nkTitle">年末調整</h2><div class="sub">提出の状況と計算の結果を見る画面です。チェック表を作る・試しの計算・本番の計算も、この画面のボタンでできます。</div></div>
           <div class="noprint"><button class="btn" id="nkReload">最新にする（読み直す）</button></div>
         </div>
         <div class="noprint" id="nkDone" style="margin:0 0 10px"></div>
@@ -2063,11 +2063,46 @@
         }, function (m) { NK.busy = false; b.disabled = false; $('gsMsg').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
       }, function (m) { NK.busy = false; b.disabled = false; $('gsMsg').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
     });
+    // チェック表を作る・試しの計算・本番の計算（勤怠管理表のメニュー「年末調整」と同じ）
+    $('pNencho').addEventListener('click', async function (e) {
+      var b = e.target.closest('button[data-nkjob]');
+      if (!b || NK.busy) return;
+      var job = b.getAttribute('data-nkjob');
+      var box = $(job === 'check' ? 'nkJobCheck' : job === 'trial' ? 'nkJobTrial' : 'nkJobFinal');
+      var ask = job === 'check' ? '提出チェック表を作り直します（入れたチェックやメモは消えません）。よろしいですか？'
+        : job === 'trial' ? '試しの計算をします（本番の数字は変えません）。よろしいですか？'
+        : '本番の計算をします。\n源泉徴収簿の各人の「年末調整で決まった年税額」（D22）に書き込みます。\n12月支給の分が全員記録されているか、先に確かめてください。\n\n計算しますか？';
+      if (!await askOk(ask)) return;
+      NK.busy = true;
+      document.querySelectorAll('#pNencho button[data-nkjob]').forEach(function (x) { x.disabled = true; });
+      box.innerHTML = '<div class="run">' + (job === 'check' ? 'チェック表を作っています...（30秒ほど）' : '計算しています...（1分ほど。この画面のままお待ちください）') + '</div>';
+      var fail = function (m) {
+        NK.busy = false;
+        document.querySelectorAll('#pNencho button[data-nkjob]').forEach(function (x) { x.disabled = false; });
+        box.innerHTML = '<div class="msg err">' + esc(m) + '</div>';
+      };
+      var done = function (text) {
+        NK.busy = false;
+        box.innerHTML = '<div class="ok">' + text + '表を新しくしています...</div>';
+        NK.flash = text;
+        nkOpen(true);
+      };
+      if (job === 'check') {
+        call('adminNenchoChecklist', [PIN, DEVICE], function (r) {
+          done(esc(r.label) + 'の勤怠管理表に、' + r.n + '人のチェック表を作りました。');
+        }, fail);
+      } else {
+        call('adminNenchoCalc', [PIN, DEVICE, job === 'trial'], function (r) {
+          done((r.trial ? '試しの' : '本番の') + '計算をしました（' + r.n + '人）。' + (r.memo ? 'メモ（確認が要る人）' + r.memo + '人。' : ''));
+        }, fail);
+      }
+    });
     function nkRender(r) {
       $('nkTitle').textContent = '年末調整（' + r.wareki + '）';
-      $('nkMsg').innerHTML = (NK.at ? savedNote(NK.at, NK.changed, NK.fresh, '読んだ') : '') +
-        '<div class="note" style="margin-bottom:8px">' + esc(r.madeAt) + ' 時点。計算や提出チェックを勤怠管理表で直したら「最新にする」を押してください。</div>';
-      NK.fresh = false;
+      $('nkMsg').innerHTML = (NK.flash ? '<div class="ok" style="margin-bottom:8px">✓ ' + NK.flash + '</div>' : '') +
+        (NK.at ? savedNote(NK.at, NK.changed, NK.fresh, '読んだ') : '') +
+        '<div class="note" style="margin-bottom:8px">' + esc(r.madeAt) + ' 時点。</div>';
+      NK.fresh = false; NK.flash = '';
       // 流れ
       var steps = '<div class="panel"><div class="ph"><span class="pi"><span class="dot"></span>流れ（今どこか）</span></div><div class="res"><table>' +
         r.steps.map(function (s, i) {
@@ -2078,23 +2113,24 @@
       // 提出
       var c = r.check, check;
       if (!c.found) {
-        check = '<div class="msg err">勤怠管理表に「年末調整 提出チェック」シートがありません。勤怠管理表のメニュー「年末調整の提出チェック表を作る」を押してください。' +
-          '　<a href="' + esc(c.url) + '" target="_blank" rel="noopener">勤怠管理表を開く ↗</a></div>';
+        check = '<div class="msg err">提出チェック表がまだありません。下の「チェック表を作る」を押してください。</div>';
       } else {
         var rest = c.total - c.both;
         check = '<div class="' + (rest ? 'msg err' : 'ok') + '">対象（甲欄）<b>' + c.total + '人</b>のうち、' + (c.hasPrevCol ? '①②と前職票がそろった人' : '①②とも提出') + ' <b>' + c.both + '人</b>・<b>まだ ' + rest + '人</b>' +
           (c.hasPrevCol && c.prevMissing ? '（うち前職票が空欄 ' + c.prevMissing + '人）' : '') + '　' +
           '中身を確認した人 <b>' + c.checked + '人</b>' + (c.outside ? '　（対象外：退職・乙欄・日雇い ' + c.outside + '人）' : '') +
           (c.noAdjust && c.noAdjust.length ? '　（前職票がもらえず本人が確定申告 ' + c.noAdjust.length + '人：' + esc(c.noAdjust.join('、')) + '）' : '') +
-          '　<a href="' + esc(c.url) + '" target="_blank" rel="noopener">チェック表を開く ↗</a>（' + esc(c.label) + 'の勤怠管理表）</div>' +
+          '　（チェック表は' + esc(c.label) + 'の勤怠管理表にあります）</div>' +
           (c.missing.length ? '<details style="margin-top:6px" open><summary>まだ出していない人（' + c.missing.length + '人）</summary>' +
             issueTable(c.missing.map(function (m) { return [m.name, m.need, m.memo]; }), ['氏名', 'まだの書類', 'メモ']) + '</details>' : '') +
           (c.unchecked.length ? '<div class="note" style="margin-top:6px">①②は出たが、中身をまだ確認していない人：' + esc(c.unchecked.join('、')) + '</div>' : '');
       }
+      check += '<div style="margin-top:8px"><button class="btn" data-nkjob="check" style="padding:4px 12px;font-size:12px">' + (c.found ? 'チェック表を更新する' : 'チェック表を作る') + '</button>' +
+        '<span class="note" style="margin-left:8px">いちばん新しい勤怠管理表の社員から作ります。入れたチェックやメモは消えません（新しく入った人が足されます）。</span></div><div id="nkJobCheck"></div>';
       // 源泉徴収簿・計算
       var g = r.gensen, calc;
       if (!g.found) {
-        calc = '<div class="msg err">「' + esc(g.name) + '」がまだありません。各月の勤怠管理表で「源泉徴収簿に今月分を記録」を押すと作られます。</div>';
+        calc = '<div class="msg err">「' + esc(g.name) + '」がまだありません。下の「支給月ごとの記録」で「記録する」を押すと作られます。</div>' + nkSourcesHtml(g);
       } else {
         calc = '<div>支給した月の記録（' + g.people + '人分）：' + g.months.map(function (x) {
           return '<span style="display:inline-block;margin:2px 3px;padding:2px 8px;border-radius:10px;font-size:12px;' +
@@ -2102,8 +2138,14 @@
         }).join('') + '</div>' +
           '<div class="note" style="margin-top:4px">月の名前は支給した月です（10月分の給料を11月に払えば「11月」）。試しの計算の前に、支給した月が全部 ✓ になっているか確かめます。</div>' +
           nkSourcesHtml(g) +
-          '<h3 style="margin:14px 0 0;font-size:15px">試しの計算</h3>' + nkCalcHtml(g.trial, '試し') +
-          '<h3 style="margin:14px 0 0;font-size:15px">本番の計算</h3>' + nkCalcHtml(g.final, '本番');
+          '<h3 style="margin:14px 0 0;font-size:15px">試しの計算</h3>' +
+          '<div style="margin-top:4px"><button class="btn" data-nkjob="trial" style="padding:4px 12px;font-size:12px">試しの計算をする</button>' +
+          '<span class="note" style="margin-left:8px">今までに支給した分だけで計算します。各人の年税額（D22）は変えません。何度でもできます。</span></div><div id="nkJobTrial"></div>' +
+          nkCalcHtml(g.trial, '試し') +
+          '<h3 style="margin:14px 0 0;font-size:15px">本番の計算</h3>' +
+          '<div style="margin-top:4px"><button class="btn" data-nkjob="final" style="padding:4px 12px;font-size:12px">本番の計算をする</button>' +
+          '<span class="note" style="margin-left:8px">12月支給の分を記録してから押します。源泉徴収簿の各人の年税額（D22）に書きます。</span></div><div id="nkJobFinal"></div>' +
+          nkCalcHtml(g.final, '本番');
       }
       // 用紙：国税庁のPDF（毎年新しくなるので、いつも国税庁から出す。名前などは書き込まない＝個人情報を画面に出さない）
       //  国税庁のファイル名は「年＋bun_番号.pdf」（入力用は _input）。記入例は nencho＋年 のフォルダ。年が変わっても自動で新しい年になる
@@ -2131,8 +2173,7 @@
         '<div class="note" style="margin-top:4px">PDFを開いて、ブラウザの印刷（Ctrl+P）で人数分を印刷します。用紙は毎年変わるので、前の年の紙は使わないでください。</div></div></div>';
       $('nkBody').innerHTML = steps + forms +
         '<div class="panel"><div class="ph"><span class="pi"><span class="dot"></span>書類の提出</span></div><div class="res">' + check + '</div></div>' +
-        '<div class="panel"><div class="ph"><span class="pi"><span class="dot"></span>源泉徴収簿と計算の結果</span>' +
-        '<a class="btn" href="' + esc(r.kintaiUrl) + '" target="_blank" rel="noopener" style="padding:4px 10px;font-size:12px">勤怠管理表を開く（計算はメニューから）↗</a></div><div class="res">' + calc + '</div></div>' +
+        '<div class="panel"><div class="ph"><span class="pi"><span class="dot"></span>源泉徴収簿と計算の結果</span></div><div class="res">' + calc + '</div></div>' +
         yyPanelHtml();
     }
 
@@ -2205,7 +2246,7 @@
       var tg = d.people.filter(function (p) { return p.kind.indexOf('対象外') < 0; });
       var head = '<div class="note" style="margin:8px 0 4px">' + esc(d.madeAt) + ' 時点。' +
         (d.calcSheet ? '申告書の中身と計算は「' + esc(d.calcSheet) + '」シートから。' + (d.calcSheet.indexOf('試し') >= 0 ? '<b style="color:#c5221f">まだ試しの計算です。本番の計算のあとに読み直してください。</b>' : '')
-          : '<b style="color:#c5221f">勤怠管理表で「年末調整を計算」をまだしていないので、申告書の中身が出ません。</b>') +
+          : '<b style="color:#c5221f">年末調整の計算（試しか本番）をまだしていないので、申告書の中身が出ません。</b>') +
         '</div>' +
         (d.noCode.length ? '<div class="msg err">弥生の従業員コード（勤怠管理表の社員シート E7）が見つからない人：' + esc(d.noCode.join('、')) + '。見比べは名前で行います。</div>' : '');
       var list = '<h3 style="margin:12px 0 0;font-size:15px">全員（源泉徴収票を出す人 ' + d.people.length + '人・うち年末調整 ' + tg.length + '人）</h3>' +
