@@ -382,6 +382,7 @@
       <a href="#" data-more="ot"><i data-icon="ot"></i><span>残業<small>定時後残業</small></span></a>
       <a href="#" data-more="chart"><i data-icon="chart"></i><span>グラフ<small>売上・人件費</small></span></a>
       <a href="#" data-more="nsk" id="moreNsk" class="hidden"><i data-icon="chart"></i><span>NSK<small>別の会社（暗証番号をもう一度入れる）</small></span></a>
+      <a href="#" data-more="log"><i data-icon="nencho"></i><span>操作の記録<small>誰が・いつ・何をしたか</small></span></a>
       <a href="#" data-more="tools"><i data-icon="gear"></i><span>ツール<small>バックアップ・備考・予定</small></span></a>
       <a href="#" data-more="wage"><i data-icon="bill"></i><span>賃金台帳<small>1人1枚・5年保存</small></span></a>
       <a href="#" data-more="otc"><i data-icon="ot"></i><span>残業チェック<small>月45時間・年360時間の確認</small></span></a>
@@ -423,7 +424,7 @@
               <div id="tasks"><div class="loading">読み込み中...</div></div>
             </div>
             <div class="panel">
-              <div class="ph"><span class="pi"><span class="dot"></span>設定（シートで入力するもの）</span></div>
+              <div class="ph"><span class="pi"><span class="dot"></span>設定（画面で直すもの）</span></div>
               <div id="settings"><div class="loading" style="padding:8px 0">読み込み中...</div></div>
             </div>
           </div>
@@ -719,6 +720,15 @@
         <div class="toolbar"><div><h2>ツール</h2><div class="sub">スプレッドシートのメニュー「出勤確認ツール」でしていた作業を、ここのボタンでできます。</div></div></div>
         <div id="tlMsg"></div>
         <div id="tlBody"><div class="loading">読み込み中...</div></div>
+      </div>
+      <!-- 操作の記録（アクセス記録。誰が・いつ・何をしたか。見るだけ） -->
+      <div class="page hidden" id="pLog">
+        <div class="toolbar"><div><h2>操作の記録</h2><div class="sub">誰が・いつ・何をしたか（ログイン・保存・書き込み・計算など）。新しいものが上です。見るだけで、直せません。</div></div>
+          <button class="btn" id="lgReload">最新にする</button></div>
+        <div class="st-bar"><input type="search" id="lgFind" placeholder="言葉でさがす（例：設定・書き込み・失敗）">
+          <select id="lgWho" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--text);font:inherit"><option value="">全員</option></select>
+          <label class="st-chk"><input type="checkbox" id="lgFail"> 失敗・まちがいだけ</label><span class="sp"></span><span id="lgCount" class="note"></span></div>
+        <div id="lgBody"><div class="loading">読み込み中...</div></div>
       </div>
       <!-- 賃金台帳（労務チェック.gs。「賃金台帳_○年」のファイルは開かずに、この画面で作る・見る・性別を入れる・印刷する） -->
       <div class="page hidden" id="pWage">
@@ -1052,6 +1062,8 @@
       if (where === 'wage') wgOpen();
       $('pTools').classList.toggle('hidden', where !== 'tools');
       if (where === 'tools') tlOpen();
+      $('pLog').classList.toggle('hidden', where !== 'log');
+      if (where === 'log') lgOpen(false);
       // 打刻の管理：打刻システムの管理者画面を、この中に出す（初めて押したときに読み込む）
       var dv = $('dakokuView');
       if (where === 'dakokuAdmin' && DAKOKU_URL) {
@@ -1072,7 +1084,7 @@
         v.classList.add('hidden');
       }
       // その他▾：中のものを開いているときは「その他」を光らせる
-      var inMore = !!VIEW_URL[where] || where === 'leave' || where === 'otc' || where === 'wage' || where === 'tools' || (where === 'nencho' && $('navNencho').classList.contains('hidden'));
+      var inMore = !!VIEW_URL[where] || where === 'leave' || where === 'otc' || where === 'wage' || where === 'tools' || where === 'log' || (where === 'nencho' && $('navNencho').classList.contains('hidden'));
       $('navMore').classList.toggle('on', inMore);
       Array.prototype.forEach.call(document.querySelectorAll('#moreMenu a[data-more]'), function (a) { a.classList.toggle('on', a.getAttribute('data-more') === where); });
       $('moreMenu').classList.add('hidden');
@@ -2041,7 +2053,7 @@
       }).join('');
       var none = (g.noSource || []).length
         ? '<div class="msg err" style="margin-top:6px">' + g.noSource.map(function (m) { return m + '月'; }).join('・') + ' に支給した分の勤怠管理表が、月一覧にありません。' +
-          '出勤確認マスターの「月一覧」に、その月（支給月の前の月）の行を足してください。A列に表示名（例：令和8年1月）、C列に年月（例：2026-01）、D列に勤怠管理表のURL。B列（出勤簿）は空のままで大丈夫です。</div>' : '';
+          '「設定」→「月一覧」で、その月（支給月の前の月）の行を足してください。表示名（例：令和8年1月）・年月（例：2026-01）・勤怠管理表のURLを入れます。出勤簿は空のままで大丈夫です。</div>' : '';
       var prev = g.firstPay > 1
         ? '<div class="note" style="margin-top:6px;color:#b06000">' + (g.firstPay - 1) + '月までに支給した分は前の会社の給料です。ここでは記録しません。' +
           '前の会社の源泉徴収票の「支払金額・社会保険料等の金額・源泉徴収税額」を、下の「申告書の中身を入れる」→「1人ずつ入れる」の「前職」の欄に入れてください（入れないと、返す額が多く出ます）。</div>' : '';
@@ -2787,6 +2799,40 @@
           (s.schedule ? '' : btn('scheduleSetup', '予定表を作る', true)) + (s.mail.on ? btn('mailOff', '毎朝のメールを止める') : btn('mailOn', '毎朝のメールを始める')));
       // NSK（別の会社）は、今の会社とは関係ないので、パソコンの管理画面には出さない（スマホの画面だけで見る）
     }
+    // ── 操作の記録（アクセス記録シートを読むだけ） ──
+    var LG = { rows: null, busy: false };
+    function lgOpen(force) {
+      if (LG.busy || (LG.rows && !force)) { if (LG.rows) lgDraw(); return; }
+      LG.busy = true; $('lgBody').innerHTML = '<div class="loading">読み込み中...</div>';
+      call('adminLogRead', [PIN, DEVICE], function (r) {
+        LG.busy = false; LG.rows = r.rows;
+        var sel = $('lgWho'), cur = sel.value;
+        sel.innerHTML = '<option value="">全員</option>' + r.names.map(function (n) { return '<option>' + esc(n) + '</option>'; }).join('');
+        sel.value = r.names.indexOf(cur) >= 0 ? cur : '';
+        lgDraw();
+      }, function (m) { LG.busy = false; $('lgBody').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+    }
+    function lgDraw() {
+      var q = $('lgFind').value.trim(), who = $('lgWho').value, fail = $('lgFail').checked;
+      var list = LG.rows.filter(function (r) {
+        if (who && r[1] !== who) return false;
+        if (fail && !/失敗|まちがい|間違|ロック/.test(r[2] + r[3])) return false;
+        return !q || (r.join(' ').indexOf(q) >= 0);
+      });
+      $('lgCount').textContent = list.length + '件' + (list.length > 500 ? '（上から500件を出しています。言葉でしぼってください）' : '');
+      $('lgBody').innerHTML = list.length ? '<div class="st-wrap"><table class="st-tbl"><thead><tr><th>日時</th><th>名前</th><th>操作</th><th>内容</th><th>端末</th></tr></thead><tbody>' +
+        list.slice(0, 500).map(function (r) {
+          var bad = /失敗|まちがい|間違|ロック/.test(r[2] + r[3]);
+          return '<tr' + (bad ? ' class="isred"' : '') + '>' + r.map(function (c, i) {
+            return '<td style="padding:6px 8px;' + (i === 0 ? 'white-space:nowrap;' : '') + (i === 4 ? 'color:var(--text3);font-size:12px' : '') + '">' + esc(c) + '</td>';
+          }).join('') + '</tr>';
+        }).join('') + '</tbody></table></div>' : '<div class="note">ありません</div>';
+    }
+    $('lgReload').addEventListener('click', function () { lgOpen(true); });
+    $('lgFind').addEventListener('input', function () { if (LG.rows) lgDraw(); });
+    $('lgWho').addEventListener('change', function () { if (LG.rows) lgDraw(); });
+    $('lgFail').addEventListener('change', function () { if (LG.rows) lgDraw(); });
+
     // ── 賃金台帳（ファイルは開かない。作る・1人ずつ見る・性別を入れる・印刷する） ──
     var WG = { init: false, info: null, year: 0, busy: false, sex: {}, cur: null };
     function wgOpen() {
@@ -3435,7 +3481,7 @@
     }
     async function invPrintAll() {
       var all = BL.data.companies.map(function (c, ci) { return ci; }).filter(function (ci) { return !BL.data.companies[ci].noRate; });
-      if (!await askOk(all.length + '社・' + all.reduce(function (t, ci) { return t + BL.data.companies[ci].sites.length; }, 0) + '現場の請求書と出面表を印刷します（現場ごとに 請求書A4横1枚＋出面表A4縦1枚）。\n工事件名などは「請求書の項目」シートに入っているものを使います。\n\n印刷しますか？')) return;
+      if (!await askOk(all.length + '社・' + all.reduce(function (t, ci) { return t + BL.data.companies[ci].sites.length; }, 0) + '現場の請求書と出面表を印刷します（現場ごとに 請求書A4横1枚＋出面表A4縦1枚）。\n工事件名などは、この画面で入れたものを使います。\n\n印刷しますか？')) return;
       invPrint(all, 'both');
     }
     // ── 出面表（現場ごとにA4縦1枚。今までのExcelの出面と同じ形） ──
