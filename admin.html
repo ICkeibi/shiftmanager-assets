@@ -218,6 +218,7 @@
     .st-tbl tr.isnew td { background: #fff8e1; }
     .st-tbl tr.isred td { background: #fce8e6; }
     @media (prefers-color-scheme: dark) { .st-tbl tr.isred td { background: #42201e; } }
+    .st-tbl tr.isred td.ch, .st-tbl tr.isnew td.ch { background: var(--warn-bg); }
     .st-tbl td select option { color: #1f2328; }
     .st-tbl tr.add td { background: var(--ok-bg); }
     .st-tbl tr.del td input { text-decoration: line-through; color: var(--text3); }
@@ -2012,7 +2013,10 @@
         NK.busy = false; NK.data = r.data; NK.at = r.at; NK.changed = r.changed || []; NK.fresh = false; nkRender(r.data);
       }, function () { read(); });
     }
-    $('nkReload').addEventListener('click', function () { nkOpen(true); });
+    $('nkReload').addEventListener('click', async function () {
+      if (typeof ckDirty === 'function' && ckDirty() && !await askOk('提出チェックに、保存していない変更があります。最新にすると消えます。よろしいですか？')) return;
+      nkOpen(true);
+    });
     function nkCalcHtml(c, label) {
       if (!c) return '<div class="note">まだ「' + label + '」の計算をしていません。</div>';
       return '<div class="ok" style="margin-top:6px">' + esc(c.sheet) + '：<b>' + c.rows.length + '人</b>。返す人 <b>' + c.nBack + '人・' + nkYen(c.back) + '</b>　' +
@@ -2125,8 +2129,10 @@
             issueTable(c.missing.map(function (m) { return [m.name, m.need, m.memo]; }), ['氏名', 'まだの書類', 'メモ']) + '</details>' : '') +
           (c.unchecked.length ? '<div class="note" style="margin-top:6px">①②は出たが、中身をまだ確認していない人：' + esc(c.unchecked.join('、')) + '</div>' : '');
       }
-      check += '<div style="margin-top:8px"><button class="btn" data-nkjob="check" style="padding:4px 12px;font-size:12px">' + (c.found ? 'チェック表を更新する' : 'チェック表を作る') + '</button>' +
-        '<span class="note" style="margin-left:8px">いちばん新しい勤怠管理表の社員から作ります。入れたチェックやメモは消えません（新しく入った人が足されます）。</span></div><div id="nkJobCheck"></div>';
+      check += '<div style="margin-top:8px">' + (c.found ? '<button class="btn main" id="ckOpenBtn" style="padding:4px 12px;font-size:12px;margin-right:6px">1人ずつチェックする</button>' : '') +
+        '<button class="btn" data-nkjob="check" style="padding:4px 12px;font-size:12px">' + (c.found ? 'チェック表を更新する' : 'チェック表を作る') + '</button>' +
+        '<span class="note" style="margin-left:8px">「更新する」は、いちばん新しい勤怠管理表の社員から作り直します。入れたチェックやメモは消えません（新しく入った人が足されます）。</span></div><div id="nkJobCheck"></div>' +
+        '<div id="ckBox"></div>';
       // 源泉徴収簿・計算
       var g = r.gensen, calc;
       if (!g.found) {
@@ -2175,7 +2181,117 @@
         '<div class="panel"><div class="ph"><span class="pi"><span class="dot"></span>書類の提出</span></div><div class="res">' + check + '</div></div>' +
         '<div class="panel"><div class="ph"><span class="pi"><span class="dot"></span>源泉徴収簿と計算の結果</span></div><div class="res">' + calc + '</div></div>' +
         yyPanelHtml();
+      if (CK.open) ckLoad();
     }
+
+    // ── 提出チェック表を画面でチェックする（シートは開かない）──
+    var CK = { open: false, d: null, orig: {}, busy: false, onlyTodo: false };
+    var CK_COLS = [['target', '対象', 'pick'], ['f1', '①扶養控除等', 'box'], ['f2', '②基礎控除など', 'box'], ['prev', '前職の源泉徴収票', 'pick'],
+      ['f3', '③保険料控除', 'box'], ['card', '控除証明書（ハガキ）', 'box'], ['f4', '④特定親族', 'box'], ['f5', '⑤住宅ローン', 'box'],
+      ['date', '受け取った日', 'date'], ['checked', '中身を確認した', 'box'], ['memo', 'メモ', 'text']];
+    function ckToday() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+    function ckLoad() {
+      var box = $('ckBox'); if (!box) return;
+      CK.open = true; CK.busy = true;
+      box.innerHTML = '<div class="loading" style="margin-top:8px">チェック表を読んでいます...</div>';
+      call('adminNenchoCheckRows', [PIN, DEVICE], function (r) {
+        CK.busy = false; CK.d = r; CK.orig = {};
+        r.rows.forEach(function (p) { CK.orig[p.name] = JSON.parse(JSON.stringify(p)); });
+        ckDraw();
+      }, function (m) { CK.busy = false; box.innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+    }
+    function ckTodo(p) { return p.target === '対象' && (!p.f1 || !p.f2 || !p.prev); }
+    function ckChanges() {
+      var out = [];
+      if (!CK.d) return out;
+      CK.d.rows.forEach(function (p) {
+        var o = CK.orig[p.name] || {};
+        CK_COLS.forEach(function (c) { if (CK.d.has[c[0]] && p[c[0]] !== o[c[0]]) out.push({ name: p.name, key: c[0], value: p[c[0]] }); });
+      });
+      return out;
+    }
+    function ckDraw() {
+      var r = CK.d, box = $('ckBox'); if (!box || !r) return;
+      var cols = CK_COLS.filter(function (c) { return r.has[c[0]]; });
+      var opt = function (list, v, blank) {
+        return (blank ? '<option value=""' + (v ? '' : ' selected') + '>（まだ）</option>' : '') +
+          list.map(function (x) { return '<option' + (x === v ? ' selected' : '') + '>' + esc(x) + '</option>'; }).join('');
+      };
+      var rows = r.rows.map(function (p, i) {
+        if (CK.onlyTodo && !ckTodo(p)) return '';
+        var o = CK.orig[p.name] || {};
+        var gray = p.target !== '対象' || String(p.prev).indexOf('もらえない') === 0;
+        var cls = ckTodo(p) ? 'isred' : '';
+        return '<tr class="' + cls + '"' + (gray ? ' style="opacity:.55"' : '') + '><td style="padding:7px 8px;white-space:nowrap"><b>' + esc(p.name) + '</b></td>' +
+          '<td style="padding:7px 8px;text-align:center">' + esc(p.kou || '甲') + '</td>' +
+          cols.map(function (c) {
+            var k = c[0], v = p[k], ch = v !== o[k] ? ' ch' : '', at = ' data-ck="' + i + '" data-k="' + k + '"';
+            if (c[2] === 'box') return '<td class="' + ch + '" style="text-align:center"><input type="checkbox"' + at + (v ? ' checked' : '') + ' style="width:18px;height:18px;min-width:0;margin:6px"></td>';
+            if (c[2] === 'pick') return '<td class="' + ch + '"><select' + at + ' style="border:0;background:transparent;color:var(--text);padding:7px 4px;font:inherit">' +
+              opt(k === 'target' ? r.targets : r.prevs, v, k === 'prev') + '</select></td>';
+            if (c[2] === 'date') return '<td class="' + ch + '"><input type="date"' + at + ' value="' + esc(v) + '" style="min-width:130px"></td>';
+            return '<td class="' + ch + '"><input type="text"' + at + ' value="' + esc(v) + '" style="min-width:180px" maxlength="300"></td>';
+          }).join('') + '</tr>';
+      }).join('');
+      var n = ckChanges().length, todo = r.rows.filter(ckTodo).length;
+      box.innerHTML = '<div style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px">' +
+        '<div class="st-bar"><b>提出チェック（' + esc(r.label) + 'の勤怠管理表）</b>' +
+        '<label class="st-chk"><input type="checkbox" id="ckTodo"' + (CK.onlyTodo ? ' checked' : '') + '> まだの人だけ（' + todo + '人）</label><span class="sp"></span>' +
+        '<span class="st-dirty' + (n ? '' : ' hidden') + '">変えたところ ' + n + 'か所（まだ保存していません）</span>' +
+        '<button class="btn main" id="ckSave"' + (n ? '' : ' disabled') + '>保存する</button>' +
+        '<button class="btn" id="ckClose">閉じる</button></div>' +
+        '<div class="note" style="margin-bottom:6px">書類を受け取ったらチェックを入れて「保存する」。チェックを入れると「受け取った日」が空なら今日の日付が入ります。赤い行＝①②か前職の源泉徴収票がまだの人。うすい行＝対象外の人。</div>' +
+        '<div class="st-wrap"><table class="st-tbl"><thead><tr><th>氏名</th><th>甲乙</th>' +
+        cols.map(function (c) { return '<th>' + esc(c[1]) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+        (rows || '<tr><td colspan="13" style="padding:10px">まだの人はいません。</td></tr>') + '</tbody></table></div>' +
+        '<div class="note" style="margin-top:4px">甲乙は社員シートのK2から出しています。ここでは変えられません。</div>' +
+        '<div id="ckMsg"></div></div>';
+    }
+    function ckDirty() { return CK.open && ckChanges().length > 0; }
+    $('pNencho').addEventListener('change', function (e) {
+      var el = e.target;
+      if (el.id === 'ckTodo') { CK.onlyTodo = el.checked; ckDraw(); return; }
+      if (!el.hasAttribute || !el.hasAttribute('data-ck') || !CK.d) return;
+      var p = CK.d.rows[Number(el.getAttribute('data-ck'))], k = el.getAttribute('data-k');
+      if (!p) return;
+      p[k] = el.type === 'checkbox' ? el.checked : el.value;
+      if (el.type === 'checkbox' && el.checked && k !== 'checked' && CK.d.has.date && !p.date) p.date = ckToday();
+      if (k === 'prev' && p.prev && CK.d.has.date && !p.date) p.date = ckToday();
+      // 表は書き直さず、その行だけ色と印を変える（次に押すところがずれないように）
+      var tr = el.closest('tr'), o = CK.orig[p.name] || {};
+      Array.prototype.forEach.call(tr.querySelectorAll('[data-ck]'), function (x) {
+        var kk = x.getAttribute('data-k');
+        if (kk === 'date' && x.value !== p.date) x.value = p.date;
+        x.closest('td').classList.toggle('ch', p[kk] !== o[kk]);
+      });
+      tr.classList.toggle('isred', ckTodo(p));
+      tr.style.opacity = p.target !== '対象' || String(p.prev).indexOf('もらえない') === 0 ? '.55' : '';
+      var n = ckChanges().length, dt = document.querySelector('#ckBox .st-dirty');
+      dt.textContent = '変えたところ ' + n + 'か所（まだ保存していません）';
+      dt.classList.toggle('hidden', !n);
+      $('ckSave').disabled = !n;
+    });
+    $('pNencho').addEventListener('click', function (e) {
+      var t = e.target;
+      if (t.id === 'ckOpenBtn') { if (!CK.busy) ckLoad(); return; }
+      if (t.id === 'ckClose') {
+        (ckDirty() ? askOk('保存していない変更があります。閉じると消えます。閉じますか？') : Promise.resolve(true)).then(function (y) {
+          if (!y) return; CK.open = false; CK.d = null; $('ckBox').innerHTML = '';
+        });
+        return;
+      }
+      if (t.id === 'ckSave' && !CK.busy) {
+        var list = ckChanges();
+        if (!list.length) return;
+        CK.busy = true; t.disabled = true;
+        $('ckMsg').innerHTML = '<div class="run" style="margin-top:6px">保存しています...</div>';
+        call('adminNenchoCheckSave', [PIN, DEVICE, list], function (r) {
+          CK.busy = false;
+          NK.flash = '提出チェックを保存しました（' + r.people + '人・' + r.n + 'か所）。';
+          CK.open = true; nkOpen(true);
+        }, function (m) { CK.busy = false; t.disabled = false; $('ckMsg').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+      }
+    });
 
     // ── 弥生給与Nextに入れる（源泉徴収票の準備）──
     //  弥生は年末調整を自分で計算し、源泉徴収票も弥生が作る。ここでは「弥生に手で入れる数字」を1人ずつ出し、
