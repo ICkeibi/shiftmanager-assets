@@ -2014,7 +2014,8 @@
       }, function () { read(); });
     }
     $('nkReload').addEventListener('click', async function () {
-      if (typeof ckDirty === 'function' && ckDirty() && !await askOk('提出チェックに、保存していない変更があります。最新にすると消えます。よろしいですか？')) return;
+      if (((typeof ckDirty === 'function' && ckDirty()) || (typeof inDirty === 'function' && inDirty())) &&
+        !await askOk('保存していない変更があります。最新にすると消えます。よろしいですか？')) return;
       nkOpen(true);
     });
     function nkCalcHtml(c, label) {
@@ -2041,7 +2042,7 @@
           '出勤確認マスターの「月一覧」に、その月（支給月の前の月）の行を足してください。A列に表示名（例：令和8年1月）、C列に年月（例：2026-01）、D列に勤怠管理表のURL。B列（出勤簿）は空のままで大丈夫です。</div>' : '';
       var prev = g.firstPay > 1
         ? '<div class="note" style="margin-top:6px;color:#b06000">' + (g.firstPay - 1) + '月までに支給した分は前の会社の給料です。ここでは記録しません。' +
-          '前の会社の源泉徴収票の「支払金額・社会保険料等の金額・源泉徴収税額」を、年末調整のシートの黄色の欄「前職の支払金額・前職の社会保険料等・前職の源泉徴収税額」に入れてください（入れないと、返す額が多く出ます）。</div>' : '';
+          '前の会社の源泉徴収票の「支払金額・社会保険料等の金額・源泉徴収税額」を、下の「申告書の中身を入れる」→「1人ずつ入れる」の「前職」の欄に入れてください（入れないと、返す額が多く出ます）。</div>' : '';
       return '<h3 style="margin:14px 0 0;font-size:15px">支給月ごとの記録</h3>' + prev +
         '<div class="note">勤怠管理表のメニュー「源泉徴収簿に今月分を記録」と同じことを、ここから行います（前の月の勤怠管理表にはこのメニューがないため）。押すと先に確認の画面が出ます。</div>' +
         (rows ? '<table>' + rows + '</table>' : '') + none + '<div id="gsMsg"></div>';
@@ -2151,7 +2152,13 @@
           '<h3 style="margin:14px 0 0;font-size:15px">本番の計算</h3>' +
           '<div style="margin-top:4px"><button class="btn" data-nkjob="final" style="padding:4px 12px;font-size:12px">本番の計算をする</button>' +
           '<span class="note" style="margin-left:8px">12月支給の分を記録してから押します。源泉徴収簿の各人の年税額（D22）に書きます。</span></div><div id="nkJobFinal"></div>' +
-          nkCalcHtml(g.final, '本番');
+          nkCalcHtml(g.final, '本番') +
+          '<h3 style="margin:14px 0 0;font-size:15px">申告書の中身を入れる</h3>' +
+          (g.trial || g.final
+            ? '<div style="margin-top:4px"><button class="btn main" id="inOpenBtn" style="padding:4px 12px;font-size:12px">1人ずつ入れる</button>' +
+              '<span class="note" style="margin-left:8px">回収した申告書①〜⑤と前職の源泉徴収票を見て、扶養・保険料などを入れます。保存すると計算し直します。</span></div>'
+            : '<div class="note">先に「試しの計算をする」を押すと、入れられるようになります。</div>') +
+          '<div id="inBox"></div>';
       }
       // 用紙：国税庁のPDF（毎年新しくなるので、いつも国税庁から出す。名前などは書き込まない＝個人情報を画面に出さない）
       //  国税庁のファイル名は「年＋bun_番号.pdf」（入力用は _input）。記入例は nencho＋年 のフォルダ。年が変わっても自動で新しい年になる
@@ -2182,7 +2189,116 @@
         '<div class="panel"><div class="ph"><span class="pi"><span class="dot"></span>源泉徴収簿と計算の結果</span></div><div class="res">' + calc + '</div></div>' +
         yyPanelHtml();
       if (CK.open) ckLoad();
+      if (IN.open) { if (IN.d) inDraw(); else inLoad(); }
     }
+
+    // ── 申告書の中身（年末調整シートの黄色の欄）を画面で入れる ──
+    var IN = { open: false, d: null, cur: 0, edit: {}, busy: false };
+    var IN_GROUPS = [
+      ['前職（この会社より前の勤め先・前職の源泉徴収票から）', ['prevPay', 'prevShaho', 'prevTax']],
+      ['配偶者（申告書②）', ['spouse', 'spouseIncome']],
+      ['扶養（申告書①・人数）', ['depGeneral', 'depSpecific', 'depElder', 'depElderLive', 'tokuteiIncome']],
+      ['障害者・本人のこと（申告書①）', ['disabled', 'disabledSp', 'disabledSpLive', 'single', 'student', 'under23']],
+      ['保険料（申告書③・1年分の円）', ['lifeNew', 'lifeOld', 'careMed', 'pensionNew', 'pensionOld', 'quake', 'quakeOld', 'selfShaho', 'smallBiz']],
+      ['住宅ローン（申告書⑤）', ['housing']]
+    ];
+    var IN_PICK = { spouse: ['なし', '一般', '70歳以上'], single: ['なし', '寡婦', 'ひとり親'] };
+    function inLoad() {
+      var box = $('inBox'); if (!box) return;
+      IN.open = true; IN.busy = true;
+      box.innerHTML = '<div class="loading" style="margin-top:8px">年末調整の表を読んでいます...</div>';
+      call('adminNenchoInputRows', [PIN, DEVICE], function (r) { IN.busy = false; IN.d = r; IN.edit = {}; if (IN.cur >= r.rows.length) IN.cur = 0; inDraw(); },
+        function (m) { IN.busy = false; box.innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+    }
+    function inVal(p, k) { var e = IN.edit[p.name]; return e && k in e ? e[k] : p[k]; }
+    function inChanges() {
+      var out = [];
+      Object.keys(IN.edit).forEach(function (name) {
+        var p = IN.d.rows.filter(function (x) { return x.name === name; })[0], e = IN.edit[name];
+        if (!p) return;
+        Object.keys(e).forEach(function (k) { if (String(e[k]) !== String(p[k])) out.push({ name: name, key: k, value: e[k] }); });
+      });
+      return out;
+    }
+    function inHasInput(p) {
+      return IN.d.cols.some(function (c) { var v = inVal(p, c[0]); return v !== '' && v !== false && v !== 0 && v !== 'なし'; });
+    }
+    function inDraw() {
+      var r = IN.d, box = $('inBox'); if (!box || !r) return;
+      if (!r.rows.length) { box.innerHTML = '<div class="note">表に人がいません。</div>'; return; }
+      var p = r.rows[IN.cur], label = {};
+      r.cols.forEach(function (c) { label[c[0]] = c[1]; });
+      var changedNames = {};
+      inChanges().forEach(function (c) { changedNames[c.name] = true; });
+      var sel = '<select id="inWho" style="padding:6px 8px;font:inherit;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--text)">' +
+        r.rows.map(function (x, i) { return '<option value="' + i + '"' + (i === IN.cur ? ' selected' : '') + '>' + esc(x.name) + (changedNames[x.name] ? '（保存前）' : inHasInput(x) ? '　✓入力あり' : '') + '</option>'; }).join('') + '</select>';
+      var field = function (k) {
+        var v = inVal(p, k), ch = String(v) !== String(p[k]) ? ';background:var(--warn-bg)' : '', inp;
+        var st = 'padding:6px 8px;font:inherit;border:1px solid var(--line);border-radius:6px;color:var(--text);background:var(--card)' + ch;
+        if (IN_PICK[k]) inp = '<select data-in="' + k + '" style="' + st + '">' + IN_PICK[k].map(function (o) { return '<option' + (o === (v || 'なし') ? ' selected' : '') + '>' + o + '</option>'; }).join('') + '</select>';
+        else if (k === 'student' || k === 'under23') inp = '<input type="checkbox" data-in="' + k + '"' + (v === true ? ' checked' : '') + ' style="width:18px;height:18px">';
+        else inp = '<input type="text" inputmode="' + (k === 'tokuteiIncome' ? 'text' : 'numeric') + '" data-in="' + k + '" value="' + esc(v) + '" placeholder="' + (k === 'tokuteiIncome' ? '例：80万,100万' : '0') + '" style="' + st + ';width:150px;text-align:right">';
+        return '<label style="display:flex;align-items:center;gap:8px;padding:4px 0"><span style="width:250px;font-size:13px">' + esc(label[k] || k) + '</span>' + inp + '</label>';
+      };
+      var groups = IN_GROUPS.map(function (g) {
+        return '<div style="border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin-top:8px"><b style="font-size:13px">' + esc(g[0]) + '</b>' + g[1].map(field).join('') + '</div>';
+      }).join('');
+      var res = '<div style="border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin-top:8px;background:var(--bg)"><b style="font-size:13px">この人の数字（保存したときの計算）</b>' +
+        '<div style="font-size:13px;margin-top:4px">支払金額（この会社） ' + nkYen(p.pay) + '　社会保険料等 ' + nkYen(p.shaho) + '　毎月引いた所得税 ' + nkYen(p.withheld) + '</div>' +
+        '<div style="font-size:14px;margin-top:4px">年調年税額 <b>' + (p.yearTax === '' ? '—' : nkYen(p.yearTax)) + '</b>　過不足 <b>' + (p.diff === '' ? '—' : (p.diff > 0 ? '+' : '') + nkYen(p.diff)) + '</b>（＋返す／－追加で引く）</div>' +
+        (p.memo ? '<div style="color:#c5221f;font-size:13px;margin-top:4px">メモ：' + esc(p.memo) + '</div>' : '') + '</div>';
+      var n = inChanges().length;
+      box.innerHTML = '<div style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px">' +
+        '<div class="st-bar"><b>' + esc(r.sheet) + '</b>' + (r.trial ? '<span class="note">（本番の計算をすると、ここで入れた中身は本番に引き継がれます）</span>' : '') + '</div>' +
+        '<div class="st-bar"><button class="btn" id="inPrev"' + (IN.cur ? '' : ' disabled') + '>← 前の人</button>' + sel +
+        '<button class="btn" id="inNext"' + (IN.cur < r.rows.length - 1 ? '' : ' disabled') + '>次の人 →</button><span class="sp"></span>' +
+        '<span class="st-dirty' + (n ? '' : ' hidden') + '" id="inDirty">変えたところ ' + n + 'か所（まだ保存していません）</span>' +
+        '<button class="btn main" id="inSave"' + (n ? '' : ' disabled') + '>保存して計算する</button><button class="btn" id="inClose">閉じる</button></div>' +
+        '<div class="note">金額は1年分の円で入れます。ない欄は空のままで大丈夫です。何人分か入れてから、まとめて保存できます。</div>' +
+        res + groups + '<div id="inMsg"></div></div>';
+    }
+    function inDirty() { return IN.open && IN.d && inChanges().length > 0; }
+    $('pNencho').addEventListener('change', function (e) {
+      var el = e.target;
+      if (el.id === 'inWho') { IN.cur = Number(el.value); inDraw(); return; }
+      if (!el.hasAttribute || !el.hasAttribute('data-in') || !IN.d) return;
+      var p = IN.d.rows[IN.cur], k = el.getAttribute('data-in');
+      IN.edit[p.name] = IN.edit[p.name] || {};
+      IN.edit[p.name][k] = el.type === 'checkbox' ? el.checked : el.value.trim();
+      var ch = String(IN.edit[p.name][k]) !== String(p[k]);
+      if (el.type !== 'checkbox') el.style.background = ch ? 'var(--warn-bg)' : 'var(--card)';
+      var n = inChanges().length;
+      $('inDirty').textContent = '変えたところ ' + n + 'か所（まだ保存していません）';
+      $('inDirty').classList.toggle('hidden', !n);
+      $('inSave').disabled = !n;
+    });
+    $('pNencho').addEventListener('click', function (e) {
+      var t = e.target;
+      if (t.id === 'inOpenBtn') { if (!IN.busy) { IN.d = null; inLoad(); } return; }
+      if (t.id === 'inPrev' && IN.cur > 0) { IN.cur--; inDraw(); return; }
+      if (t.id === 'inNext' && IN.d && IN.cur < IN.d.rows.length - 1) { IN.cur++; inDraw(); return; }
+      if (t.id === 'inClose') {
+        (inDirty() ? askOk('保存していない変更があります。閉じると消えます。閉じますか？') : Promise.resolve(true)).then(function (y) {
+          if (!y) return; IN.open = false; IN.d = null; IN.edit = {}; $('inBox').innerHTML = '';
+        });
+        return;
+      }
+      if (t.id === 'inSave' && !IN.busy) {
+        var list = inChanges();
+        if (!list.length) return;
+        (IN.d.trial ? Promise.resolve(true) : askOk('本番の表に保存して、本番の計算をし直します（各人の年税額 D22 も書き直します）。よろしいですか？')).then(function (y) {
+          if (!y) return;
+          IN.busy = true; t.disabled = true;
+          $('inMsg').innerHTML = '<div class="run" style="margin-top:6px">保存して計算し直しています...（1分ほど）</div>';
+          call('adminNenchoInputSave', [PIN, DEVICE, list], function (r) {
+            IN.busy = false; IN.d.rows = r.rows; IN.edit = {};
+            if (IN.cur >= r.rows.length) IN.cur = 0;
+            NK.flash = '申告書の中身を保存して計算し直しました（' + r.people + '人・' + r.n + 'か所）。';
+            nkOpen(true);
+          }, function (m) { IN.busy = false; t.disabled = false; $('inMsg').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+        });
+      }
+    });
 
     // ── 提出チェック表を画面でチェックする（シートは開かない）──
     var CK = { open: false, d: null, orig: {}, busy: false, onlyTodo: false };
@@ -2310,7 +2426,7 @@
     function yyPanelHtml() {
       var flow = '<details' + (YY.data ? '' : ' open') + '><summary><b>弥生での流れ</b>（手続き → 令和' + ((NK.data ? NK.data.year : 2026) - 2018) + '年分 年末調整手続き → やることリスト）</summary><table>' +
         YY_FLOW.map(function (f, i) { return '<tr><td style="width:24px">' + (i + 1) + '</td><td style="white-space:nowrap;width:230px"><b>' + esc(f[0]) + '</b></td><td>' + esc(f[1]) + '</td></tr>'; }).join('') +
-        '</table><div class="note" style="margin-top:4px">弥生には、扶養や保険料をCSVで取り込む方法がありません（従業員情報のCSVで入るのは前職・障害者・寡婦などだけ）。なので申告書の中身は手で入れます。入れる数字は、勤怠管理表の「年末調整」シートの黄色の欄と同じです。</div></details>';
+        '</table><div class="note" style="margin-top:4px">弥生には、扶養や保険料をCSVで取り込む方法がありません（従業員情報のCSVで入るのは前職・障害者・寡婦などだけ）。なので申告書の中身は手で入れます。入れる数字は、この画面の「申告書の中身を入れる」で入れた数字と同じです。</div></details>';
       return '<div class="panel"><div class="ph"><span class="pi"><span class="dot"></span>弥生給与Nextに入れる（源泉徴収票）</span>' +
         '<span class="noprint"><button class="btn" id="yyLoad" style="padding:4px 10px;font-size:12px">' + (YY.data ? '読み直す' : '入れる数字を出す') + '</button></span></div>' +
         '<div class="res">' + flow + '<div id="yyMsg"></div><div id="yyBody">' + (YY.data ? yyBodyHtml(YY.data) : '') + '</div></div></div>';
