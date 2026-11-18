@@ -381,7 +381,7 @@
       <a href="#" data-more="bill"><i data-icon="bill"></i><span>会社別請求<small>請求額（スマホと同じ画面）</small></span></a>
       <a href="#" data-more="ot"><i data-icon="ot"></i><span>残業<small>定時後残業</small></span></a>
       <a href="#" data-more="chart"><i data-icon="chart"></i><span>グラフ<small>売上・人件費</small></span></a>
-      <a href="#" data-more="tools"><i data-icon="gear"></i><span>ツール<small>バックアップ・備考・予定・NSK</small></span></a>
+      <a href="#" data-more="tools"><i data-icon="gear"></i><span>ツール<small>バックアップ・備考・予定</small></span></a>
       <a href="#" data-more="wage"><i data-icon="bill"></i><span>賃金台帳<small>1人1枚・5年保存</small></span></a>
       <a href="#" data-more="otc"><i data-icon="ot"></i><span>残業チェック<small>月45時間・年360時間の確認</small></span></a>
       <a href="#" data-more="leave"><i data-icon="nencho"></i><span>有給管理<small>付与・取得・年5日の確認</small></span></a>
@@ -1199,7 +1199,7 @@
         if (ST_SHEETS.indexOf(s.name) >= 0)
           return '<div class="slink" style="cursor:pointer" data-stgo="' + esc(s.name) + '" role="button" tabindex="0"><span>' + esc(s.name) + '<br><small>' + esc(s.note) + '（画面で直す）</small></span>' +
             '<span style="color:var(--brand);font-weight:bold">›</span></div>';
-        return '<a class="slink" href="' + esc(s.url) + '" target="_blank" rel="noopener"><span>' + esc(s.name) + '<br><small>' + esc(s.note) + '</small></span><span>↗</span></a>';
+        return '<div class="slink"><span>' + esc(s.name) + '<br><small>' + esc(s.note) + '</small></span></div>';   // シートへのリンクは出さない
       }).join('') || '<div class="note">ありません</div>';
       if (!h.tasks.length) {
         $('tasks').innerHTML = '<div class="empty" style="padding:18px">今日やることはありません。お疲れさまです。' +
@@ -1212,8 +1212,7 @@
           return '<label class="co' + (x.done ? ' on' : '') + '" title="' + esc(x.doneBy ? '済：' + x.doneBy : '押すと済になります') + '">' +
             '<input type="checkbox" data-key="' + esc(x.key) + '"' + (x.done ? ' checked' : '') + '>' + esc(x.name) + '</label>';
         }).join('') + '</div>' : '';
-        var open = t.link ? '<button class="btn main" data-open="' + t.link + '">開く</button>'
-          : t.url ? '<a class="btn main" href="' + esc(t.url) + '" target="_blank" rel="noopener">' + esc(t.urlLabel || '予定シートを開く') + ' ↗</a>' : '';
+        var open = t.link ? '<button class="btn main" data-open="' + t.link + '">開く</button>' : '';
         var doneBtn = t.group || t.noDone ? '' : '<button class="btn done" data-done="' + esc(t.key) + '" data-title="' + esc(t.title) + '">✓ 済にする</button>';
         return '<div class="task ' + cls + '"><div class="top"><span class="chip">' + whenChip(t) + '</span><span class="d">期限 ' + esc(t.dueLabel) + '</span></div>' +
           '<div class="t">' + esc(t.title) + '</div><div class="note">' + esc(t.note || '') + '</div>' + cos +
@@ -2782,12 +2781,8 @@
           '<label>月 <select id="tlRemMonth" style="font:inherit;padding:4px 6px">' + months.map(function (m) { return '<option>' + esc(m) + '</option>'; }).join('') + '</select></label> ' + btn('remarks', '整える', true)) +
         sec('予定とお知らせ', '<div class="note">予定：' + (s.schedule ? 'あります（「設定」→「予定」で直せます）' : '<b style="color:var(--over)">まだありません</b>') +
           '　毎朝のメールお知らせ：' + on(s.mail.on) + (s.mail.to ? '（送り先 ' + esc(s.mail.to) + '）' : '') + '</div>' +
-          (s.schedule ? '' : btn('scheduleSetup', '予定表を作る', true)) + (s.mail.on ? btn('mailOff', '毎朝のメールを止める') : btn('mailOn', '毎朝のメールを始める'))) +
-        sec('NSK集計（別の会社）', '<div class="note">' + (nsk.ready ? 'NSK月一覧：' + (nsk.months.length ? nsk.months.map(function (m) { return esc(m.ym) + (m.status ? '（読み取り済）' : '（まだ）'); }).join('・') : 'URLが入っている月がありません') : 'まだ準備していません') +
-          '<br>集計の表は「その他 ▾」→「月払い」の「NSK」タブで見られます。</div>' +
-          btn('nskSetup', '① シートを準備する') + (nsk.ready ? btn('nskRead', '② 出勤簿を読む（まだの月）', true) +
-          ' <select id="tlNskMonth" style="font:inherit;padding:4px 6px"><option value="全部">全部</option>' + nsk.months.map(function (m) { return '<option>' + esc(m.ym) + '</option>'; }).join('') + '</select> ' +
-          btn('nskReread', '読み直す') + btn('nskSum', '③ 集計する', true) : ''));
+          (s.schedule ? '' : btn('scheduleSetup', '予定表を作る', true)) + (s.mail.on ? btn('mailOff', '毎朝のメールを止める') : btn('mailOn', '毎朝のメールを始める')));
+      // NSK（別の会社）は、今の会社とは関係ないので、パソコンの管理画面には出さない（スマホの画面だけで見る）
     }
     // ── 賃金台帳（ファイルは開かない。作る・1人ずつ見る・性別を入れる・印刷する） ──
     var WG = { init: false, info: null, year: 0, busy: false, sex: {}, cur: null };
