@@ -371,6 +371,7 @@
       <a href="#" data-more="bill"><i data-icon="bill"></i><span>会社別請求<small>請求額（スマホと同じ画面）</small></span></a>
       <a href="#" data-more="ot"><i data-icon="ot"></i><span>残業<small>定時後残業</small></span></a>
       <a href="#" data-more="chart"><i data-icon="chart"></i><span>グラフ<small>売上・人件費</small></span></a>
+      <a href="#" data-more="otc"><i data-icon="ot"></i><span>残業チェック<small>月45時間・年360時間の確認</small></span></a>
       <a href="#" data-more="leave"><i data-icon="nencho"></i><span>有給管理<small>付与・取得・年5日の確認</small></span></a>
       <a href="#" data-more="nencho" id="moreNencho"><i data-icon="nencho"></i><span>年末調整<small>源泉徴収票の確認など</small></span></a>
     </div>
@@ -700,6 +701,16 @@
         <div id="blMsg"></div>
         <div id="blBody"></div>
       </div>
+      <!-- 残業チェック（労務チェック.gs。シートは開かずに、この画面で作る・見る） -->
+      <div class="page hidden" id="pOtc">
+        <div class="toolbar">
+          <div><h2>残業チェック</h2><div class="sub">全部の月の勤怠管理表から、1人ずつ月ごとの法定時間外（1日8時間・週40時間を超えた分）と法定休日の労働を出します（単位：時間）。</div></div>
+          <div class="noprint"><button class="btn" id="ocPrint">印刷</button> <button class="btn main" id="ocRun">最新にする（作り直す）</button></div>
+        </div>
+        <div id="ocMsg"></div>
+        <div id="ocBody"><div class="loading">読み込み中...</div></div>
+        <p class="sub" style="margin-top:8px">36協定の上限：月45時間・年360時間（特別条項でも 月100時間未満・2〜6か月平均80時間以内・年720時間）。<span style="background:#fce8e6;padding:0 4px">赤</span>＝月45時間を超えた月、<span style="background:#fff3cd;padding:0 4px">黄</span>＝36時間（8割）を超えた月。「（休○）」は法定休日の労働です。注意がある人は赤い字です。</p>
+      </div>
       <!-- 有給管理（労務チェック.gs。シートは開かずに、この画面で作る・入社日を入れる） -->
       <div class="page hidden" id="pLeave">
         <div class="toolbar">
@@ -1005,6 +1016,8 @@
       if (where === 'settings') stOpen();
       $('pLeave').classList.toggle('hidden', where !== 'leave');
       if (where === 'leave') lvOpen();
+      $('pOtc').classList.toggle('hidden', where !== 'otc');
+      if (where === 'otc') ocOpen();
       // 打刻の管理：打刻システムの管理者画面を、この中に出す（初めて押したときに読み込む）
       var dv = $('dakokuView');
       if (where === 'dakokuAdmin' && DAKOKU_URL) {
@@ -1025,7 +1038,7 @@
         v.classList.add('hidden');
       }
       // その他▾：中のものを開いているときは「その他」を光らせる
-      var inMore = !!VIEW_URL[where] || where === 'leave' || (where === 'nencho' && $('navNencho').classList.contains('hidden'));
+      var inMore = !!VIEW_URL[where] || where === 'leave' || where === 'otc' || (where === 'nencho' && $('navNencho').classList.contains('hidden'));
       $('navMore').classList.toggle('on', inMore);
       Array.prototype.forEach.call(document.querySelectorAll('#moreMenu a[data-more]'), function (a) { a.classList.toggle('on', a.getAttribute('data-more') === where); });
       $('moreMenu').classList.add('hidden');
@@ -2415,6 +2428,45 @@
     // ── 請求書・売上累計表 ──
     var BL = { init: false, data: null };
     function yen(n) { return (n < 0 ? '-¥' : '¥') + Math.abs(Math.round(n)).toLocaleString('ja-JP'); }
+    // ── 残業チェック（シートは開かない。この画面で作る・見る・印刷する） ──
+    var OC = { init: false, data: null, busy: false };
+    function ocOpen() {
+      if (!OC.init) {
+        OC.init = true;
+        $('ocRun').addEventListener('click', async function () {
+          if (OC.busy || !await askOk('全部の月の勤怠管理表を読んで、残業チェック表を作り直します（1〜2分）。\n\nよろしいですか？')) return;
+          OC.busy = true; $('ocRun').disabled = true; $('ocMsg').innerHTML = '<div class="run">勤怠管理表を読んでいます...（1〜2分）</div>';
+          call('adminOvertime', [PIN, DEVICE], function (r) { OC.busy = false; $('ocRun').disabled = false; OC.data = r; ocRender(); $('ocMsg').innerHTML = '<div class="ok">作り直しました。</div>'; },
+            function (m) { OC.busy = false; $('ocRun').disabled = false; $('ocMsg').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+        });
+        $('ocPrint').addEventListener('click', function () {
+          var t = $('ocBody').innerHTML, w = window.open('', '_blank'); if (!w) return;
+          w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>残業チェック</title><style>body{font-family:"Yu Gothic UI",Meiryo,sans-serif;margin:8mm;font-size:11px}' +
+            'table{border-collapse:collapse;width:100%}td,th{border:1px solid #999;padding:2px 4px;text-align:right;white-space:nowrap}td:first-child,th:first-child{text-align:left}td:last-child{text-align:left;white-space:normal}' +
+            '@page{size:A4 landscape;margin:8mm}</style></head><body><h3 style="margin:0 0 6px">残業チェック（法定時間外・時間）</h3>' + t + '</body></html>');
+          w.document.close(); w.focus(); setTimeout(function () { w.print(); }, 300);
+        });
+      }
+      if (!OC.data && !OC.busy) {
+        $('ocBody').innerHTML = '<div class="loading">読み込み中...</div>';
+        call('adminOvertimeSaved', [PIN, DEVICE], function (r) { OC.data = r; ocRender(); }, function (m) { $('ocBody').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+      }
+    }
+    function ocRender() {
+      var r = OC.data;
+      if (!r || r.none || !r.rows) { $('ocBody').innerHTML = '<div class="note">まだ残業チェック表がありません。「最新にする（作り直す）」を押してください。</div>'; return; }
+      var col = { r: 'background:#fce8e6;color:#8a1c14;font-weight:bold', y: 'background:#fff3cd;color:#7a5a00' };
+      var notes = r.rows.filter(function (x) { return x.note; }).length;
+      $('ocBody').innerHTML = '<div class="note" style="margin-bottom:8px">' + esc(r.made || '') + '　<b>' + r.rows.length + '人</b>' +
+        (notes ? '　<b style="color:var(--over)">注意がある人 ' + notes + '人</b>' : '　注意がある人はいません') + '</div>' +
+        '<div style="overflow-x:auto"><table class="wk"><thead><tr>' + r.head.map(function (h, i) { return '<th' + (i ? ' class="num"' : '') + '>' + esc(h) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+        r.rows.map(function (x) {
+          var last = x.values.length - 1;
+          return '<tr' + (x.note ? ' style="color:var(--over)"' : '') + '>' + x.values.map(function (c, i) {
+            return '<td' + (i === 0 ? ' style="white-space:nowrap;font-weight:bold"' : i === last ? ' style="min-width:180px"' : ' class="num" style="white-space:nowrap;' + (col[x.colors[i]] || '') + '"') + '>' + esc(c) + '</td>';
+          }).join('') + '</tr>';
+        }).join('') + '</tbody></table></div>';
+    }
     // ── 有給管理（シートは開かない。入社日・週の所定日数だけ、この画面で入れる） ──
     var LV = { init: false, data: null, edits: {}, busy: false };
     function lvOpen() {
