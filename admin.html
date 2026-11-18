@@ -2492,7 +2492,13 @@
       var d = ST.data; if (!d || !d.heads) return;
       var q = $('stQ').value.trim().toLowerCase(), newOnly = $('stNewOnly').checked;
       var cls = function (t) { return t === 'key' ? 'k' : (/^yen|day/.test(t) ? 'num' : ''); };
-      $('stTbl').tHead.innerHTML = '<tr>' + d.heads.map(function (h) { return '<th>' + esc(h) + '</th>'; }).join('') + '<th></th></tr>';
+      // seenHead：現場の振り分けだけ。最後に計算した月の「請求明細」で、その行がどの日に出てきたか（見るだけ）
+      var seenTd = function (x) {
+        if (!d.seenHead) return '';
+        var s = x ? String(x.seen || '') : '', none = !x || /^この月にはなし/.test(s);
+        return '<td class="seen" style="min-width:150px;font-size:12px;line-height:1.4;padding:4px 8px;color:' + (none ? 'var(--text3)' : 'var(--text)') + '">' + esc(x ? s : '') + '</td>';
+      };
+      $('stTbl').tHead.innerHTML = '<tr>' + d.heads.map(function (h) { return '<th>' + esc(h) + '</th>'; }).join('') + (d.seenHead ? '<th title="見るだけの欄です（保存されません）">' + esc(d.seenHead) + '</th>' : '') + '<th></th></tr>';
       var cellsHtml = function (vals, base) {
         return vals.map(function (v, i) {
           var ch = base && String(v) !== String(base[i]);
@@ -2505,9 +2511,9 @@
       var rows = d.rows.filter(function (x) { return (!newOnly || x.isNew) && (!q || x.values.join(' ').toLowerCase().indexOf(q) >= 0 || ST.edits[x.row]); });
       var h = rows.map(function (x) {
         var vals = ST.edits[x.row] || x.values;
-        return '<tr data-r="' + x.row + '" class="' + (ST.dels[x.row] ? 'del' : x.isNew ? 'isnew' : '') + '">' + cellsHtml(vals, x.values) + '<td class="rm"><button type="button" data-rm title="' + (ST.dels[x.row] ? '消すのをやめる' : 'この行を消す') + '">' + (ST.dels[x.row] ? '↺' : '✕') + '</button></td></tr>';
-      }).join('') + ST.adds.map(function (v, i) { return '<tr data-a="' + i + '" class="add">' + cellsHtml(v, null) + '<td class="rm"><button type="button" data-rm title="追加をやめる">✕</button></td></tr>'; }).join('');
-      $('stTbl').tBodies[0].innerHTML = h || '<tr><td colspan="' + (d.heads.length + 1) + '" style="padding:20px;color:var(--text3)">' + (q || newOnly ? '条件に合う行はありません。' : 'まだ行がありません。「＋ 行を追加」で足せます。') + '</td></tr>';
+        return '<tr data-r="' + x.row + '" class="' + (ST.dels[x.row] ? 'del' : x.isNew ? 'isnew' : '') + '">' + cellsHtml(vals, x.values) + seenTd(x) + '<td class="rm"><button type="button" data-rm title="' + (ST.dels[x.row] ? '消すのをやめる' : 'この行を消す') + '">' + (ST.dels[x.row] ? '↺' : '✕') + '</button></td></tr>';
+      }).join('') + ST.adds.map(function (v, i) { return '<tr data-a="' + i + '" class="add">' + cellsHtml(v, null) + seenTd(null) + '<td class="rm"><button type="button" data-rm title="追加をやめる">✕</button></td></tr>'; }).join('');
+      $('stTbl').tBodies[0].innerHTML = h || '<tr><td colspan="' + (d.heads.length + (d.seenHead ? 2 : 1)) + '" style="padding:20px;color:var(--text3)">' + (q || newOnly ? '条件に合う行はありません。' : 'まだ行がありません。「＋ 行を追加」で足せます。') + '</td></tr>';
       stState();
     }
     async function stSave() {
