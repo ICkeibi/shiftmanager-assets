@@ -231,7 +231,16 @@
     .st-tbl td.rm button:hover { color: var(--over); }
     @media (prefers-color-scheme: dark) { .st-tbl tr.isnew td { background: #3a3112; } }
     .msg.err { background: var(--over-bg); color: var(--over); }
-    .loading { color: var(--text3); padding: 30px 0; }
+    /* 読み込み中・処理中：色をつけて、くるくる回る印と点滅で、動いているのが分かるようにする */
+    .loading { color: var(--primary); font-weight: bold; padding: 30px 0; animation: ldPulse 1.4s ease-in-out infinite; }
+    .loading::before, .run::before, .busy::before { content: ""; display: inline-block; width: 14px; height: 14px; margin-right: 8px; vertical-align: -2px;
+      border: 3px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: ldSpin .8s linear infinite; }
+    .run { font-weight: bold; animation: ldPulse 1.4s ease-in-out infinite; }
+    .run:not(.msg) { background: var(--primary-bg); color: var(--primary); border-radius: 8px; padding: 8px 12px; }
+    .busy { color: var(--primary); font-weight: bold; animation: ldPulse 1.4s ease-in-out infinite; }
+    @keyframes ldSpin { to { transform: rotate(360deg); } }
+    @keyframes ldPulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+    @media (prefers-reduced-motion: reduce) { .loading, .run, .busy, .loading::before, .run::before, .busy::before { animation-duration: 3s; } }
     .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
     /* 週払い */
     .filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 14px; }
@@ -1779,11 +1788,11 @@
       return same.length === 1 ? same[0] : hit.length === 1 ? hit[0] : '';
     }
     function kiActs(x, i) {
-      if (KI.busy[i]) return '<span class="note">保存しています...</span>';
+      if (KI.busy[i]) return '<span class="busy">保存しています...</span>';
       if (x.done) return '<span class="doneby">✓ ' + esc(x.done.how) + '<br>' + esc(x.done.by) + ' ' + esc(x.done.at) + '</span> <button class="tbtn" data-ki="undo" data-i="' + i + '">済を外す</button>';
       var ed = KI.edit;
       if (ed && ed.i === i) {
-        if (ed.loading) return '<span class="note">勤怠管理表を読んでいます...</span>';
+        if (ed.loading) return '<span class="busy">勤怠管理表を読んでいます...</span>';
         return '<span class="now">今：' + esc([ed.kind, ed.start && ed.start + '〜' + ed.end].filter(Boolean).join(' ') || '（空）') + '</span>' +
           '始業 <input data-kin="start" value="' + esc(ed.start || '') + '" placeholder="8:30"> 終業 <input data-kin="end" value="' + esc(ed.end || '') + '" placeholder="17:30">' +
           '<button class="tbtn main" data-ki="save" data-i="' + i + '">保存</button><button class="tbtn" data-ki="cancel" data-i="' + i + '">やめる</button>';
@@ -1822,7 +1831,7 @@
           if (x.kind === 'check' && !(prev && prev.kind === 'check' && prev.name === x.name)) {
             var cnt = todo.filter(function (j) { var y = d.list[j]; return y.kind === 'check' && y.name === x.name; }).length;
             if (cnt >= 2) head = '<tr class="kigrp"><td colspan="3"><b>' + esc(x.name) + '</b>　確認 ' + cnt + '件</td><td class="acts">' +
-              (KI.busy['g:' + x.name] ? '<span class="note">保存しています...</span>' : '<button class="tbtn main" data-ki="okall" data-name="' + esc(x.name) + '">この人の確認をまとめてOK</button>') + '</td></tr>';
+              (KI.busy['g:' + x.name] ? '<span class="busy">保存しています...</span>' : '<button class="tbtn main" data-ki="okall" data-name="' + esc(x.name) + '">この人の確認をまとめてOK</button>') + '</td></tr>';
           }
           return head + row(i);
         }).join('') + '</table>' : '<div class="ok" style="margin-top:6px">全部片付きました。</div>') +
@@ -2586,7 +2595,7 @@
       Array.prototype.forEach.call(document.querySelectorAll('#pSettings .st-bar, #pSettings .st-wrap, #pSettings .st-wrap + .sub'), function (el) { el.classList.toggle('hidden', on); });
     }
     function stAdmLoad() {
-      stAdmMode(true); $('stAdm').innerHTML = '<div class="note">読み込んでいます…</div>';
+      stAdmMode(true); $('stAdm').innerHTML = '<div class="loading" style="padding:12px 0">読み込んでいます…</div>';
       call('adminAdminsGet', [PIN, DEVICE], function (r) { if (ST.name !== '管理者') return; ST.adm = r; stAdmDraw(''); }, function (e) { stMsg(e, 'err'); });
     }
     function stAdmDraw(form) {
@@ -2639,7 +2648,7 @@
       }
       if (act === 'add' && !p.name) { stMsg('名前を入れてください', 'err'); return; }
       if (!me) { stMsg('自分の暗証番号を入れてください', 'err'); return; }
-      stMsg('処理しています…');
+      stMsg('処理しています…', 'run');
       call('adminAdminsSave', [PIN, DEVICE, p], function (r) { ST.adm = r; stAdmDraw(''); stMsg(r.message || '変えました', 'ok'); }, function (e) { stMsg(e, 'err'); });
     }
     document.addEventListener('click', function (e) {
@@ -2651,7 +2660,7 @@
     function stLoad() {
       stReset(); stMsg('');
       if (ST.name === '管理者') { ST.data = { name: '管理者' }; stAdmLoad(); return; }
-      stAdmMode(false); $('stTbl').tBodies[0].innerHTML = '<tr><td style="padding:20px;color:var(--text3)">読み込んでいます…</td></tr>';
+      stAdmMode(false); $('stTbl').tBodies[0].innerHTML = '<tr><td><div class="loading" style="padding:16px 12px">読み込んでいます…</div></td></tr>';
       var name = ST.name;
       call('adminSettingGet', [PIN, DEVICE, name], function (r) { if (name !== ST.name) return; ST.data = r; $('stNote').textContent = r.note || ''; stDraw(); },
         function (e) {
@@ -2708,7 +2717,7 @@
       var dl = Object.keys(ST.dels).map(Number);
       var text = ST.name + 'を保存します。\n\n' + (e.length ? '変更 ' + e.length + '行\n' : '') + (a.length ? '追加 ' + a.length + '行\n' : '') + (dl.length ? '削除 ' + dl.length + '行（' + dl.map(function (r) { return stRow(r).values[0]; }).join('、') + '）\n' : '') + '\nよろしいですか？';
       if (!await askOk(text)) return;
-      ST.busy = true; stState(); stMsg('保存しています…');
+      ST.busy = true; stState(); stMsg('保存しています…', 'run');
       call('adminSettingSave', [PIN, DEVICE, ST.name, { edits: e, adds: a, deletes: dl }, ST.data.version], function (r) {
         ST.busy = false; ST.data = r; stReset(); stDraw(); stMsg(r.message || '保存しました', 'ok');
       }, function (err) { ST.busy = false; stState(); stMsg(err, 'err'); });
@@ -2731,7 +2740,7 @@
       BL.data = null; BL.savedAt = 0; BL.changed = [];
       $('blRun').textContent = '会社別の請求額を出す';
       $('blBody').innerHTML = '';
-      $('blMsg').innerHTML = '<div class="msg" style="background:var(--primary-bg);color:var(--primary)">前に計算した結果を読んでいます...</div>';
+      $('blMsg').innerHTML = '<div class="msg run" style="background:var(--primary-bg);color:var(--primary)">前に計算した結果を読んでいます...</div>';
       call('adminBillingSaved', [PIN, DEVICE, label], function (r) {
         if (blLabel() !== label || BL.busy) return;   // 読んでいる間に月を変えた・計算を始めた
         if (r.none) {
@@ -2752,7 +2761,7 @@
       var label = blLabel();
       if (!label) return;
       var b = this; b.disabled = true; BL.busy = true;
-      $('blMsg').innerHTML = '<div class="msg" style="background:var(--primary-bg);color:var(--primary)">出勤簿を読んで計算しています...（1〜2分）</div>';
+      $('blMsg').innerHTML = '<div class="msg run" style="background:var(--primary-bg);color:var(--primary)">出勤簿を読んで計算しています...（1〜2分）</div>';
       $('blBody').innerHTML = '';
       call('adminBilling', [PIN, DEVICE, label], function (r) {
         b.disabled = false; BL.busy = false; BL.data = r; BL.savedAt = r.savedAt || 0; BL.changed = []; BL.fresh = true; invSetCo(r.co);
