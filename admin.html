@@ -72,7 +72,7 @@
     #login { max-width: 360px; margin: 12vh auto 0; background: var(--card); border-radius: 12px; padding: 28px; box-shadow: 0 2px 12px rgba(0,0,0,.08); }
     #login h1 { font-size: 20px; margin: 0 0 4px; }
     #login p { color: var(--text2); font-size: 13px; margin: 0 0 18px; }
-    #login input[type=password] { width: 100%; font-size: 18px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); }
+    #login input[type=password], #login input#code { width: 100%; font-size: 18px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); }
     #login label { display: flex; align-items: center; gap: 8px; margin: 12px 0; font-size: 14px; color: var(--text2); }
     #login .go { width: 100%; padding: 12px; border: 0; border-radius: 8px; background: var(--primary); color: #fff; font-size: 16px; font-weight: bold; }
     #loginMsg { color: var(--over); font-size: 13px; min-height: 18px; margin-top: 10px; }
@@ -337,7 +337,8 @@
   <div id="login" class="hidden">
     <h1>管理画面</h1>
     <p>月払いと同じ暗証番号でログインします。</p>
-    <input id="pin" type="password" inputmode="numeric" autocomplete="off" placeholder="暗証番号">
+    <input id="pin" type="password" autocomplete="off" placeholder="暗証番号">
+    <input id="code" class="hidden" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="確認コード（メールで届いた6けた）" style="margin-top:8px">
     <label><input id="remember" type="checkbox" checked> このパソコンで覚える（90日間）</label>
     <button class="go" id="loginBtn">ログイン</button>
     <div id="loginMsg"></div>
@@ -896,15 +897,40 @@
     // ── ログイン ──
     function showLogin(msg) {
       $('app').classList.add('hidden'); $('login').classList.remove('hidden');
-      $('loginMsg').textContent = msg || ''; $('pin').focus();
+      $('loginMsg').textContent = msg || ''; (CODE_FOR ? $('code') : $('pin')).focus();
     }
+    // 確認コード：暗証番号が合うと、管理者のメールに6けたのコードが届く。コードを入れてもう一度「ログイン」
+    var CODE_FOR = '';
+    function codeReset() { CODE_FOR = ''; $('code').value = ''; $('code').classList.add('hidden'); $('pin').disabled = false; }
     function login(cred, quiet) {
       if (!cred) { showLogin(''); return; }
+      var code = '';
+      if (CODE_FOR && String(cred).indexOf('t:') !== 0) {
+        if (cred !== CODE_FOR) codeReset();
+        else { code = $('code').value.trim(); if (!code) { $('loginMsg').textContent = 'メールで届いた確認コード（6けた）を入れてください'; $('code').focus(); return; } }
+      }
       if (!quiet) $('loginMsg').textContent = '確認中...';
-      call('adminLogin', [cred, $('remember').checked, DEVICE], function (res) {
+      call('adminLogin', [cred, $('remember').checked, DEVICE, code], function (res) {
+        if (res && res.needCode) {
+          CODE_FOR = cred; $('code').classList.remove('hidden'); $('pin').disabled = true;
+          $('loginMsg').textContent = (res.note ? res.note + '。' : '') + 'メール（' + (res.mail || '') + '）に確認コードを送りました。届いた6けたを入れて「ログイン」を押してください。';
+          $('code').focus();
+          return;
+        }
+        codeReset();
         PIN = res.token || cred;
-        if (res.token) setToken(res.token);
+        if (res.token && res.keep) setToken(res.token);   // 覚えないときの印（12時間）は保存しない
         $('pin').value = '';
+        // 暗証番号が短い・メールが未登録のときは、ホームの上にお知らせを出す
+        (function () {
+          var w = [];
+          if (res.weakPin) w.push('暗証番号が短いか、英字と数字がまざっていません。「設定」→「管理者」で、英字と数字をまぜた8文字以上に変えてください。');
+          if (res.noMail) w.push('確認コードを送るメールが入っていません。「設定」→「管理者」で、自分のメールを入れてください（入れると、新しい端末では確認コードが必要になります）。');
+          var box = $('secWarn');
+          if (!box) { box = document.createElement('div'); box.id = 'secWarn'; box.style.cssText = 'margin:0 0 12px;padding:10px 14px;border-radius:8px;background:#fff3cd;color:#7a5a00;font-size:14px;line-height:1.6'; var hp = $('pHome'); hp.insertBefore(box, hp.firstChild); }
+          box.innerHTML = w.map(function (t) { return '⚠ ' + esc(t); }).join('<br>');
+          box.classList.toggle('hidden', !w.length);
+        })();
         $('who').textContent = 'ログイン中：' + res.name;
         Array.prototype.forEach.call(document.querySelectorAll('[data-sheet]'), function (a) { a.href = res.sheetUrl || '#'; a.target = '_blank'; });
         $('login').classList.add('hidden'); $('app').classList.remove('hidden');
@@ -918,17 +944,19 @@
         setTimeout(dkAdminLoad, 4000);
       }, function (msg) {
         if (String(cred).indexOf('t:') === 0) setToken('');
+        if (/期限が切れました|5回まちがえ|暗証番号が違|ロック/.test(msg) && CODE_FOR) { codeReset(); $('pin').value = ''; }
         showLogin(msg);
       });
     }
     $('loginBtn').addEventListener('click', function () { login($('pin').value); });
     $('pin').addEventListener('keydown', function (e) { if (e.key === 'Enter') login(this.value); });
+    $('code').addEventListener('keydown', function (e) { if (e.key === 'Enter') login($('pin').value); });
     $('logout').addEventListener('click', async function (e) {
       e.preventDefault();
       if (!await askOk('このパソコンのログインを解除します。次から暗証番号が必要です。よろしいですか？')) return;
       var t = getToken(); setToken('');
       if (t) call('payLogout', [t, DEVICE], function () {}, function () {});
-      PIN = ''; showLogin('ログインを解除しました');
+      PIN = ''; codeReset(); showLogin('ログインを解除しました');
     });
 
     // ── メニュー ──
@@ -2432,28 +2460,35 @@
       call('adminAdminsGet', [PIN, DEVICE], function (r) { if (ST.name !== '管理者') return; ST.adm = r; stAdmDraw(''); }, function (e) { stMsg(e, 'err'); });
     }
     function stAdmDraw(form) {
-      var r = ST.adm, h = '<div class="st-wrap" style="max-height:none"><table class="st-tbl"><thead><tr><th>名前</th><th>状態</th><th>覚えている端末</th><th></th></tr></thead><tbody>' +
+      var r = ST.adm, h = '<div class="st-wrap" style="max-height:none"><table class="st-tbl"><thead><tr><th>名前</th><th>状態</th><th>暗証番号</th><th>確認コードの送り先</th><th>覚えている端末</th><th></th></tr></thead><tbody>' +
         r.admins.map(function (a) {
           return '<tr><td style="padding:8px 10px"><b>' + esc(a.name) + '</b>' + (a.me ? '（自分）' : '') + '</td>' +
             '<td style="padding:8px 10px">' + (a.active ? '<span style="color:var(--ok);font-weight:bold">有効</span>' : '<span style="color:var(--text3)">止めている</span>') + '</td>' +
+            '<td style="padding:8px 10px">' + (a.weak ? '<span style="color:var(--over);font-weight:bold">短い（変えてください）</span>' : '<span style="color:var(--ok)">OK</span>') + '</td>' +
+            '<td style="padding:8px 10px">' + (a.mail ? esc(a.mail) : '<span style="color:var(--over);font-weight:bold">未登録</span>') + '</td>' +
             '<td style="padding:8px 10px">' + a.devices + '台</td><td style="padding:6px 10px;text-align:right;white-space:nowrap">' +
             '<button type="button" class="btn" data-adm="pin" data-n="' + esc(a.name) + '">番号を変える</button> ' +
+            '<button type="button" class="btn" data-adm="mail" data-n="' + esc(a.name) + '">メールを変える</button> ' +
             (a.me ? '' : a.active ? '<button type="button" class="btn" style="color:var(--over);border-color:var(--over)" data-adm="stop" data-n="' + esc(a.name) + '">止める</button>' : '<button type="button" class="btn" data-adm="start" data-n="' + esc(a.name) + '">有効にもどす</button>') +
             '</td></tr>';
         }).join('') + '</tbody></table></div>' +
         '<div style="margin-top:10px"><button type="button" class="btn" data-adm="add">＋ 管理者を足す</button></div>' +
         '<div id="stAdmForm">' + (form || '') + '</div>' +
-        '<p class="sub" style="margin-top:10px">暗証番号は、この画面には出しません。どの操作も、最後に<b>自分の暗証番号</b>を入れ直します（まちがいが続くと、ログインと同じようにしばらくロックします）。止めた人・番号を変えた人の「この端末で覚える」は取り消されます。名前は変えられません（変えたいときは、新しく足してから前の人を止めます）。</p>';
+        '<p class="sub" style="margin-top:10px">暗証番号は、この画面には出しません。どの操作も、最後に<b>自分の暗証番号</b>を入れ直します（まちがいが続くと、ログインと同じようにしばらくロックします）。止めた人・番号を変えた人の「この端末で覚える」は取り消されます。名前は変えられません（変えたいときは、新しく足してから前の人を止めます）。<br>' +
+        '<b>確認コード</b>：メールが入っている人は、暗証番号でログインするときに、そのメールに届く6けたのコードも入れます。「この端末で覚える」にした端末は、次から（90日間）コードはいりません。メールアドレスは画面には一部しか出しません。</p>';
       $('stAdm').innerHTML = h;
     }
     function stAdmForm(act, name) {
-      var title = act === 'add' ? '管理者を足す' : act === 'pin' ? '「' + name + '」の暗証番号を変える' : act === 'stop' ? '「' + name + '」を止める' : '「' + name + '」を有効にもどす';
+      var title = act === 'add' ? '管理者を足す' : act === 'pin' ? '「' + name + '」の暗証番号を変える' : act === 'mail' ? '「' + name + '」の確認コードの送り先（メール）を変える' : act === 'stop' ? '「' + name + '」を止める' : '「' + name + '」を有効にもどす';
+      var inp = 'padding:7px 10px;border:1px solid var(--line);border-radius:8px';
       var f = '<div class="panel" style="margin-top:10px;padding:14px 16px;border:2px solid var(--brand)"><b>' + esc(title) + '</b><div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;align-items:flex-end">' +
         (act === 'add' ? '<label>名前<br><input id="admN" maxlength="30" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"></label>' : '') +
         (act === 'add' || act === 'pin' ? '<label>新しい暗証番号<br><input id="admP1" type="password" autocomplete="new-password" maxlength="20" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"></label><label>もう一度<br><input id="admP2" type="password" autocomplete="new-password" maxlength="20" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"></label>' : '') +
-        '<label>自分の暗証番号<br><input id="admMe" type="password" autocomplete="current-password" maxlength="64" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"></label>' +
-        '<button type="button" class="btn main" data-admgo="' + act + '" data-n="' + esc(name || '') + '">' + (act === 'add' ? '足す' : act === 'pin' ? '変える' : act === 'stop' ? '止める' : 'もどす') + '</button><button type="button" class="btn" data-admx>やめる</button></div>' +
-        '<p class="sub" style="margin:8px 0 0">暗証番号は、数字か英字で4〜20けた。ほかの人と同じ番号は使えません。</p></div>';
+        (act === 'add' || act === 'mail' ? '<label>メールアドレス（確認コードの送り先）<br><input id="admM" type="email" autocomplete="off" maxlength="100" style="' + inp + ';min-width:240px"></label><label>もう一度<br><input id="admM2" type="email" autocomplete="off" maxlength="100" style="' + inp + ';min-width:240px"></label>' : '') +
+        '<label>自分の暗証番号<br><input id="admMe" type="password" autocomplete="current-password" maxlength="64" style="' + inp + '"></label>' +
+        '<button type="button" class="btn main" data-admgo="' + act + '" data-n="' + esc(name || '') + '">' + (act === 'add' ? '足す' : act === 'pin' || act === 'mail' ? '変える' : act === 'stop' ? '止める' : 'もどす') + '</button><button type="button" class="btn" data-admx>やめる</button></div>' +
+        '<p class="sub" style="margin:8px 0 0">' + (act === 'mail' ? '入れたメールに、ログインのときの確認コードが届きます。まちがえると届かないので、2回入れて確かめます。自分のメールは空にできません。'
+          : '暗証番号は、<b>英字と数字の両方を入れて8〜20文字</b>（例：ab12cd34 のような形。これは例なので使わないでください）。ほかの人と同じ番号は使えません。') + '</p></div>';
       stAdmDraw(f);
       var first = $('admN') || $('admP1') || $('admMe'); if (first) first.focus();
     }
@@ -2464,6 +2499,13 @@
         var a = $('admP1').value, b = $('admP2').value;
         if (!a || a !== b) { stMsg('新しい暗証番号が、2回とも同じになっていません', 'err'); return; }
         p.pin = a;
+        if (!/^(?=.*[A-Za-z])(?=.*\d)[0-9A-Za-z]{8,20}$/.test(a)) { stMsg('暗証番号は、英字と数字の両方を入れて8〜20文字にしてください', 'err'); return; }
+      }
+      if (act === 'add' || act === 'mail') {
+        var m1 = $('admM').value.trim(), m2 = $('admM2').value.trim();
+        if (m1 !== m2) { stMsg('メールアドレスが、2回とも同じになっていません', 'err'); return; }
+        if (act === 'mail' && !m1) { stMsg('メールアドレスを入れてください', 'err'); return; }
+        p.mail = m1;
       }
       if (act === 'add' && !p.name) { stMsg('名前を入れてください', 'err'); return; }
       if (!me) { stMsg('自分の暗証番号を入れてください', 'err'); return; }
@@ -3180,7 +3222,8 @@
       try { if (!/\.googleusercontent\.com$/.test(new URL(ev.origin).hostname)) return; } catch (e) { return; }
       if (!ev.source || !fromOurFrame(ev.source)) return;
       var msg = ev.data || {};
-      if (msg.type === 'payHello') ev.source.postMessage({ type: 'payToken', token: getToken() }, ev.origin);
+      // 覚えないでログインしたとき（12時間の印）も、中の月払いの画面に渡す（暗証番号と確認コードを2回入れなくてよいように）
+      if (msg.type === 'payHello') ev.source.postMessage({ type: 'payToken', token: getToken() || (String(PIN).indexOf('t:') === 0 ? PIN : '') }, ev.origin);
       else if (msg.type === 'paySave') { try { if (msg.token) localStorage.setItem(TOKEN_KEY, msg.token); else localStorage.removeItem(TOKEN_KEY); } catch (e) {} }
     });
 
