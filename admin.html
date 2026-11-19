@@ -3861,6 +3861,8 @@
         col: [70.88, 50.62, 54, 78, 46.5, 78, 50.62, 50.62], tc: 7,   // 表は7列。題名はH列まで（8列）の真ん中
         row: [35.25, 18.75] }
     };
+    // 出面表の線の太さ（pt）と、請求書のうすい線（太さ・色）
+    var DZ_LW = 0.75, INV_LW = 0.75, INV_SOFT = '#a6a6a6';
     // 線や文字を、Excelのセルの位置に置く道具
     function xlGrid(g) {
       var cl = [0], rt = [0];
@@ -3868,18 +3870,26 @@
       g.row.forEach(function (h) { rt.push(rt[rt.length - 1] + h); });
       var pt = function (n) { return (Math.round(n * 100) / 100) + 'pt'; };
       var X = function (c) { return g.x0 + cl[c] * g.sx; }, Y = function (r) { return g.y0 + rt[r] * g.sy; };
+      // 線は1枚の絵（SVG）にまとめて描く。四角い箱で線を描くと、印刷のときに画面の点の大きさに丸められて
+      // 線ごとに太さがバラバラになる（細い線が太く・濃く出る）。SVGなら、決めた太さのまま印刷される
+      var L = [], r2 = function (n) { return Math.round(n * 1000) / 1000; };
+      var line = function (x, y, w, h, color) { L.push('<rect x="' + r2(x) + '" y="' + r2(y) + '" width="' + r2(w) + '" height="' + r2(h) + '" fill="' + (color || '#000') + '"/>'); return ''; };
       return {
         X: X, Y: Y, rt: rt, cl: cl, pt: pt,
+        // 横線（r行の上の線）・縦線（c列の左の線）。w＝太さ（pt）、color＝色（なければ黒）
+        h: function (r, c1, c2, w, color) { return line(X(c1) - w / 2, Y(r) - w / 2, X(c2) - X(c1) + w, w, color); },
+        v: function (c, r1, r2_, w, color) { return line(X(c) - w / 2, Y(r1) - w / 2, w, Y(r2_) - Y(r1) + w, color); },
+        // 四角い枠（二重線などに使う）
+        box: function (x, y, w, h, lw, color) { L.push('<rect x="' + r2(x) + '" y="' + r2(y) + '" width="' + r2(w) + '" height="' + r2(h) + '" fill="none" stroke="' + (color || '#000') + '" stroke-width="' + lw + '"/>'); return ''; },
+        // ページの大きさ（pt）の絵にして返す。ページの最後に足す
+        svg: function (W, H) { return '<svg class="xsvg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' + L.join('') + '</svg>'; },
         fz: function (n) { return pt(n * g.fz); },
         fg: function (n) { return pt(n * (g.fg || g.fz)); },
         // セル（c1列〜c2列の手前、r1行〜r2行の手前）に文字を置く。a＝横（l/c/r）、v＝縦（t/c/b）
         cell: function (c1, c2, r1, r2, html, a, v, css) {
           return '<div class="xc ' + (a || 'l') + ' v' + (v || 'b') + '" style="left:' + pt(X(c1)) + ';top:' + pt(Y(r1)) + ';width:' + pt(X(c2) - X(c1)) +
             ';height:' + pt(Y(r2) - Y(r1)) + ';' + (css || '') + '">' + html + '</div>';
-        },
-        // 横線（r行の上の線）・縦線（c列の左の線）。w＝太さ（pt）
-        h: function (r, c1, c2, w) { return '<i class="xl" style="left:' + pt(X(c1) - w / 2) + ';top:' + pt(Y(r) - w / 2) + ';width:' + pt(X(c2) - X(c1) + w) + ';height:' + pt(w) + '"></i>'; },
-        v: function (c, r1, r2, w) { return '<i class="xl" style="left:' + pt(X(c) - w / 2) + ';top:' + pt(Y(r1) - w / 2) + ';width:' + pt(w) + ';height:' + pt(Y(r2) - Y(r1) + w) + '"></i>'; }
+        }
       };
     }
     function dzPage(c, s, m) {
@@ -4009,10 +4019,10 @@
         kt: [[zero(tot.q), 16], [zero(tot.d), 16], [zero(tot.od / 60), 16], [zero(tot.n), 16], [zero(tot.on / 60), 16]]
       }[kind];
       tots.forEach(function (t, k) { put(2 + k, last - 1, t); });
-      // 表の線（細線）
-      for (var rr = H0; rr <= last; rr++) out += G.h(rr, 0, nc, g0.lw);
-      for (var cc = 0; cc <= nc; cc++) out += G.v(cc, H0, last, g0.lw);
-      return '<div class="dz">' + out + '</div>';
+      // 表の線：どの形も、外枠も中の線も、全部同じ太さ（DZ_LW）にする
+      for (var rr = H0; rr <= last; rr++) out += G.h(rr, 0, nc, DZ_LW);
+      for (var cc = 0; cc <= nc; cc++) out += G.v(cc, H0, last, DZ_LW);
+      return '<div class="dz">' + out + G.svg(595.28, 841.61) + '</div>';   // 210mm × 296.9mm
     }    // 請求書・出面表を印刷する（見えない枠で印刷の画面を出す）
     //  mode：'both' 現場ごとに 請求書（A4横）→ 出面表（A4縦）／'inv' 請求書だけ／'dz' 出面表だけ
     // 請求書・出面表のHTMLを作る（印刷と「画面で見る」の両方で使う）。labels＝1枚ずつの名前
@@ -4039,18 +4049,18 @@
           // 左：金額・工事件名など
           o += G.cell(1, 2, 7, 8, '金　　額', 'c', 'c', 'font-size:' + f(13));
           o += G.cell(2, 6, 7, 8, '¥' + num(all) + '-', 'c', 'c', 'font-size:' + f(18));
-          o += G.h(8, 2, 6, 0.3);
+          o += G.h(8, 2, 6, INV_LW, INV_SOFT);
           o += G.cell(1, 2, 10, 11, '工事件名', 'c', 'c', 'font-size:' + f(13));
           o += G.cell(2, 7, 10, 11, esc(m.title || ''), 'l', 'c', 'font-size:' + f(14) + ';padding-left:.5em');   // Excelの書式「_ @」で前に半角1つ分あく
           o += G.cell(1, 2, 12, 13, '施工場所', 'c', 'c', 'font-size:' + f(13));
           o += G.cell(2, 5, 12, 13, esc(m.place || ''), 'l', 'c', 'font-size:' + f(14) + ';padding-left:.5em');
-          o += G.h(13, 2, 5, 0.3);
+          o += G.h(13, 2, 5, INV_LW, INV_SOFT);
           o += G.cell(1, 2, 14, 15, '工期', 'c', 'c', 'font-size:' + f(13));
           o += G.cell(2, 5, 14, 15, esc(m.term || ''), 'l', 'c', 'font-size:' + f(14) + ';padding-left:.5em');
-          o += G.h(15, 2, 5, 0.3);
+          o += G.h(15, 2, 5, INV_LW, INV_SOFT);
           o += G.cell(1, 2, 16, 17, '工事概要', 'c', 'c', 'font-size:' + f(13));
           o += G.cell(2, 3, 16, 17, esc(m.outline || ''), 'c', 'c', 'font-size:' + f(14) + ';padding-left:.2em');
-          o += G.h(17, 2, 5, 0.3);
+          o += G.h(17, 2, 5, INV_LW, INV_SOFT);
           // 右：会社
           o += G.cell(9, 13, 6, 7, esc(INV_CO.licence), 'l', 'b', 'font-size:' + G.fg(12) + ';font-family:var(--goth);font-weight:bold');
           o += G.cell(8, 9, 6, 9, '<img src="' + esc(icon) + '" alt="" onerror="this.style.display=\'none\'" style="width:' + G.pt(21 * XL_INV.sx) + ';height:' + G.pt(21 * XL_INV.sy) + '">', 'c', 'c');
@@ -4095,17 +4105,16 @@
           o += G.cell(5, 6, E + 2, E + 3, '合計', 'r', 'c', 'font-size:' + f(14) + PR);
           o += G.cell(6, 7, E + 2, E + 3, num(all), 'r', 'c', 'font-size:' + f(14) + PR);
           // 表の線：まわり（外枠）は黒、中の縦横の線はうすい灰色にする
-          var soft = function (s) { return s.replace('class="xl"', 'class="xl soft"'); };
-          o += G.h(T, 1, 13, 0.3) + G.h(E, 1, 13, 0.3) + G.h(E + 3, 5, 13, 0.3);   // 上・表の下・合計の下
-          for (var r = T + 1; r < E; r++) o += soft(G.h(r, 1, 13, 0.3));
-          for (var r2 = E + 1; r2 < E + 3; r2++) o += soft(G.h(r2, 5, 13, 0.3));
-          o += G.v(1, T, E, 0.3) + G.v(13, T, E + 3, 0.3) + G.v(5, E, E + 3, 0.3);   // 左・右・小計の左
-          o += soft(G.v(4, T, E, 0.3)) + soft(G.v(5, T, E, 0.3));
-          [6, 7].forEach(function (cc) { o += soft(G.v(cc, T, E + 3, 0.3)); });
+          // 表の線：外枠も中の線も、全部うすい灰色（印刷で濃く出ないように）
+          for (var r = T; r <= E; r++) o += G.h(r, 1, 13, INV_LW, INV_SOFT);
+          for (var r2 = E + 1; r2 <= E + 3; r2++) o += G.h(r2, 5, 13, INV_LW, INV_SOFT);
+          [1, 4].forEach(function (cc) { o += G.v(cc, T, E, INV_LW, INV_SOFT); });
+          [5, 6, 7, 13].forEach(function (cc) { o += G.v(cc, T, E + 3, INV_LW, INV_SOFT); });
           // まわりの二重線（A列の左・N列の右・1行目の上・30行目の下）
           var fx = G.X(0), fy = G.Y(0), fw = G.X(14) - fx, fh = G.Y(30) - fy;
-          o += '<i class="xf" style="left:' + G.pt(fx - 1.05) + ';top:' + G.pt(fy - 1.05) + ';width:' + G.pt(fw + 2.1) + ';height:' + G.pt(fh + 2.1) + '"></i>';
-          pages += '<div class="pg">' + o + '</div>';
+          // まわりの二重線もうすい灰色（外側と内側の2本）
+          o += G.box(fx - 1.4, fy - 1.4, fw + 2.8, fh + 2.8, INV_LW, INV_SOFT) + G.box(fx + 0.1, fy + 0.1, fw - 0.2, fh - 0.2, INV_LW, INV_SOFT);
+          pages += '<div class="pg">' + o + G.svg(841.89, 595) + '</div>';   // 297mm × 209.9mm
           if (mode === 'both') pages += dzPage(c, s, m);
         });
       });
@@ -4125,8 +4134,7 @@
         '.xc { position: absolute; display: flex; padding: 0 1.6pt; white-space: nowrap; line-height: 1; }' +
         '.xc.l { justify-content: flex-start; } .xc.c { justify-content: center; } .xc.r { justify-content: flex-end; }' +
         '.xc.vt { align-items: flex-start; } .xc.vc { align-items: center; } .xc.vb { align-items: flex-end; padding-bottom: 1.2pt; }' +
-        '.xl { position: absolute; background: #000; display: block; }' +
-        '.xl.soft { background: #a6a6a6; }' +
+        '.xsvg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }' +
         '.xf { position: absolute; display: block; border: 2.1pt double #000; }' +
         '.ttl { text-decoration: underline double; text-underline-offset: .12em; text-decoration-thickness: .04em; }' +
         '@media print { .pg, .dz { margin: 0; } }' +
