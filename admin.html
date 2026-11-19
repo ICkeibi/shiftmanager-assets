@@ -219,6 +219,26 @@
     .st-tbl tr.isred td { background: #fce8e6; }
     @media (prefers-color-scheme: dark) { .st-tbl tr.isred td { background: #42201e; } }
     .st-tbl tr.isred td.ch, .st-tbl tr.isnew td.ch { background: var(--warn-bg); }
+    /* 勤怠の直し */
+    .kn-sel { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); font: inherit; }
+    .kn-sum { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+    .kn-sum span { border: 1px solid var(--line); border-radius: 8px; padding: 4px 9px; font-size: 12px; color: var(--text2); background: var(--card); }
+    .kn-sum b { color: var(--text); margin-left: 4px; }
+    .kn-tbl th { min-width: 0; text-align: center; white-space: nowrap; }
+    .kn-tbl td.v { padding: 7px 6px; text-align: right; color: var(--text2); white-space: nowrap; }
+    .kn-tbl td.dt { padding: 4px 8px; white-space: nowrap; font-weight: bold; }
+    .kn-tbl td.dt.hol { color: var(--over); }
+    .kn-tbl td.sf { padding: 4px 6px; text-align: center; font-size: 12px; color: var(--text2); }
+    .kn-tbl tr.nt td.sf { color: #4f81bd; font-weight: bold; }
+    .kn-tbl tr.nt td { border-bottom: 2px solid var(--line); }
+    .kn-tbl td input.t { min-width: 58px; width: 64px; text-align: center; }
+    .kn-tbl td input.c { min-width: 36px; width: 42px; text-align: center; }
+    .kn-tbl td input.p { min-width: 120px; }
+    .kn-tbl td input[type=checkbox] { width: auto; min-width: 0; margin: 8px auto; display: block; }
+    .kn-tbl td.yl { background: #fffbe6; }
+    @media (prefers-color-scheme: dark) { .kn-tbl td.yl { background: #2e2a16; } }
+    .kn-tbl td.ch { background: var(--warn-bg); }
+    .kn-tbl td.en { font-size: 11px; color: var(--text2); padding: 0 6px 0 0; white-space: nowrap; }
     /* 請求書：期限が近い会社のカードの目印（ホームの「対応が必要な処理」と同じ。済にすると外れる） */
     .blx-co.due-over { box-shadow: 0 0 0 3px #d93025; }
     .blx-co.due-today { box-shadow: 0 0 0 3px #f29900; }
@@ -401,6 +421,7 @@
       <a href="#" data-more="ot"><i data-icon="ot"></i><span>残業<small>定時後残業</small></span></a>
       <a href="#" data-more="chart"><i data-icon="chart"></i><span>グラフ<small>売上・人件費</small></span></a>
       <a href="#" data-more="nsk" id="moreNsk" class="hidden"><i data-icon="chart"></i><span>NSK<small>別の会社（暗証番号をもう一度入れる）</small></span></a>
+      <a href="#" data-more="kin"><i data-icon="ot"></i><span>勤怠の直し<small>1人ずつ・日ごとに直す</small></span></a>
       <a href="#" data-more="kou"><i data-icon="bill"></i><span>甲乙・扶養人数<small>社員シートのK2・J2を直す</small></span></a>
       <a href="#" data-more="log"><i data-icon="nencho"></i><span>操作の記録<small>誰が・いつ・何をしたか</small></span></a>
       <a href="#" data-more="tools"><i data-icon="gear"></i><span>ツール<small>バックアップ・備考・予定</small></span></a>
@@ -752,6 +773,15 @@
         <div id="kuMsg"></div>
         <div id="kuBody"><div class="loading">読み込み中...</div></div>
       </div>
+      <!-- 勤怠の直し（勤怠管理表の社員シートの 10〜71行目。黄色の欄だけ直す） -->
+      <div class="page hidden" id="pKin">
+        <div class="toolbar"><div><h2>勤怠の直し</h2><div class="sub">勤怠管理表の社員シートを、シートを開かずに直します。直せるのはシートの黄色の欄（勤怠・始業・終業・休憩・資格・隊長・備考）と、定時の時刻だけです。勤務時間や残業はシートの式が計算します。直したことは操作の記録に残ります。</div></div></div>
+        <div class="st-bar"><label>月 <select id="knMonth" class="kn-sel"></select></label>
+          <label>人 <select id="knPerson" class="kn-sel"></select></label>
+          <button class="btn" id="knReload">読み直す</button><span class="sp"></span><span id="knDirty" class="st-dirty hidden"></span><button class="btn main" id="knSave" disabled>保存</button></div>
+        <div id="knMsg"></div>
+        <div id="knBody"><div class="loading">読み込み中...</div></div>
+      </div>
       <div class="page hidden" id="pLog">
         <div class="toolbar"><div><h2>操作の記録</h2><div class="sub">誰が・いつ・何をしたか（ログイン・保存・書き込み・計算など）。新しいものが上です。見るだけで、直せません。</div></div>
           <button class="btn" id="lgReload">最新にする</button></div>
@@ -1096,6 +1126,8 @@
       if (where === 'log') lgOpen(false);
       $('pKou').classList.toggle('hidden', where !== 'kou');
       if (where === 'kou') kuOpen();
+      $('pKin').classList.toggle('hidden', where !== 'kin');
+      if (where === 'kin') knOpen();
       // 打刻の管理：打刻システムの管理者画面を、この中に出す（初めて押したときに読み込む）
       var dv = $('dakokuView');
       if (where === 'dakokuAdmin' && DAKOKU_URL) {
@@ -1116,7 +1148,7 @@
         v.classList.add('hidden');
       }
       // その他▾：中のものを開いているときは「その他」を光らせる
-      var inMore = !!VIEW_URL[where] || where === 'leave' || where === 'otc' || where === 'wage' || where === 'tools' || where === 'log' || where === 'kou' || (where === 'nencho' && $('navNencho').classList.contains('hidden'));
+      var inMore = !!VIEW_URL[where] || where === 'leave' || where === 'otc' || where === 'wage' || where === 'tools' || where === 'log' || where === 'kou' || where === 'kin' || (where === 'nencho' && $('navNencho').classList.contains('hidden'));
       $('navMore').classList.toggle('on', inMore);
       Array.prototype.forEach.call(document.querySelectorAll('#moreMenu a[data-more]'), function (a) { a.classList.toggle('on', a.getAttribute('data-more') === where); });
       $('moreMenu').classList.add('hidden');
@@ -2886,6 +2918,114 @@
       call('adminKouSave', [PIN, DEVICE, $('kuMonth').value, list], function (r) {
         KU.busy = false; KU.d = r; KU.ch = {}; kuDraw(); $('kuMsg').innerHTML = '<div class="ok">' + esc(r.message) + '</div>';
       }, function (m) { KU.busy = false; kuState(); $('kuMsg').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+    });
+
+    // ── 勤怠の直し（社員シートの 10〜71行目。黄色の欄と定時だけ直す） ──
+    var KN = { init: false, d: null, ch: {}, busy: false, person: '' };
+    var KN_TIME = { F: 1, G: 1, H: 1, T: 1, U: 1 };
+    function knOpen() {
+      if (KN.init) return;
+      call('adminMonths', [PIN, DEVICE], function (r) {
+        KN.init = true;
+        var ms = r.months.filter(function (m) { return m.hasKintai; });
+        $('knMonth').innerHTML = ms.map(function (m) { return '<option>' + esc(m.label) + '</option>'; }).join('');
+        $('knMonth').value = ms.length ? ms[ms.length - 1].label : '';
+        knLoad(true);
+      }, function (m) { $('knBody').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+    }
+    // people：true のときは人の一覧から読み直す（月を変えたとき）
+    function knLoad(people) {
+      if (!$('knMonth').value) { $('knBody').innerHTML = '<div class="note">勤怠管理表のある月がありません</div>'; return; }
+      KN.ch = {}; knState(); $('knMsg').innerHTML = '';
+      var sheet = people ? '' : $('knPerson').value;
+      $('knBody').innerHTML = '<div class="loading">勤怠管理表を読んでいます...</div>';
+      call('adminKinGet', [PIN, DEVICE, $('knMonth').value, sheet], function (r) {
+        var sel = $('knPerson'), keep = KN.person;
+        sel.innerHTML = r.people.map(function (p) { return '<option value="' + esc(p.sheet) + '">' + esc(p.name) + '</option>'; }).join('');
+        if (!r.rows) {
+          if (!r.people.length) { $('knBody').innerHTML = '<div class="note">社員シートがありません</div>'; return; }
+          sel.value = r.people.some(function (p) { return p.sheet === keep; }) ? keep : r.people[0].sheet;
+          KN.person = sel.value; knLoad(false); return;
+        }
+        sel.value = r.sheet; KN.person = r.sheet; KN.d = r; knDraw();
+      }, function (m) { $('knBody').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+    }
+    function knState() {
+      var n = Object.keys(KN.ch).length;
+      $('knDirty').textContent = '変えたところ ' + n + 'か所（まだ保存していません）'; $('knDirty').classList.toggle('hidden', !n);
+      $('knSave').disabled = !n || KN.busy;
+    }
+    function knVal(x, k) { var key = x.r + ':' + k; return KN.ch.hasOwnProperty(key) ? KN.ch[key] : x[k]; }
+    function knDraw() {
+      var r = KN.d; if (!r || !r.rows) return;
+      var codes = r.codes || {};
+      var dl = '<datalist id="knCodes">' + Object.keys(codes).sort(function (a, b) { return a - b; }).map(function (c) { return '<option value="' + esc(c) + '">' + esc(codes[c]) + '</option>'; }).join('') + '</datalist>';
+      var inp = function (x, k, cls, extra) {
+        var v = knVal(x, k), ch = KN.ch.hasOwnProperty(x.r + ':' + k);
+        if (x.fx[k]) return '<td class="v" title="式なので直せません">' + esc(x[k]) + '</td>';
+        return '<td class="yl' + (ch ? ' ch' : '') + '"><input class="' + cls + '" data-kn="' + x.r + '" data-k="' + k + '" value="' + esc(v) + '"' + (extra || '') + '></td>';
+      };
+      var box = function (x, k) {
+        var v = knVal(x, k), ch = KN.ch.hasOwnProperty(x.r + ':' + k);
+        if (x.fx[k]) return '<td class="v">' + (x[k] ? '✓' : '') + '</td>';
+        return '<td class="yl' + (ch ? ' ch' : '') + '"><input type="checkbox" data-kn="' + x.r + '" data-k="' + k + '"' + (v ? ' checked' : '') + '></td>';
+      };
+      var codeName = function (x) {
+        var v = String(knVal(x, 'D')); if (v === String(x.D)) return x.E || '';
+        return codes[v] || (v ? '？' : '');
+      };
+      $('knBody').innerHTML = dl +
+        '<div class="kn-sum">' + (r.sum || []).map(function (s) { return '<span>' + esc(s.h) + '<b>' + esc(s.v) + '</b></span>'; }).join('') + '</div>' +
+        '<div class="st-wrap"><table class="st-tbl kn-tbl"><thead><tr>' +
+        ['日', '', '勤怠', '', '始業', '終業', '休憩', '勤務時間', '普通残業', '深夜残業', '休日労働', '残業時間', '資格', '隊長', '会社（備考）', '住所（備考）', '定時始業', '定時終業']
+          .map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr></thead><tbody>' +
+        r.rows.map(function (x) {
+          return '<tr class="' + (x.night ? 'nt' : '') + '">' +
+            '<td class="dt' + (x.hol ? ' hol' : '') + '">' + (x.night ? '' : esc(x.m) + '/' + esc(x.day) + '（' + esc(x.wd) + '）') + '</td>' +
+            '<td class="sf">' + (x.night ? '夜' : '昼') + '</td>' +
+            inp(x, 'D', 'c', ' list="knCodes" inputmode="numeric"') + '<td class="en" data-en="' + x.r + '">' + esc(codeName(x)) + '</td>' +
+            inp(x, 'F', 't') + inp(x, 'G', 't') + inp(x, 'H', 't') +
+            ['I', 'J', 'K', 'L', 'M'].map(function (k) { return '<td class="v">' + esc(x[k]) + '</td>'; }).join('') +
+            box(x, 'N') + box(x, 'O') + inp(x, 'P', 'p') + inp(x, 'Q', 'p') + inp(x, 'T', 't') + inp(x, 'U', 't') + '</tr>';
+        }).join('') + '</tbody></table></div>' +
+        '<p class="sub" style="margin-top:6px">勤怠は数字で入れます（' + Object.keys(codes).sort(function (a, b) { return a - b; }).map(function (c) { return esc(c) + ' ' + esc(codes[c]); }).join('・') +
+        '）。時刻は 8:30 のように入れます（830 でも大丈夫です）。定時始業・定時終業は、開始時間が違う日だけ変えます。保存すると、勤務時間や残業の数字も新しくなります。</p>';
+      knState();
+    }
+    function knSet(el) {
+      if (!KN.d || !el.hasAttribute || !el.hasAttribute('data-kn')) return;
+      var row = Number(el.getAttribute('data-kn')), k = el.getAttribute('data-k');
+      var x = KN.d.rows.filter(function (y) { return y.r === row; })[0]; if (!x) return;
+      var v = el.type === 'checkbox' ? el.checked : el.value.trim(), key = row + ':' + k;
+      var same = el.type === 'checkbox' ? v === x[k] : (KN_TIME[k] ? knTime(v) === knTime(x[k]) : String(v) === String(x[k]));
+      if (same) delete KN.ch[key]; else KN.ch[key] = v;
+      el.closest('td').classList.toggle('ch', !same);
+      if (k === 'D') { var en = document.querySelector('#knBody [data-en="' + row + '"]'); if (en) en.textContent = v === String(x.D) ? (x.E || '') : ((KN.d.codes || {})[v] || (v ? '？' : '')); }
+      knState();
+    }
+    function knTime(s) {
+      s = String(s || '').replace(/[０-９：]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); }).replace(/\s/g, '');
+      var m = s.match(/^(\d{1,2}):?(\d{2})$/); return m ? Number(m[1]) + ':' + m[2] : s;
+    }
+    $('pKin').addEventListener('input', function (e) { knSet(e.target); });
+    $('pKin').addEventListener('change', function (e) { knSet(e.target); });
+    $('knMonth').addEventListener('change', async function () {
+      if (Object.keys(KN.ch).length && !await askOk('まだ保存していない直しがあります。捨てて月を変えますか？')) return;
+      knLoad(true);
+    });
+    $('knPerson').addEventListener('change', async function () {
+      if (Object.keys(KN.ch).length && !await askOk('まだ保存していない直しがあります。捨てて人を変えますか？')) { $('knPerson').value = KN.person; return; }
+      KN.person = $('knPerson').value; knLoad(false);
+    });
+    $('knReload').addEventListener('click', function () { knLoad(false); });
+    $('knSave').addEventListener('click', async function () {
+      var list = Object.keys(KN.ch).map(function (key) { var p = key.split(':'); return { r: Number(p[0]), k: p[1], v: KN.ch[key] }; });
+      if (!list.length || KN.busy || !KN.d) return;
+      if (!await askOk(KN.d.name + ' の ' + $('knMonth').value + ' の勤怠を ' + list.length + 'か所直します。よろしいですか？')) return;
+      KN.busy = true; knState(); $('knMsg').innerHTML = '<div class="run">保存しています...</div>';
+      call('adminKinSave', [PIN, DEVICE, $('knMonth').value, KN.person, list], function (r) {
+        KN.busy = false; KN.d = r; KN.ch = {}; knDraw(); $('knMsg').innerHTML = '<div class="ok">' + esc(r.message) + '</div>';
+      }, function (m) { KN.busy = false; knState(); $('knMsg').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
     });
 
     // ── 操作の記録（アクセス記録シートを読むだけ） ──
