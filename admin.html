@@ -2939,14 +2939,11 @@
       KN.ch = {}; knState(); $('knMsg').innerHTML = '';
       var sheet = people ? '' : $('knPerson').value;
       $('knBody').innerHTML = '<div class="loading">勤怠管理表を読んでいます...</div>';
-      call('adminKinGet', [PIN, DEVICE, $('knMonth').value, sheet], function (r) {
-        var sel = $('knPerson'), keep = KN.person;
+      // 月を変えたときは、人の一覧と（前に見ていた人か1人目の）シートを1回で読む
+      call('adminKinGet', [PIN, DEVICE, $('knMonth').value, sheet, KN.person], function (r) {
+        var sel = $('knPerson');
         sel.innerHTML = r.people.map(function (p) { return '<option value="' + esc(p.sheet) + '">' + esc(p.name) + '</option>'; }).join('');
-        if (!r.rows) {
-          if (!r.people.length) { $('knBody').innerHTML = '<div class="note">社員シートがありません</div>'; return; }
-          sel.value = r.people.some(function (p) { return p.sheet === keep; }) ? keep : r.people[0].sheet;
-          KN.person = sel.value; knLoad(false); return;
-        }
+        if (!r.rows) { $('knBody').innerHTML = '<div class="note">社員シートがありません</div>'; return; }
         sel.value = r.sheet; KN.person = r.sheet; KN.d = r; knDraw();
       }, function (m) { $('knBody').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
     }
