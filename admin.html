@@ -3227,16 +3227,55 @@
     function stOrdDraw() {
       var o = ST.ord, box = $('stOrder');
       if (!o) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+      // 書き直しても、見ていた場所（一覧と画面のスクロール）はそのまま
+      var old = $('stOrdList'), keepTop = old ? old.scrollTop : 0, keepY = window.scrollY;
       box.classList.remove('hidden');
       box.innerHTML = '<div class="panel" style="padding:12px 16px;margin:8px 0;border:2px solid var(--brand)">' +
-        '<b>' + esc(ST.name) + 'の並び順</b><span class="note" style="margin-left:8px">↑↓で動かして「この順で保存」。上から順に、請求書・売上累計表に並びます。</span>' +
-        '<ol style="margin:8px 0;padding-left:28px;max-height:420px;overflow:auto">' + o.map(function (k, i) {
-          return '<li style="padding:3px 0"><span style="display:inline-block;min-width:240px">' + esc(k) + '</span>' +
+        '<b>' + esc(ST.name) + 'の並び順</b><span class="note" style="margin-left:8px">左の ≡ をつまんで上下に動かすか、↑↓で1つずつ動かして「この順で保存」。上から順に、請求書・売上累計表に並びます。</span>' +
+        '<ol id="stOrdList" style="margin:8px 0;padding-left:34px;max-height:70vh;overflow:auto">' + o.map(function (k, i) {
+          return '<li draggable="true" data-oi="' + i + '" style="padding:3px 0;border-top:2px solid transparent">' +
+            '<span class="ord-grip" title="つまんで上下に動かす" style="display:inline-block;width:26px;text-align:center;cursor:grab;color:var(--text3);font-size:16px;user-select:none">≡</span>' +
+            '<span style="display:inline-block;min-width:240px">' + esc(k) + '</span>' +
             '<button type="button" class="btn" data-ou="' + i + '" style="padding:2px 10px"' + (i ? '' : ' disabled') + '>↑</button> ' +
             '<button type="button" class="btn" data-od="' + i + '" style="padding:2px 10px"' + (i < o.length - 1 ? '' : ' disabled') + '>↓</button></li>';
         }).join('') + '</ol>' +
         '<button type="button" class="btn main" id="stOrdSave">この順で保存</button> <button type="button" class="btn" id="stOrdX">やめる</button></div>';
+      $('stOrdList').scrollTop = keepTop; window.scrollTo(0, keepY);
     }
+    // つまんで動かす（ドラッグ）。一覧の上下の端まで持っていくと、自動で流れる
+    var ORD_DRAG = null;
+    $('stOrder').addEventListener('dragstart', function (e) {
+      var li = e.target.closest && e.target.closest('li[data-oi]'); if (!li) return;
+      ORD_DRAG = Number(li.getAttribute('data-oi'));
+      li.style.opacity = '.4';
+      try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(ORD_DRAG)); } catch (x) {}
+    });
+    $('stOrder').addEventListener('dragover', function (e) {
+      if (ORD_DRAG === null) return;
+      e.preventDefault();
+      var list = $('stOrdList'), r = list.getBoundingClientRect();
+      if (e.clientY < r.top + 40) list.scrollTop -= 12; else if (e.clientY > r.bottom - 40) list.scrollTop += 12;
+      Array.prototype.forEach.call(list.querySelectorAll('li'), function (x) { x.style.borderTopColor = 'transparent'; x.style.borderBottom = ''; });
+      var li = e.target.closest && e.target.closest('li[data-oi]');
+      if (li) {
+        var b = li.getBoundingClientRect(), after = e.clientY > b.top + b.height / 2;
+        if (after) li.style.borderBottom = '2px solid var(--brand)'; else li.style.borderTopColor = 'var(--brand)';
+      }
+    });
+    $('stOrder').addEventListener('drop', function (e) {
+      if (ORD_DRAG === null) return;
+      e.preventDefault();
+      var li = e.target.closest && e.target.closest('li[data-oi]'), o = ST.ord, from = ORD_DRAG;
+      ORD_DRAG = null;
+      if (!li || !o) { stOrdDraw(); return; }
+      var to = Number(li.getAttribute('data-oi')), b = li.getBoundingClientRect();
+      if (e.clientY > b.top + b.height / 2) to++;   // 行の下半分に落としたら、その行の下へ
+      var item = o.splice(from, 1)[0];
+      if (to > from) to--;
+      o.splice(to, 0, item);
+      stOrdDraw();
+    });
+    $('stOrder').addEventListener('dragend', function () { if (ORD_DRAG !== null) { ORD_DRAG = null; stOrdDraw(); } });
     $('stOrderBtn').addEventListener('click', function () {
       if (!ST.data || !ST.data.order || ST.busy) return;
       if (stDirty()) { stMsg('先に、直したところを「保存」するか「元に戻す」を押してください', 'err'); return; }
