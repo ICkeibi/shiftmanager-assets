@@ -3042,7 +3042,8 @@
         $('stQ').addEventListener('input', stDraw); $('stNewOnly').addEventListener('change', stDraw);
         $('stReload').onclick = async function () { if (stDirty() && !await askOk('保存していない変更を捨てて、読み直しますか？')) return; stLoad(); };
         $('stUndo').onclick = async function () { if (await askOk('保存していない変更を、全部元に戻しますか？')) { stReset(); stDraw(); } };
-        $('stAdd').onclick = function () { ST.adds.push(ST.data.types.map(function (t) { return t === 'check' ? 'FALSE' : ''; })); $('stQ').value = ''; stDraw(); var w = document.querySelector('.st-wrap'); w.scrollTop = w.scrollHeight; var f = document.querySelector('#stTbl tr.add:last-child input'); if (f) f.focus(); };
+        // 時刻の欄は、はじめから決まった時刻を入れておく（請求単価の現場の終業：日勤 18:00・夜勤 5:00）
+        $('stAdd').onclick = function () { ST.adds.push(ST.data.types.map(function (t, i) { return t === 'check' ? 'FALSE' : t === 'time' ? stTimeDef(i) : ''; })); $('stQ').value = ''; stDraw(); var w = document.querySelector('.st-wrap'); w.scrollTop = w.scrollHeight; var f = document.querySelector('#stTbl tr.add:last-child input'); if (f) f.focus(); };
         $('stSave').onclick = stSave;
         var stEdit = function (e) {
           var inp = e.target.closest('[data-c]'); if (!inp || inp.readOnly) return;
@@ -3164,6 +3165,8 @@
           stMsg(/画面からは直せません/.test(e) ? e + '（出勤確認の Apps Script の「管理画面.gs」が古いままかもしれません。新しいものを貼って「新バージョン」でデプロイしてください）' : e, 'err');
         });
     }
+    // 時刻の欄の決まった時刻（見出しに「夜勤」があれば 5:00、ほかは 18:00）
+    function stTimeDef(i) { var h = ST.data && ST.data.heads ? String(ST.data.heads[i] || '') : ''; return /夜勤/.test(h) ? '5:00' : '18:00'; }
     function stDraw() {
       var d = ST.data; if (!d || !d.heads) return;
       var q = $('stQ').value.trim().toLowerCase(), newOnly = $('stNewOnly').checked;
@@ -3196,7 +3199,7 @@
           var ph = { url: 'https://docs.google.com/spreadsheets/d/…', ym: '2026-11', date: '2026/11/30', mday: '1〜31 か 末', int: '3' }[t] || '';
           if (ph) return '<td class="' + (ch ? 'ch' : '') + (t === 'int' ? ' num' : '') + '"><input data-c="' + i + '" value="' + esc(v) + '" placeholder="' + esc(ph) + '"' + (t === 'url' ? ' style="min-width:260px"' : '') + '></td>';
           var sw = t === 'color' && /^#[0-9A-Fa-f]{3,6}$/.test(String(v)) ? '<span class="st-sw" style="background:' + esc(v) + '"></span>' : '';
-          return '<td class="' + cls(t) + (ch ? ' ch' : '') + (sw ? ' clr' : '') + '">' + sw + '<input data-c="' + i + '" value="' + esc(v) + '"' + (t === 'time' ? ' placeholder="18:00"' : t === 'color' ? ' placeholder="#FF0000"' : '') + '></td>';
+          return '<td class="' + cls(t) + (ch ? ' ch' : '') + (sw ? ' clr' : '') + '">' + sw + '<input data-c="' + i + '" value="' + esc(v) + '"' + (t === 'time' ? ' placeholder="' + stTimeDef(i) + '"' : t === 'color' ? ' placeholder="#FF0000"' : '') + '></td>';
         }).join('');
       };
       var rows = d.rows.filter(function (x) { return (!newOnly || x.isNew) && (!q || x.values.join(' ').toLowerCase().indexOf(q) >= 0 || ST.edits[x.row]); });
