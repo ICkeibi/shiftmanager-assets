@@ -3733,8 +3733,8 @@
             };
             var full = one(x.td || [], x.tn || []), short = one(noKu(x.td), noKu(x.tn)), chosen = null;
             if (fit(full.txt, 14, 2) >= 14) chosen = full;
-            else if (fit(short.txt, 14, 2) >= 14) chosen = short;
-            if (chosen) out += G.cell(2, 3, R, R + 1, chosen.html, 'c', 'c', 'font-size:' + f(14) + ';white-space:nowrap');
+            else if (fit(short.txt, 14, 2) >= 11) chosen = short;   // 区を省いて1行に入るなら、少し小さくしても1行のまま（2行にしない）
+            if (chosen) out += G.cell(2, 3, R, R + 1, chosen.html, 'c', 'c', 'font-size:' + f(fit(chosen.txt, 14, 2)) + ';white-space:nowrap');
             else {
               // 2行：昼と夜があれば 1行目に昼・2行目に夜。片方だけなら、場所を半分ずつに分ける
               var dA = noKu(x.td), nA = noKu(x.tn), l1, l2;
