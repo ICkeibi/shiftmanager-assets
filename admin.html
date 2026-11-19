@@ -3981,7 +3981,7 @@
             var blue = function (t) { return '<span style="color:' + BLUE + '">' + esc(t) + '</span>'; };
             var one = function (dA, nA) {
               var pd = dA.join('・'), pn = nA.join('・');
-              return { txt: pd && pn ? pd + '／' + pn : pd || pn, html: pd && pn ? esc(pd) + '／' + blue(pn) : pn ? blue(pn) : esc(pd) };
+              return { txt: pd && pn ? pd + '/' + pn : pd || pn, html: pd && pn ? esc(pd) + '/' + blue(pn) : pn ? blue(pn) : esc(pd) };
             };
             var full = one(x.td || [], x.tn || []), short = one(noKu(x.td), noKu(x.tn)), chosen = null;
             if (fit(full.txt, 14, 2) >= 14) chosen = full;
@@ -3990,7 +3990,7 @@
             else {
               // 2行：昼と夜があれば 1行目に昼・2行目に夜。片方だけなら、場所を半分ずつに分ける
               var dA = noKu(x.td), nA = noKu(x.tn), l1, l2;
-              if (dA.length && nA.length) { l1 = { t: dA.join('・') + '／', h: esc(dA.join('・')) + '／' }; /* 昼と夜があるときは、1行目の終わりに「／」 */ l2 = { t: nA.join('・'), h: blue(nA.join('・')) }; }
+              if (dA.length && nA.length) { l1 = { t: dA.join('・') + '/', h: esc(dA.join('・')) + '/' }; /* 昼と夜があるときは、1行目の終わりに「／」 */ l2 = { t: nA.join('・'), h: blue(nA.join('・')) }; }
               else {
                 var all = dA.length ? dA : nA, half = Math.ceil(all.length / 2), isN = !dA.length;
                 var a1 = all.slice(0, half).join('・') + (all.length > half ? '・' : ''), a2 = all.slice(half).join('・');
@@ -4052,6 +4052,7 @@
           o += G.h(8, 2, 6, INV_LW, INV_SOFT);
           o += G.cell(1, 2, 10, 11, '工事件名', 'c', 'c', 'font-size:' + f(13));
           o += G.cell(2, 7, 10, 11, esc(m.title || ''), 'l', 'c', 'font-size:' + f(14) + ';padding-left:.5em');   // Excelの書式「_ @」で前に半角1つ分あく
+          o += G.h(11, 2, 5, INV_LW, INV_SOFT);   // 工事件名の下の線
           o += G.cell(1, 2, 12, 13, '施工場所', 'c', 'c', 'font-size:' + f(13));
           o += G.cell(2, 5, 12, 13, esc(m.place || ''), 'l', 'c', 'font-size:' + f(14) + ';padding-left:.5em');
           o += G.h(13, 2, 5, INV_LW, INV_SOFT);
@@ -4112,8 +4113,8 @@
           [5, 6, 7, 13].forEach(function (cc) { o += G.v(cc, T, E + 3, INV_LW, INV_SOFT); });
           // まわりの二重線（A列の左・N列の右・1行目の上・30行目の下）
           var fx = G.X(0), fy = G.Y(0), fw = G.X(14) - fx, fh = G.Y(30) - fy;
-          // まわりの二重線もうすい灰色（外側と内側の2本）
-          o += G.box(fx - 1.4, fy - 1.4, fw + 2.8, fh + 2.8, INV_LW, INV_SOFT) + G.box(fx + 0.1, fy + 0.1, fw - 0.2, fh - 0.2, INV_LW, INV_SOFT);
+          // まわりの二重線（黒のまま。外側と内側の2本）
+          o += G.box(fx - 0.7, fy - 0.7, fw + 1.4, fh + 1.4, 0.7) + G.box(fx + 0.7, fy + 0.7, fw - 1.4, fh - 1.4, 0.7);
           pages += '<div class="pg">' + o + G.svg(841.89, 595) + '</div>';   // 297mm × 209.9mm
           if (mode === 'both') pages += dzPage(c, s, m);
         });
