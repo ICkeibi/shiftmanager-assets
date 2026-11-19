@@ -1081,6 +1081,14 @@
       window.scrollTo(0, 0);
       if (document.getElementById('monthSelect').value) doAction(false);
     });
+    // 月払い・請求額の画面の下のボタン「週払い」から来たとき（#weekly）：週払いを開く
+    if (location.hash === '#weekly') {
+      setMode('weekly');
+      (function waitMonth(n) {
+        if (document.getElementById('monthSelect').value) { doAction(false); return; }
+        if (n < 40) setTimeout(function () { waitMonth(n + 1); }, 300);
+      })(0);
+    }
     // 年月の一覧が読めなかったとき（タイムアウトなど）の「もう一度読む」
     document.getElementById('retryBtn').addEventListener('click', function () {
       this.hidden = true;
