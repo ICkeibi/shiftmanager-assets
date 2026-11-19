@@ -401,7 +401,7 @@
       <a href="#" data-more="ot"><i data-icon="ot"></i><span>残業<small>定時後残業</small></span></a>
       <a href="#" data-more="chart"><i data-icon="chart"></i><span>グラフ<small>売上・人件費</small></span></a>
       <a href="#" data-more="nsk" id="moreNsk" class="hidden"><i data-icon="chart"></i><span>NSK<small>別の会社（暗証番号をもう一度入れる）</small></span></a>
-      <a href="#" data-more="log"><i data-icon="nencho"></i><span>操作の記録<small>誰が・いつ・何をしたか</small></span></a>
+      <a href="#" data-more="kou"><i data-icon="bill"></i><span>甲乙・扶養人数<small>社員シートのK2・J2を直す</small></span></a><i data-icon="nencho"></i><span>操作の記録<small>誰が・いつ・何をしたか</small></span></a>
       <a href="#" data-more="tools"><i data-icon="gear"></i><span>ツール<small>バックアップ・備考・予定</small></span></a>
       <a href="#" data-more="wage"><i data-icon="bill"></i><span>賃金台帳<small>1人1枚・5年保存</small></span></a>
       <a href="#" data-more="otc"><i data-icon="ot"></i><span>残業チェック<small>月45時間・年360時間の確認</small></span></a>
@@ -743,6 +743,14 @@
         <div id="tlBody"><div class="loading">読み込み中...</div></div>
       </div>
       <!-- 操作の記録（アクセス記録。誰が・いつ・何をしたか。見るだけ） -->
+      <!-- 甲乙・扶養人数（勤怠管理表の社員シートの K2・J2。シートを開かずに直す） -->
+      <div class="page hidden" id="pKou">
+        <div class="toolbar"><div><h2>甲乙・扶養人数</h2><div class="sub">勤怠管理表の社員シートの「甲乙（K2）」と「扶養人数（J2）」を直します。毎月の所得税の計算に使われます。直したことは操作の記録に残ります。</div></div></div>
+        <div class="st-bar"><label>月 <select id="kuMonth" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--text);font:inherit"></select></label>
+          <button class="btn" id="kuReload">読み直す</button><span class="sp"></span><span id="kuDirty" class="st-dirty hidden"></span><button class="btn main" id="kuSave" disabled>保存</button></div>
+        <div id="kuMsg"></div>
+        <div id="kuBody"><div class="loading">読み込み中...</div></div>
+      </div>
       <div class="page hidden" id="pLog">
         <div class="toolbar"><div><h2>操作の記録</h2><div class="sub">誰が・いつ・何をしたか（ログイン・保存・書き込み・計算など）。新しいものが上です。見るだけで、直せません。</div></div>
           <button class="btn" id="lgReload">最新にする</button></div>
@@ -1085,6 +1093,8 @@
       if (where === 'tools') tlOpen();
       $('pLog').classList.toggle('hidden', where !== 'log');
       if (where === 'log') lgOpen(false);
+      $('pKou').classList.toggle('hidden', where !== 'kou');
+      if (where === 'kou') kuOpen();
       // 打刻の管理：打刻システムの管理者画面を、この中に出す（初めて押したときに読み込む）
       var dv = $('dakokuView');
       if (where === 'dakokuAdmin' && DAKOKU_URL) {
@@ -1105,7 +1115,7 @@
         v.classList.add('hidden');
       }
       // その他▾：中のものを開いているときは「その他」を光らせる
-      var inMore = !!VIEW_URL[where] || where === 'leave' || where === 'otc' || where === 'wage' || where === 'tools' || where === 'log' || (where === 'nencho' && $('navNencho').classList.contains('hidden'));
+      var inMore = !!VIEW_URL[where] || where === 'leave' || where === 'otc' || where === 'wage' || where === 'tools' || where === 'log' || where === 'kou' || (where === 'nencho' && $('navNencho').classList.contains('hidden'));
       $('navMore').classList.toggle('on', inMore);
       Array.prototype.forEach.call(document.querySelectorAll('#moreMenu a[data-more]'), function (a) { a.classList.toggle('on', a.getAttribute('data-more') === where); });
       $('moreMenu').classList.add('hidden');
@@ -2822,6 +2832,61 @@
           (s.schedule ? '' : btn('scheduleSetup', '予定表を作る', true)) + (s.mail.on ? btn('mailOff', '毎朝のメールを止める') : btn('mailOn', '毎朝のメールを始める')));
       // NSK（別の会社）は、今の会社とは関係ないので、パソコンの管理画面には出さない（スマホの画面だけで見る）
     }
+    // ── 甲乙・扶養人数（社員シートの K2・J2） ──
+    var KU = { init: false, d: null, ch: {}, busy: false };
+    function kuOpen() {
+      if (KU.init) return;
+      call('adminMonths', [PIN, DEVICE], function (r) {
+        KU.init = true;
+        var ms = r.months.filter(function (m) { return m.hasKintai; });
+        $('kuMonth').innerHTML = ms.map(function (m) { return '<option>' + esc(m.label) + '</option>'; }).join('');
+        $('kuMonth').value = ms.length ? ms[ms.length - 1].label : '';   // いちばん新しい月
+        kuLoad();
+      }, function (m) { $('kuBody').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+    }
+    function kuLoad() {
+      if (!$('kuMonth').value) { $('kuBody').innerHTML = '<div class="note">勤怠管理表のある月がありません</div>'; return; }
+      KU.ch = {}; $('kuBody').innerHTML = '<div class="loading">勤怠管理表を読んでいます...</div>'; kuState();
+      call('adminKouGet', [PIN, DEVICE, $('kuMonth').value], function (r) { KU.d = r; kuDraw(); }, function (m) { $('kuBody').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+    }
+    function kuState() {
+      var n = Object.keys(KU.ch).length;
+      $('kuDirty').textContent = '変えた人 ' + n + '人（まだ保存していません）'; $('kuDirty').classList.toggle('hidden', !n);
+      $('kuSave').disabled = !n || KU.busy;
+    }
+    function kuDraw() {
+      var r = KU.d; if (!r) return;
+      $('kuBody').innerHTML = '<div class="st-wrap"><table class="st-tbl"><thead><tr><th>氏名（シート）</th><th>甲乙（K2）</th><th>扶養人数（J2）</th></tr></thead><tbody>' +
+        r.rows.map(function (x, i) {
+          var c = KU.ch[x.sheet] || {}, kou = c.kou !== undefined ? c.kou : x.kou, dep = c.dep !== undefined ? c.dep : x.dep;
+          return '<tr><td style="padding:7px 8px"><b>' + esc(x.name) + '</b>' + (x.name !== x.sheet ? '<span class="note">（' + esc(x.sheet) + '）</span>' : '') + '</td>' +
+            '<td class="' + (kou !== x.kou ? 'ch' : '') + '">' + (x.kouF ? '<span class="note" style="padding:7px 8px;display:block">' + esc(x.kou) + '（式）</span>' :
+              '<select data-ku="' + i + '" data-k="kou" style="border:0;background:transparent;color:var(--text);padding:7px 6px;font:inherit">' + r.kouOptions.map(function (o) { return '<option' + (o === kou ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select>') + '</td>' +
+            '<td class="num' + (String(dep) !== String(x.dep) ? ' ch' : '') + '">' + (x.depF ? '<span class="note" style="padding:7px 8px;display:block">' + esc(x.dep) + '（式）</span>' :
+              '<input data-ku="' + i + '" data-k="dep" value="' + esc(dep) + '" inputmode="numeric" style="max-width:90px">') + '</td></tr>';
+        }).join('') + '</tbody></table></div><p class="sub" style="margin-top:6px">「（式）」のマスは勤怠管理表で式になっているので、ここでは直せません。</p>';
+      kuState();
+    }
+    $('pKou').addEventListener('change', function (e) {
+      var el = e.target; if (!el.hasAttribute || !el.hasAttribute('data-ku') || !KU.d) return;
+      var x = KU.d.rows[Number(el.getAttribute('data-ku'))], k = el.getAttribute('data-k'), v = el.value.trim();
+      var c = KU.ch[x.sheet] || {};
+      if (String(v) === String(x[k])) delete c[k]; else c[k] = v;
+      if (Object.keys(c).length) KU.ch[x.sheet] = c; else delete KU.ch[x.sheet];
+      el.closest('td').classList.toggle('ch', String(v) !== String(x[k])); kuState();
+    });
+    $('kuMonth').addEventListener('change', kuLoad);
+    $('kuReload').addEventListener('click', kuLoad);
+    $('kuSave').addEventListener('click', async function () {
+      var list = Object.keys(KU.ch).map(function (s) { var c = KU.ch[s]; return { sheet: s, dep: c.dep, kou: c.kou }; });
+      if (!list.length || KU.busy) return;
+      if (!await askOk($('kuMonth').value + ' の勤怠管理表の ' + list.length + '人分を直します。よろしいですか？')) return;
+      KU.busy = true; kuState(); $('kuMsg').innerHTML = '<div class="run">保存しています...</div>';
+      call('adminKouSave', [PIN, DEVICE, $('kuMonth').value, list], function (r) {
+        KU.busy = false; KU.d = r; KU.ch = {}; kuDraw(); $('kuMsg').innerHTML = '<div class="ok">' + esc(r.message) + '</div>';
+      }, function (m) { KU.busy = false; kuState(); $('kuMsg').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+    });
+
     // ── 操作の記録（アクセス記録シートを読むだけ） ──
     var LG = { rows: null, busy: false };
     function lgOpen(force) {
