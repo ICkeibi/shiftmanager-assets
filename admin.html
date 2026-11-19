@@ -3738,14 +3738,14 @@
             else {
               // 2行：昼と夜があれば 1行目に昼・2行目に夜。片方だけなら、場所を半分ずつに分ける
               var dA = noKu(x.td), nA = noKu(x.tn), l1, l2;
-              if (dA.length && nA.length) { l1 = { t: dA.join('・'), h: esc(dA.join('・')) }; l2 = { t: nA.join('・'), h: blue(nA.join('・')) }; }
+              if (dA.length && nA.length) { l1 = { t: dA.join('・') + '／', h: esc(dA.join('・')) + '／' }; /* 昼と夜があるときは、1行目の終わりに「／」 */ l2 = { t: nA.join('・'), h: blue(nA.join('・')) }; }
               else {
                 var all = dA.length ? dA : nA, half = Math.ceil(all.length / 2), isN = !dA.length;
                 var a1 = all.slice(0, half).join('・') + (all.length > half ? '・' : ''), a2 = all.slice(half).join('・');
                 l1 = { t: a1, h: isN ? blue(a1) : esc(a1) }; l2 = { t: a2, h: isN ? blue(a2) : esc(a2) };
               }
               var sz = Math.min(9.5, fit(l1.t.length > l2.t.length ? l1.t : l2.t, 9.5, 2));   // 行の高さに2行入る大きさ
-              out += G.cell(2, 3, R, R + 1, l1.h + '<br>' + l2.h, 'c', 'c', 'font-size:' + f(sz) + ';white-space:nowrap;line-height:1.05');
+              out += G.cell(2, 3, R, R + 1, '<div style="text-align:center;line-height:1.05">' + l1.h + '<br>' + l2.h + '</div>', 'c', 'c', 'font-size:' + f(sz) + ';white-space:nowrap');   // マスは横に並べる作りなので、2行は1つの箱に入れてから改行する
             }
             vals = [null, [v(dn), 14], [h(x.od), 14], [v(nn), 14], [h(x.on), 14, 'r', 'b'], [v(x.q), 14, 'c', 'b']];
           } else
