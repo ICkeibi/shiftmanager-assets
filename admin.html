@@ -4071,32 +4071,37 @@
           o += G.cell(11, 13, 16, 17, esc(INV_CO.acName), 'l', 'c', 'font-size:' + f(12));
           // 表（19行目＝見出し、20行目から）
           var T = 18, n = rows.length, E = T + 1 + n;   // E＝小計の行
-          o += G.cell(1, 4, T, T + 1, '名称', 'l', 'c', 'font-size:' + f(14));
-          o += G.cell(4, 5, T, T + 1, '単価', 'l', 'c', 'font-size:' + f(14));
-          o += G.cell(5, 6, T, T + 1, '数量', 'l', 'c', 'font-size:' + f(14));
-          o += G.cell(6, 7, T, T + 1, '金額', 'l', 'c', 'font-size:' + f(14));
-          o += G.cell(7, 13, T, T + 1, '特記事項', 'l', 'c', 'font-size:' + f(14));
+          // 文字と線の間に少しすき間をあける（左の文字は左に、数字は右に .45em）
+          var PL = ';padding-left:.45em', PR = ';padding-right:.45em';
+          o += G.cell(1, 4, T, T + 1, '名称', 'l', 'c', 'font-size:' + f(14) + PL);
+          o += G.cell(4, 5, T, T + 1, '単価', 'l', 'c', 'font-size:' + f(14) + PL);
+          o += G.cell(5, 6, T, T + 1, '数量', 'l', 'c', 'font-size:' + f(14) + PL);
+          o += G.cell(6, 7, T, T + 1, '金額', 'l', 'c', 'font-size:' + f(14) + PL);
+          o += G.cell(7, 13, T, T + 1, '特記事項', 'l', 'c', 'font-size:' + f(14) + PL);
           rows.forEach(function (x, i) {
             var R = T + 1 + i;
-            o += G.cell(1, 4, R, R + 1, esc(x.name), 'l', 'c', 'font-size:' + f(14));
-            o += G.cell(4, 5, R, R + 1, num(x.unit), 'r', 'c', 'font-size:' + f(11) + ';padding-right:0');
-            o += G.cell(5, 6, R, R + 1, num(x.qty), 'r', 'c', 'font-size:' + f(12) + ';padding-right:0');
-            o += G.cell(6, 7, R, R + 1, num(x.yen), 'r', 'c', 'font-size:' + f(14) + ';padding-right:.14em');
-            o += G.cell(7, 13, R, R + 1, esc(INV_NOTES[i] || ''), 'l', 'c', 'font-size:' + f(12));
+            o += G.cell(1, 4, R, R + 1, esc(x.name), 'l', 'c', 'font-size:' + f(14) + PL);
+            o += G.cell(4, 5, R, R + 1, num(x.unit), 'r', 'c', 'font-size:' + f(14) + PR);
+            o += G.cell(5, 6, R, R + 1, num(x.qty), 'r', 'c', 'font-size:' + f(14) + PR);
+            o += G.cell(6, 7, R, R + 1, num(x.yen), 'r', 'c', 'font-size:' + f(14) + PR);
+            o += G.cell(7, 13, R, R + 1, esc(INV_NOTES[i] || ''), 'l', 'c', 'font-size:' + f(12) + PL);
           });
-          o += G.cell(5, 6, E, E + 1, '小計', 'r', 'c', 'font-size:' + f(14) + ';padding-right:0');
-          o += G.cell(6, 7, E, E + 1, num(sub), 'r', 'c', 'font-size:' + f(14) + ';padding-right:.14em');
-          o += G.cell(5, 6, E + 1, E + 2, '消費税', 'r', 'c', 'font-size:' + f(14) + ';padding-right:0');
-          o += G.cell(6, 7, E + 1, E + 2, num(tax), 'r', 'c', 'font-size:' + f(14) + ';padding-right:.14em');
+          o += G.cell(5, 6, E, E + 1, '小計', 'r', 'c', 'font-size:' + f(14) + PR);
+          o += G.cell(6, 7, E, E + 1, num(sub), 'r', 'c', 'font-size:' + f(14) + PR);
+          o += G.cell(5, 6, E + 1, E + 2, '消費税', 'r', 'c', 'font-size:' + f(14) + PR);
+          o += G.cell(6, 7, E + 1, E + 2, num(tax), 'r', 'c', 'font-size:' + f(14) + PR);
           o += G.cell(7, 8, E + 1, E + 2, '税率', 'c', 'c', 'font-size:' + G.fg(12) + ';font-family:var(--goth);font-weight:bold');
           o += G.cell(8, 9, E + 1, E + 2, '10%', 'l', 'c', 'font-size:' + f(12));
-          o += G.cell(5, 6, E + 2, E + 3, '合計', 'r', 'c', 'font-size:' + f(14) + ';padding-right:0');
-          o += G.cell(6, 7, E + 2, E + 3, num(all), 'r', 'c', 'font-size:' + f(14) + ';padding-right:.14em');
-          // 表の線（ヘアライン）
-          for (var r = T; r <= E; r++) o += G.h(r, 1, 13, 0.3);
-          for (var r2 = E + 1; r2 <= E + 3; r2++) o += G.h(r2, 5, 13, 0.3);
-          [1, 4].forEach(function (cc) { o += G.v(cc, T, E, 0.3); });
-          [5, 6, 7, 13].forEach(function (cc) { o += G.v(cc, T, E + 3, 0.3); });
+          o += G.cell(5, 6, E + 2, E + 3, '合計', 'r', 'c', 'font-size:' + f(14) + PR);
+          o += G.cell(6, 7, E + 2, E + 3, num(all), 'r', 'c', 'font-size:' + f(14) + PR);
+          // 表の線：まわり（外枠）は黒、中の縦横の線はうすい灰色にする
+          var soft = function (s) { return s.replace('class="xl"', 'class="xl soft"'); };
+          o += G.h(T, 1, 13, 0.3) + G.h(E, 1, 13, 0.3) + G.h(E + 3, 5, 13, 0.3);   // 上・表の下・合計の下
+          for (var r = T + 1; r < E; r++) o += soft(G.h(r, 1, 13, 0.3));
+          for (var r2 = E + 1; r2 < E + 3; r2++) o += soft(G.h(r2, 5, 13, 0.3));
+          o += G.v(1, T, E, 0.3) + G.v(13, T, E + 3, 0.3) + G.v(5, E, E + 3, 0.3);   // 左・右・小計の左
+          o += soft(G.v(4, T, E, 0.3)) + soft(G.v(5, T, E, 0.3));
+          [6, 7].forEach(function (cc) { o += soft(G.v(cc, T, E + 3, 0.3)); });
           // まわりの二重線（A列の左・N列の右・1行目の上・30行目の下）
           var fx = G.X(0), fy = G.Y(0), fw = G.X(14) - fx, fh = G.Y(30) - fy;
           o += '<i class="xf" style="left:' + G.pt(fx - 1.05) + ';top:' + G.pt(fy - 1.05) + ';width:' + G.pt(fw + 2.1) + ';height:' + G.pt(fh + 2.1) + '"></i>';
@@ -4121,6 +4126,7 @@
         '.xc.l { justify-content: flex-start; } .xc.c { justify-content: center; } .xc.r { justify-content: flex-end; }' +
         '.xc.vt { align-items: flex-start; } .xc.vc { align-items: center; } .xc.vb { align-items: flex-end; padding-bottom: 1.2pt; }' +
         '.xl { position: absolute; background: #000; display: block; }' +
+        '.xl.soft { background: #a6a6a6; }' +
         '.xf { position: absolute; display: block; border: 2.1pt double #000; }' +
         '.ttl { text-decoration: underline double; text-underline-offset: .12em; text-decoration-thickness: .04em; }' +
         '@media print { .pg, .dz { margin: 0; } }' +
