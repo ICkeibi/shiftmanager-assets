@@ -219,6 +219,16 @@
     .st-tbl tr.isred td { background: #fce8e6; }
     @media (prefers-color-scheme: dark) { .st-tbl tr.isred td { background: #42201e; } }
     .st-tbl tr.isred td.ch, .st-tbl tr.isnew td.ch { background: var(--warn-bg); }
+    /* いちばん左の列（会社名など）は、右へ動かしても見えたままにする */
+    .st-tbl th:first-child, .st-tbl td:first-child { position: sticky; left: 0; z-index: 2; box-shadow: 1px 0 0 var(--line); }
+    .st-tbl th:first-child { z-index: 3; }
+    .st-tbl td:first-child { background: var(--card); }
+    .st-tbl tr.isnew td:first-child { background: #fff8e1; }
+    .st-tbl tr.isred td:first-child { background: #fce8e6; }
+    .st-tbl tr.add td:first-child { background: var(--ok-bg); }
+    .st-tbl td.ch:first-child { background: var(--warn-bg); }
+    /* マウスを当てた行に色をつけて、横に長い行を追いやすくする */
+    .st-tbl tbody tr:hover td { background: var(--brand-bg); }
     .st-tbl td select option { color: #1f2328; }
     .st-tbl tr.add td { background: var(--ok-bg); }
     .st-tbl tr.del td input { text-decoration: line-through; color: var(--text3); }
@@ -3469,6 +3479,8 @@
     // 宛名：「請求書の項目」G列 → 「請求単価」N列 → A列（(株)は株式会社に）
     function invAtena(c, meta) {
       if (meta && meta.atena) return meta.atena;
+      // 出面表の形を「S2」にした会社（S2の下請けの仕事）は、宛名もはじめから 株式会社S2（現場ごとの宛名を入れれば、そちらが先）
+      if (/S2/i.test(String(c.dz || '').replace(/[Ａ-Ｚａ-ｚ０-９]/g, function (ch) { return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0); }))) return '株式会社S2';
       if (c.disp) return c.disp;
       return String(c.name).replace(/^[（(]株[)）]\s*(.+)$/, '株式会社 $1').replace(/^(.+?)\s*[（(]株[)）]$/, '$1 株式会社');
     }
