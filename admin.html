@@ -3635,7 +3635,13 @@
       }[kind];
       heads.forEach(function (x, k) { put(k, H0, x); });
       // 得意先名（S2の形）：会社名から「株式会社」などを取ったもの
-      var client = String(c.name || '').replace(/[（(]株[)）]|株式会社|有限会社/g, '').trim();
+      //  長い名前は短くする（共同企業体 → JV）。それでもマスからはみ出すときは、文字を小さくする
+      var client = String(c.name || '').replace(/[（(]株[)）]|株式会社|有限会社/g, '').replace(/共同企業体/g, 'JV').trim();
+      var fit = function (text, size, col) {
+        var w = G.X(col + 1) - G.X(col) - 4, u = 0;
+        String(text || '').split('').forEach(function (ch) { u += /[ -~｡-ﾟ]/.test(ch) ? 0.6 : 1; });
+        return u && u * size * g0.fz > w ? Math.max(7, Math.floor(w / u / g0.fz * 10) / 10) : size;
+      };
       // 日付の行
       for (var r = 0; r < nRow; r++) {
         var dt = dates[r], R = H0 + 1 + r;
@@ -3663,7 +3669,7 @@
           vals = [[v(x.q), 16], [v(dn), 16], [h(x.od), 16], [v(nn), 16, 'c', 'b'], [h(x.on), 16]];
         } else {
           add('d', dn); add('n', nn); add('o', (x.od || 0) + (x.on || 0));
-          vals = [[v(dn), 16], [v(nn), 16, 'c', 'b', BLUE], [h((x.od || 0) + (x.on || 0)), 16, 'c', 'b'], [place ? client : '', 16, 'c', 'b'], [place, 16, 'c', 'b']];
+          vals = [[v(dn), 16], [v(nn), 16, 'c', 'b', BLUE], [h((x.od || 0) + (x.on || 0)), 16, 'c', 'b'], [place ? client : '', fit(client, 16, 5), 'c', 'b'], [place, fit(place, 16, 6), 'c', 'b']];
         }
         vals.forEach(function (t, k) { put(2 + k, R, t); });
       }
