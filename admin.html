@@ -3696,6 +3696,10 @@
         String(text || '').split('').forEach(function (ch) { u += /[ -~｡-ﾟ]/.test(ch) ? 0.6 : 1; });
         return u && u * size * g0.fz > w ? Math.max(7, Math.floor(w / u / g0.fz * 10) / 10) : size;
       };
+      // その現場の月の中で、場所が2つ以上あるか（まとめた現場＝都内各所など）
+      var allPl = {};
+      Object.keys(s.days || {}).forEach(function (k) { ((s.days[k].td || []).concat(s.days[k].tn || [])).forEach(function (p) { allPl[p] = 1; }); });
+      var manyPlaces = Object.keys(allPl).length > 1;
       // 日付の行
       for (var r = 0; r < nRow; r++) {
         var dt = dates[r], R = H0 + 1 + r;
@@ -3717,6 +3721,15 @@
         } else if (kind === 'addr') {
           add('d', dn); add('n', nn); add('od', x.od); add('on', x.on); add('q', x.q);
           // 現場住所：請求書の「施工場所」が入っていればそれ（Excelと同じく番地まで）。空なら出勤簿の町の名前
+          // ただし、まとめた現場（都内各所など）で日によって場所がちがうときは、その日の場所を Excel と同じく「区＋町」で出す
+          //  昼と夜があるときは「昼の場所／夜の場所」で、夜は青
+          if (manyPlaces && (dn || nn) && (x.td || x.tn)) {
+            var pd = (x.td || []).join('・'), pn = (x.tn || []).join('・');
+            var txt = pd && pn ? pd + '／' + pn : pd || pn;
+            var html = pd && pn ? esc(pd) + '／<span style="color:' + BLUE + '">' + esc(pn) + '</span>' : pn ? '<span style="color:' + BLUE + '">' + esc(pn) + '</span>' : esc(pd);
+            out += G.cell(2, 3, R, R + 1, html, 'c', 'c', 'font-size:' + f(fit(txt, 14, 2)) + ';white-space:nowrap');
+            vals = [null, [v(dn), 14], [h(x.od), 14], [v(nn), 14], [h(x.on), 14, 'r', 'b'], [v(x.q), 14, 'c', 'b']];
+          } else
           vals = [[dn || nn ? (m.place || place) : '', 14], [v(dn), 14], [h(x.od), 14], [v(nn), 14], [h(x.on), 14, 'r', 'b'], [v(x.q), 14, 'c', 'b']];
         } else if (kind === 'kt') {
           add('d', dn); add('n', nn); add('od', x.od); add('on', x.on); add('q', x.q);
