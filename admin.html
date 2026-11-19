@@ -3724,10 +3724,29 @@
           // ただし、まとめた現場（都内各所など）で日によって場所がちがうときは、その日の場所を Excel と同じく「区＋町」で出す
           //  昼と夜があるときは「昼の場所／夜の場所」で、夜は青
           if (manyPlaces && (dn || nn) && (x.td || x.tn)) {
-            var pd = (x.td || []).join('・'), pn = (x.tn || []).join('・');
-            var txt = pd && pn ? pd + '／' + pn : pd || pn;
-            var html = pd && pn ? esc(pd) + '／<span style="color:' + BLUE + '">' + esc(pn) + '</span>' : pn ? '<span style="color:' + BLUE + '">' + esc(pn) + '</span>' : esc(pd);
-            out += G.cell(2, 3, R, R + 1, html, 'c', 'c', 'font-size:' + f(fit(txt, 14, 2)) + ';white-space:nowrap');
+            // 入らないときは ①区を省く（例：墨田区京島 → 京島）②それでも入らなければ2行（昼／夜） ③最後に少しだけ小さく
+            var noKu = function (a) { return (a || []).map(function (p) { return String(p).replace(/^.*[区市](?=.)/, ''); }); };
+            var blue = function (t) { return '<span style="color:' + BLUE + '">' + esc(t) + '</span>'; };
+            var one = function (dA, nA) {
+              var pd = dA.join('・'), pn = nA.join('・');
+              return { txt: pd && pn ? pd + '／' + pn : pd || pn, html: pd && pn ? esc(pd) + '／' + blue(pn) : pn ? blue(pn) : esc(pd) };
+            };
+            var full = one(x.td || [], x.tn || []), short = one(noKu(x.td), noKu(x.tn)), chosen = null;
+            if (fit(full.txt, 14, 2) >= 14) chosen = full;
+            else if (fit(short.txt, 14, 2) >= 14) chosen = short;
+            if (chosen) out += G.cell(2, 3, R, R + 1, chosen.html, 'c', 'c', 'font-size:' + f(14) + ';white-space:nowrap');
+            else {
+              // 2行：昼と夜があれば 1行目に昼・2行目に夜。片方だけなら、場所を半分ずつに分ける
+              var dA = noKu(x.td), nA = noKu(x.tn), l1, l2;
+              if (dA.length && nA.length) { l1 = { t: dA.join('・'), h: esc(dA.join('・')) }; l2 = { t: nA.join('・'), h: blue(nA.join('・')) }; }
+              else {
+                var all = dA.length ? dA : nA, half = Math.ceil(all.length / 2), isN = !dA.length;
+                var a1 = all.slice(0, half).join('・') + (all.length > half ? '・' : ''), a2 = all.slice(half).join('・');
+                l1 = { t: a1, h: isN ? blue(a1) : esc(a1) }; l2 = { t: a2, h: isN ? blue(a2) : esc(a2) };
+              }
+              var sz = Math.min(9.5, fit(l1.t.length > l2.t.length ? l1.t : l2.t, 9.5, 2));   // 行の高さに2行入る大きさ
+              out += G.cell(2, 3, R, R + 1, l1.h + '<br>' + l2.h, 'c', 'c', 'font-size:' + f(sz) + ';white-space:nowrap;line-height:1.05');
+            }
             vals = [null, [v(dn), 14], [h(x.od), 14], [v(nn), 14], [h(x.on), 14, 'r', 'b'], [v(x.q), 14, 'c', 'b']];
           } else
           vals = [[dn || nn ? (m.place || place) : '', 14], [v(dn), 14], [h(x.od), 14], [v(nn), 14], [h(x.on), 14, 'r', 'b'], [v(x.q), 14, 'c', 'b']];
