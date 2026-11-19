@@ -219,6 +219,15 @@
     .st-tbl tr.isred td { background: #fce8e6; }
     @media (prefers-color-scheme: dark) { .st-tbl tr.isred td { background: #42201e; } }
     .st-tbl tr.isred td.ch, .st-tbl tr.isnew td.ch { background: var(--warn-bg); }
+    /* 請求書：期限が近い会社のカードの目印（ホームの「対応が必要な処理」と同じ。済にすると外れる） */
+    .blx-co.due-over { box-shadow: 0 0 0 3px #d93025; }
+    .blx-co.due-today { box-shadow: 0 0 0 3px #f29900; }
+    .blx-co.due-soon { box-shadow: 0 0 0 3px #f5c400; }
+    .blx-due { margin: -4px 0 8px; padding: 6px 10px; border-radius: 8px; background: #fff3cd; color: #7a4a00; font-size: 13px; font-weight: bold; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .blx-co.due-over .blx-due { background: #fce8e6; color: #b3261e; }
+    .blx-due .btn { padding: 3px 10px; font-size: 12px; margin-left: auto; }
+    .blx-due.done { background: var(--ok-bg); color: var(--ok); font-weight: normal; }
+    .blx-due.done a { margin-left: auto; font-size: 12px; color: var(--text3); }
     /* いちばん左の列（会社名など）は、右へ動かしても見えたままにする */
     .st-tbl th:first-child, .st-tbl td:first-child { position: sticky; left: 0; z-index: 2; box-shadow: 1px 0 0 var(--line); }
     .st-tbl th:first-child { z-index: 3; }
@@ -1195,6 +1204,8 @@
     }
     function renderHome(h) {
       HOME = h;
+      // ホームで済にした・戻したら、請求書の画面の会社の目印も合わせる
+      setTimeout(function () { try { if (typeof BL !== 'undefined' && BL.data) blRender(); } catch (e) {} }, 0);
       applyNencho(h.nencho);
       $('homeMsg').innerHTML = '';
       // 夜の計算（定時後残業・請求額）の結果。エラーがあれば、どの月の何かを出す
@@ -3366,6 +3377,25 @@
           ? '<div class="unk" style="background:#fff3cd;color:#7a5a00;border-radius:8px;padding:8px 12px;margin-bottom:10px">⚠ 計算したあとに <b>' + esc(BL.changed.join('、')) + '</b> が直されています。印刷の前に「最新にする（出勤簿から計算し直す）」を押してください。</div>'
           : '');
     }
+    // ホームの「対応が必要な処理」から、その会社の請求書の作成（締め日ごと）を探す
+    function blDue(name) {
+      var out = null;
+      ((HOME && HOME.tasks) || []).forEach(function (t) {
+        if (t.kind !== 'bill' || !t.items || out) return;
+        t.items.forEach(function (it) { if (!out && it.name === name) out = { task: t, item: it }; });
+      });
+      return out;
+    }
+    function blMarkDone(key, on) {
+      call('adminDone', [PIN, DEVICE, key, on], function (h) { renderHome(h); if (BL.data) blRender(); },
+        function (m) { tell(m); });
+    }
+    document.addEventListener('click', function (e) {
+      var d = e.target.closest && e.target.closest('[data-billdone]');
+      if (d) { d.disabled = true; blMarkDone(d.getAttribute('data-billdone'), true); return; }
+      var u = e.target.closest && e.target.closest('[data-billundo]');
+      if (u) { e.preventDefault(); blMarkDone(u.getAttribute('data-billundo'), false); }
+    });
     function blRender() {
       var r = BL.data, g = r.grand;
       var stLink = function (name) { return '<span data-stgo="' + name + '" role="button" tabindex="0" style="color:var(--primary);text-decoration:underline;cursor:pointer">設定の' + name + '</span>'; };
@@ -3399,7 +3429,16 @@
         var srows = c.sites.map(function (s) {
           return '<tr><td>' + esc(s.name) + '</td><td class="num">' + s.day + '</td><td class="num">' + s.night + '</td><td class="num">' + yen(s.total) + '</td></tr>';
         }).join('');
-        return '<div class="blx-co' + (c.noRate ? ' norate' : '') + '">' +
+        // ホームの「対応が必要な処理」で、この会社の請求書の期限が来ていれば目印（済にしたら外して「✓ 済」）
+        var due = blDue(c.name), dueCls = '', dueBox = '';
+        if (due && !due.item.done) {
+          dueCls = due.task.left < 0 ? ' due-over' : due.task.left === 0 ? ' due-today' : ' due-soon';
+          dueBox = '<div class="blx-due">' + (due.task.left < 0 ? '期限を過ぎています' : due.task.left === 0 ? '今日が期限' : 'もうすぐ期限') + '：' + esc(due.task.title) +
+            '（期限 ' + esc(due.task.dueLabel) + '）<button type="button" class="btn" data-billdone="' + esc(due.item.key) + '">✓ 済にする</button></div>';
+        } else if (due && due.item.done) {
+          dueBox = '<div class="blx-due done">✓ 請求書 済（' + esc(due.item.doneBy) + '）<a href="#" data-billundo="' + esc(due.item.key) + '">戻す</a></div>';
+        }
+        return '<div class="blx-co' + (c.noRate ? ' norate' : '') + dueCls + '">' + dueBox +
           '<div class="blx-co-head"><div class="blx-co-name"><i>' + IC.bld + '</i><div><b>' + esc(c.name) + '</b>' +
           '<span class="blx-chip">' + esc(c.period) + '</span>' + (c.noRate ? '<span class="blx-chip bad">単価未登録</span>' : '') + '</div></div>' +
           '<div class="blx-amt">' + yen(c.total) + '<small>税抜</small></div></div>' +
