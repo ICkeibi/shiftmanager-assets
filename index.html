@@ -281,13 +281,43 @@
     .bottom-nav svg { width: 22px; height: 22px; display: block; margin: 0 auto 3px; }
     .bottom-nav .on { background: #40A040; color: #fff; }
     body.need-login .bottom-nav { display: none; }
+    /* 他社（グロウス）に切り替えたとき：自社の青・緑とまったく違う色にして、上に会社名を出す */
+    .co-tag { display: none; font-size: 12px; font-weight: bold; background: #fff; color: #B4440F; border-radius: 6px; padding: 2px 7px; margin-left: 6px; vertical-align: 2px; }
+    body.co-other { --primary: #C2410C; --primary-active: #9A3412; }
+    body.co-other .co-tag { display: inline-block; }
+    body.co-other .app-bar { background: #C2410C; }
+    body.co-other .app-bar .ab-stripe::after { background: #F59E0B; }
+    body.co-other .subtitle { border-left-color: #F59E0B; }
+    body.co-other button#searchBtn { background: #C2410C; }
+    body.co-other button#searchBtn:active { background: #9A3412; }
+    body.co-other .sum-total { border-color: #F59E0B; }
+    body.co-other .bottom-nav { display: none; }
+    body.co-other { padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)); }
+    body.co-other .sum-type .type-btn { visibility: hidden; }
+    body.co-other #payLink, body.co-other #billLink, body.co-other #otLink, body.co-other #chartLink, body.co-other #nskLink { display: none; }
+    .mode-toggle #modeDaily { display: none; }
+    body.co-other .mode-toggle #modeDaily { display: block; }
+    body.co-other .mode-toggle #modeWeekly { order: 1; } body.co-other .mode-toggle #modeDaily { order: 2; } body.co-other .mode-toggle #modePersonal { order: 3; }
+    .more-menu a.co-switch { font-weight: bold; color: #C2410C; border-top: 1px solid var(--border); }
+    body.co-other .more-menu a.co-switch { color: #0060A0; }
+    /* 日払いの一覧 */
+    .day-sec { margin: 14px 0 6px; font-weight: bold; font-size: 14px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
+    .day-sec .n { margin-left: auto; font-size: 13px; }
+    .day-row { display: flex; align-items: center; gap: 10px; background: var(--card-bg); border: 1px solid var(--border); border-left: 5px solid #f5b400; border-radius: 12px; padding: 9px 10px; margin-bottom: 6px; }
+    .day-row.night { border-left-color: var(--badge-night); }
+    .day-row .dn { font-weight: bold; font-size: 16px; min-width: 0; }
+    .day-row .dn .times { font-size: 13px; }
+    .day-row .ds { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+    .day-row .dm { flex: 1; min-width: 0; }
+    .day-row input { width: 24px; height: 24px; accent-color: var(--primary); flex-shrink: 0; }
+    .day-row.paid { opacity: .5; }
   </style>
 </head>
 <body>
   <div class="app-bar">
     <span class="ab-stripe" aria-hidden="true"></span>
     <span class="ab-logo"><img src="icon.png" alt=""></span>
-    <h1>出勤確認</h1>
+    <h1>出勤確認<span class="co-tag" id="coTag"></span></h1>
     <button id="refreshBtn" class="refresh-btn" title="更新" aria-label="更新">⟳</button>
     <button id="moreBtn" class="more-btn" title="メニュー" aria-label="メニュー">⋮</button>
     <div id="moreMenu" class="more-menu" hidden>
@@ -296,6 +326,7 @@
       <a id="otLink" href="pay.html?view=ot">定時後残業</a>
       <a id="chartLink" href="pay.html?view=chart">グラフ（売上・人件費）</a>
       <a id="nskLink" href="pay.html?view=nsk">NSK集計</a>
+      <a id="coLink" class="co-switch" href="#" hidden></a>
     </div>
   </div>
   <div class="subtitle" id="subtitle">年月を選択してください</div>
@@ -303,6 +334,7 @@
   <div class="mode-toggle">
     <button id="modePersonal" class="active">個人検索</button>
     <button id="modeWeekly">週払い</button>
+    <button id="modeDaily">日払い</button>
   </div>
 
   <div class="field-row">
@@ -312,10 +344,16 @@
         <option value="">選択してください</option>
       </select>
     </div>
-    <div class="field">
+    <div class="field" id="periodField">
       <label for="periodSelect">期間</label>
       <select id="periodSelect" disabled>
         <option value="全">全</option>
+      </select>
+    </div>
+    <div class="field" id="dayField" hidden>
+      <label for="daySelect">日</label>
+      <select id="daySelect" disabled>
+        <option value="">先に年月を選択</option>
       </select>
     </div>
   </div>
@@ -384,10 +422,29 @@
       document.body.classList.add('need-login');
     }
 
+    // ── 他社（グロウス）への切り替え ──
+    //  ⋮ メニューで切り替える。見られる人（NSK を見られる人・スマホ）だけにボタンが出る。
+    //  切り替えている間は、サーバーへの問い合わせに co=g を付けて、他社の出勤簿を読む（このタブを閉じると自社に戻る）
+    var CO = '';
+    try { CO = sessionStorage.getItem('coOther') === '1' ? 'g' : ''; } catch (e) {}
+    function setCo(on) {
+      try { if (on) sessionStorage.setItem('coOther', '1'); else sessionStorage.removeItem('coOther'); } catch (e) {}
+      location.hash = '';
+      location.reload();
+    }
+
     var jsonpCounter = 0;
     // サーバーへの問い合わせ。まず fetch で読む（サーバーがエラーの画面を返したときも、その中身を見て理由を出せる）。
     // fetch が使えないときだけ、前からのやり方（JSONP）で読む
     function jsonp(params) {
+      if (CO && params.action !== 'setPayType' && params.action !== 'payTypes') params = Object.assign({ co: CO }, params);
+      return jsonpRaw(params).then(function (data) {
+        // サーバーが「見られません」などを返したとき（ログイン切れは、その前に案内を出している）
+        if (data && data.error && typeof data.error === 'string' && params.action !== 'setPayType') throw new Error(data.error);
+        return data;
+      });
+    }
+    function jsonpRaw(params) {
       var allParams = Object.assign({ token: savedToken() }, params);
       var qs = Object.keys(allParams).map(function (k) {
         return encodeURIComponent(k) + '=' + encodeURIComponent(allParams[k]);
@@ -484,6 +541,7 @@
           var opt = document.createElement('option');
           opt.value = m.id;
           opt.textContent = m.label;
+          opt.setAttribute('data-ym', m.ym || '');
           sel.appendChild(opt);
           if (m.ym === currentYm) matchId = m.id;
         });
@@ -529,10 +587,123 @@
       currentMode = mode;
       document.getElementById('modePersonal').classList.toggle('active', mode === 'personal');
       document.getElementById('modeWeekly').classList.toggle('active', mode === 'weekly');
+      document.getElementById('modeDaily').classList.toggle('active', mode === 'daily');
       document.getElementById('navWeekly').classList.toggle('on', mode === 'weekly');
       document.getElementById('nameField').style.display = mode === 'personal' ? '' : 'none';
-      document.getElementById('counts').style.display = mode === 'personal' ? '' : 'none';
+      document.getElementById('counts').style.display = mode === 'weekly' ? 'none' : '';
+      // 日払いは「日」を選ぶ（期間は使わない）
+      document.getElementById('periodField').hidden = mode === 'daily';
+      document.getElementById('dayField').hidden = mode !== 'daily';
+      document.getElementById('periodInfo').style.display = mode === 'daily' ? 'none' : '';
       resetResults();
+    }
+
+    // ── 日払い（他社）：その日に出た人の一覧。済は「その日の分を払った」印（この端末に覚える） ──
+    function loadDays(monthId) {
+      var sel = document.getElementById('daySelect');
+      sel.disabled = true;
+      sel.innerHTML = '<option value="">読み込み中...</option>';
+      return jsonp({ action: 'days', month: monthId }).then(function (days) {
+        sel.innerHTML = '';
+        var today = new Date(), pick = '';
+        (days || []).forEach(function (d) {
+          var o = document.createElement('option');
+          o.value = d.day; o.textContent = d.label;
+          sel.appendChild(o);
+          if (d.day === today.getDate()) pick = String(d.day);
+        });
+        if (!days || !days.length) sel.innerHTML = '<option value="">日のシートがありません</option>';
+        // 今月なら今日、ちがう月なら1日目
+        var monthSel = document.getElementById('monthSelect'), opt = monthSel.options[monthSel.selectedIndex];
+        var isThisMonth = opt && opt.getAttribute('data-ym') === getCurrentYm();
+        if (isThisMonth && pick) sel.value = pick;
+        sel.disabled = !days || !days.length;
+      }).catch(function (err) {
+        sel.innerHTML = '<option value="">エラー: ' + err.message + '</option>';
+      });
+    }
+    function dailyKey(monthId, day, shift, name) { return 'd|' + monthId + '|' + day + '|' + shift + '|' + name; }
+    function doDaily(forceRefresh) {
+      var monthId = document.getElementById('monthSelect').value;
+      var day = document.getElementById('daySelect').value;
+      var resultsArea = document.getElementById('resultsArea');
+      if (!monthId) { resultsArea.innerHTML = '<div class="empty">年月を選択してください</div>'; return Promise.resolve(); }
+      if (!day) { resultsArea.innerHTML = '<div class="empty">日を選択してください</div>'; return Promise.resolve(); }
+      resultsArea.innerHTML = '<div class="loading">読み込み中...</div>';
+      return jsonp({ action: 'daily', month: monthId, day: day, refresh: forceRefresh ? '1' : '0' }).then(function (data) {
+        updateLastUpdated();
+        renderDaily(data, monthId, day);
+      }).catch(function (err) {
+        resultsArea.innerHTML = '<div class="empty">エラー: ' + err.message + '</div>';
+      });
+    }
+    function renderDaily(data, monthId, day) {
+      var resultsArea = document.getElementById('resultsArea');
+      resultsArea.innerHTML = '';
+      renderUnknown(data.unknown);
+      var rows = data.rows || [], paid = loadPaid();
+      var dn = 0, nn = 0;
+      rows.forEach(function (r) { if (r.shift === '夜') nn += r.times; else dn += r.times; });
+      document.getElementById('dayCount').textContent = dn;
+      document.getElementById('nightCount').textContent = nn;
+      document.getElementById('totalCount').textContent = dn + nn;
+      if (!rows.length) {
+        var empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = (data.label || '') + ' に出た人はいません';
+        resultsArea.appendChild(empty);
+        return;
+      }
+      [['昼', '日勤', ICON_SUN], ['夜', '夜勤', ICON_MOON]].forEach(function (s) {
+        var list = rows.filter(function (r) { return r.shift === s[0]; });
+        if (!list.length) return;
+        var head = document.createElement('div');
+        head.className = 'day-sec';
+        head.innerHTML = '<span class="badge ' + (s[0] === '夜' ? 'night' : 'day') + '">' + s[2] + '</span>' + s[1] + '<span class="n"></span>';
+        resultsArea.appendChild(head);
+        var box = document.createElement('div');
+        resultsArea.appendChild(box);
+        var cnt = head.querySelector('.n');
+        var count = function () {
+          var done = box.querySelectorAll('.day-row.paid').length;
+          cnt.textContent = list.length + '人' + (done ? '（済 ' + done + '）' : '');
+        };
+        // 済でない人を上、済の人を下に
+        var isPaid = function (r) { return !!paid[dailyKey(monthId, day, r.shift, r.name)]; };
+        list.filter(function (r) { return !isPaid(r); }).concat(list.filter(isPaid)).forEach(function (r) {
+          var key = dailyKey(monthId, day, r.shift, r.name);
+          var row = document.createElement('label');
+          row.className = 'day-row' + (r.shift === '夜' ? ' night' : '') + (paid[key] ? ' paid' : '');
+          var main = document.createElement('div');
+          main.className = 'dm';
+          var nm = makeSpan('dn', r.name);
+          if (r.times > 1) nm.appendChild(makeSpan('times', '×' + r.times));
+          main.appendChild(nm);
+          var site = document.createElement('div');
+          site.className = 'ds';
+          site.textContent = r.site || '';
+          if (r.alert) site.style.color = r.alert;
+          main.appendChild(site);
+          row.appendChild(main);
+          var cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.checked = !!paid[key];
+          cb.setAttribute('aria-label', r.name + ' 済');
+          cb.addEventListener('change', function () {
+            var p = loadPaid();
+            if (cb.checked) p[key] = 1; else delete p[key];
+            savePaid(p);
+            row.classList.toggle('paid', cb.checked);
+            var firstPaid = null;
+            Array.prototype.some.call(box.children, function (el) { if (el !== row && el.classList.contains('paid')) { firstPaid = el; return true; } return false; });
+            if (cb.checked) box.appendChild(row); else box.insertBefore(row, firstPaid);
+            count();
+          });
+          row.appendChild(cb);
+          box.appendChild(row);
+        });
+        count();
+      });
     }
 
     function onMonthChange() {
@@ -569,6 +740,7 @@
         nameSel.innerHTML = '<option value="">エラー: ' + err.message + '</option>';
       });
 
+      if (CO) loadDays(monthId);   // 日払いの「日」（他社のときだけ）
       jsonp({ action: 'periods', month: monthId }).then(function (periods) {
         periodSel.innerHTML = '';
         periodMeta = {};
@@ -685,7 +857,7 @@
       });
     }
 
-    var PAID_STORAGE_KEY = 'weeklyPaidChecks';
+    var PAID_STORAGE_KEY = CO ? 'otherPaidChecks' : 'weeklyPaidChecks';   // 他社の済は、自社とは別に覚える
 
     function loadPaid() {
       try {
@@ -768,7 +940,8 @@
       area.innerHTML = '<div class="wkp-page">' +
         '<div class="wkp-printed">印刷 ' + pEsc(printed) + '</div>' +
         '<div class="wkp-head"><div class="ym">' + pEsc(monthLabel) + '</div><div class="t">週払い</div>' +
-        '<div class="co"><img src="icon.png" alt="" onerror="this.style.display=\'none\'"><span>I・C警備保障株式会社</span></div></div>' +
+        (CO ? '<div class="co"><span>' + pEsc(document.getElementById('coTag').textContent) + '</span></div></div>'
+          : '<div class="co"><img src="icon.png" alt="" onerror="this.style.display=\'none\'"><span>I・C警備保障株式会社</span></div></div>') +
         '<div class="wkp-range"><b>' + pEsc(printRange(lastSummary.period)) + '</b><span>（' + pEsc(madeAt) + ' 時点の出勤簿）</span></div>' +
         '<table><colgroup>' + colg + colg + '</colgroup><thead><tr>' + head + head.replace('<th>', '<th class="rb">') + '</tr></thead><tbody>' + body +
         '<tr class="sum"><td colspan="4" style="text-align:left">週払い ' + rows.length + '人</td><td class="rb">合計</td><td>' + sd + '</td><td>' + sn + '</td><td>' + (sd + sn) + '</td></tr>' +
@@ -1041,7 +1214,8 @@
       resultsArea.innerHTML = '<div class="loading">集計中...</div>';
       if (forceRefresh) detailCache = {};   // ⟳ で読み直したときは、開いた内訳も読み直す
 
-      var types = jsonp({ action: 'payTypes' }).catch(function () { return { monthly: [] }; });
+      // 月払いの区分は自社だけ（他社は全員、週払いの一覧に出す）
+      var types = CO ? Promise.resolve({ monthly: [] }) : jsonp({ action: 'payTypes' }).catch(function () { return { monthly: [] }; });
       return Promise.all([jsonp({
         action: 'summary',
         month: monthId,
@@ -1059,7 +1233,7 @@
     }
 
     function doAction(forceRefresh) {
-      return currentMode === 'weekly' ? doSummary(forceRefresh) : doSearch(forceRefresh);
+      return currentMode === 'weekly' ? doSummary(forceRefresh) : currentMode === 'daily' ? doDaily(forceRefresh) : doSearch(forceRefresh);
     }
 
     function doRefresh() {
@@ -1075,6 +1249,8 @@
 
     document.getElementById('modePersonal').addEventListener('click', function () { setMode('personal'); });
     document.getElementById('modeWeekly').addEventListener('click', function () { setMode('weekly'); });
+    document.getElementById('modeDaily').addEventListener('click', function () { setMode('daily'); });
+    document.getElementById('daySelect').addEventListener('change', function () { if (currentMode === 'daily') resetResults(); });
     // 下のメニューの「週払い」：週払いの一覧にして、年月が選んであればすぐ集計する
     document.getElementById('navWeekly').addEventListener('click', function () {
       if (currentMode !== 'weekly') setMode('weekly');
@@ -1101,7 +1277,40 @@
     document.getElementById('refreshBtn').addEventListener('click', doRefresh);
     document.getElementById('subtitle').textContent = formatToday();
     // ログインしていない端末は、データを読まずにログインの案内を出す
-    if (savedToken()) loadMonths(); else showLogin('');
+    //  他社に切り替えているときは、見られる人かを先に確かめてから読む（見られなければ自社に戻す）
+    function setupCo(info) {
+      var link = document.getElementById('coLink');
+      if (!info || !info.allowed) {
+        link.hidden = true;
+        if (CO) { try { sessionStorage.removeItem('coOther'); } catch (e) {} CO = ''; }
+        return;
+      }
+      link.hidden = false;
+      link.textContent = CO ? '自社（I・C警備保障）に戻す' : info.name + 'に切り替え';
+      if (CO) {
+        document.body.classList.add('co-other');
+        document.getElementById('coTag').textContent = info.name;
+        document.title = '出勤確認（' + info.name + '）';
+      }
+    }
+    document.getElementById('coLink').addEventListener('click', function (ev) {
+      ev.preventDefault();
+      setCo(!CO);
+    });
+    if (savedToken()) {
+      var coInfo = jsonp({ action: 'otherInfo' }).catch(function () { return null; });
+      if (CO) {
+        // 他社：先に確かめる。週払いを最初に出す
+        coInfo.then(function (info) {
+          setupCo(info);
+          if (CO) setMode('weekly');
+          loadMonths();
+        });
+      } else {
+        loadMonths();
+        coInfo.then(setupCo);
+      }
+    } else showLogin('');
     // 月払いの画面でログインしてから「戻る」でもどったとき（画面が前のまま残っているとき）は、読み直す
     window.addEventListener('pageshow', function () {
       if (document.body.classList.contains('need-login') && savedToken()) location.reload();
