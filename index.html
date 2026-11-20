@@ -295,9 +295,19 @@
     body.co-other { padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)); }
     body.co-other .sum-type .type-btn { visibility: hidden; }
     body.co-other #payLink, body.co-other #billLink, body.co-other #otLink, body.co-other #chartLink, body.co-other #nskLink { display: none; }
-    .mode-toggle #modeDaily { display: none; }
-    body.co-other .mode-toggle #modeDaily { display: block; }
-    body.co-other .mode-toggle #modeWeekly { order: 1; } body.co-other .mode-toggle #modeDaily { order: 2; } body.co-other .mode-toggle #modePersonal { order: 3; }
+    .mode-toggle #modeDaily { display: none !important; }   /* 日払いはやめた（週払いの中で日ごとにチェックする） */
+    body.co-other .mode-toggle #modeWeekly { order: 1; } body.co-other .mode-toggle #modePersonal { order: 2; }
+    /* グロウスの週払い：日ごとのチェック。名前の「済」を付けたのに、チェックしていない日があれば赤くする */
+    .co-cnt { display: block; font-size: 11px; font-weight: bold; color: var(--text-secondary); margin-top: 1px; }
+    .co-cnt.all { color: #137333; }
+    .sum-row.co-warn { background: #fde7e6; box-shadow: 0 0 0 2px #d93025 inset; opacity: 1; }
+    .sum-row.co-warn .co-cnt { color: #c5221f; }
+    .card .co-ck { margin-left: auto; width: 26px; height: 26px; flex-shrink: 0; accent-color: var(--primary); }
+    .card.co-done { opacity: .55; }
+    .card.unchk { background: #fde7e6; border-color: #d93025; }
+    .card .unchk-tag { display: none; font-size: 11px; font-weight: bold; color: #c5221f; margin-left: 6px; }
+    .card.unchk .unchk-tag { display: inline; }
+    @media (prefers-color-scheme: dark) { .sum-row.co-warn, .card.unchk { background: #42201e; } }
     /* 出勤確認の横の切り替えボタン（他社を見られる人だけ） */
     /* I・C・S ／ グロウス の2つのボタン。今見ている方が白くなる */
     .app-bar h1 { flex: 0 0 auto; white-space: nowrap; }
@@ -1052,6 +1062,73 @@
       });
     }
 
+    // ── グロウスの週払い：日ごとのチェック ──
+    //  チェックは「日付・昼夜・現場・名前」で覚える（期間を変えても同じ日は同じチェック）。この端末に覚える
+    //  名前の「済」を付けたのに、チェックしていない日があれば、その日と名前の行を赤くする
+    function coKey(monthId, name, row) { return 'c|' + monthId + '|' + row[0] + '|' + row[1] + '|' + row[2] + '|' + name; }
+    function coGroups(r) {
+      var g = [];
+      (r.days || []).forEach(function (row) {
+        var l = g[g.length - 1];
+        if (l && l.row[0] === row[0] && l.row[1] === row[1] && l.row[2] === row[2]) l.count++;
+        else g.push({ row: row, count: 1 });
+      });
+      return g;
+    }
+    function coSetup(r, monthId, row, detail, nameEl, nameKeyStr) {
+      var groups = coGroups(r);
+      var cnt = makeSpan('co-cnt', '');
+      nameEl.appendChild(cnt);
+      var refresh = function () {
+        var p = loadPaid(), named = !!p[nameKeyStr], done = 0;
+        groups.forEach(function (x) { if (p[coKey(monthId, r.name, x.row)]) done++; });
+        cnt.textContent = '済 ' + done + '/' + groups.length;
+        cnt.classList.toggle('all', groups.length > 0 && done === groups.length);
+        row.classList.toggle('co-warn', named && done < groups.length);
+        Array.prototype.forEach.call(detail.querySelectorAll('.card'), function (c, i) {
+          var on = !!p[coKey(monthId, r.name, groups[i].row)];
+          c.classList.toggle('co-done', on);
+          c.classList.toggle('unchk', named && !on);
+        });
+      };
+      var built = false;
+      var build = function () {
+        detail.innerHTML = '<div class="detail-count">日勤 ' + r.day + '・夜勤 ' + r.night + '・合計 ' + r.total + '</div>';
+        if (!groups.length) { detail.innerHTML += '<div class="empty">該当するデータがありません</div>'; return; }
+        groups.forEach(function (g) {
+          var x = g.row, isN = x[1] === '夜';
+          var card = document.createElement('div');   // チェックは四角を押したときだけ（カードを触っただけでは付かない）
+          card.className = 'card ' + (isN ? 'night' : 'day');
+          card.innerHTML = '<span class="badge ' + (isN ? 'night' : 'day') + '" role="img" aria-label="' + (isN ? '夜勤' : '日勤') + '">' + (isN ? ICON_MOON : ICON_SUN) + '</span>' +
+            '<div class="info"><div class="date">' + pEsc(x[0]) + (g.count > 1 ? '<span class="times">×' + g.count + '</span>' : '') + '<span class="unchk-tag">未チェック</span></div>' +
+            '<div class="address' + (x[3] ? ' alert' : '') + '"' + (x[3] && x[4] ? ' style="color:' + pEsc(x[4]) + '"' : '') + '>' + pEsc(x[2]) + '</div></div>';
+          var ck = document.createElement('input');
+          ck.type = 'checkbox'; ck.className = 'co-ck';
+          ck.setAttribute('aria-label', x[0] + ' 済');
+          ck.checked = !!loadPaid()[coKey(monthId, r.name, x)];
+          ck.addEventListener('change', function () {
+            var p = loadPaid(), k = coKey(monthId, r.name, x);
+            if (ck.checked) p[k] = 1; else delete p[k];
+            savePaid(p);
+            refresh();
+          });
+          card.appendChild(ck);
+          detail.appendChild(card);
+        });
+      };
+      refresh();
+      return {
+        refresh: refresh,
+        toggle: function () {
+          var open = detail.hidden;
+          detail.hidden = !open;
+          row.classList.toggle('open', open);
+          if (open && !built) { build(); built = true; }
+          refresh();
+        }
+      };
+    }
+
     function renderSummary(rows, monthId, period, unknown) {
       var resultsArea = document.getElementById('resultsArea');
       resultsArea.innerHTML = '';
@@ -1156,6 +1233,12 @@
         item.appendChild(detail);
         (isMon ? resultsArea : weeklyBox).appendChild(item);
         var toggle = function () { return toggleDetail(r, row, detail, monthId, period); };
+        if (CO && r.days) {
+          // グロウス：内訳はサーバーから一緒に届いている。日ごとにチェックを付ける
+          var co = coSetup(r, monthId, row, detail, nameEl, key);
+          toggle = co.toggle;
+          if (cb) cb.addEventListener('change', co.refresh);
+        }
         nameEl.addEventListener('click', toggle);
         items.push({ el: item, name: r.name });
       }
