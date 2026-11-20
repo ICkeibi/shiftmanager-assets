@@ -298,6 +298,16 @@
     .mode-toggle #modeDaily { display: none; }
     body.co-other .mode-toggle #modeDaily { display: block; }
     body.co-other .mode-toggle #modeWeekly { order: 1; } body.co-other .mode-toggle #modeDaily { order: 2; } body.co-other .mode-toggle #modePersonal { order: 3; }
+    /* 出勤確認の横の切り替えボタン（他社を見られる人だけ） */
+    /* I・C・S ／ グロウス の2つのボタン。今見ている方が白くなる */
+    .app-bar h1 { flex: 0 0 auto; white-space: nowrap; }
+    .app-bar .co-seg { display: flex; flex-shrink: 1; min-width: 0; margin-right: auto; border: 2px solid #fff; border-radius: 999px; overflow: hidden; }
+    .app-bar .co-seg[hidden] { display: none; }
+    .app-bar .co-seg button { border: none; background: transparent; color: #fff; font: inherit; font-size: 12px; font-weight: bold; padding: 5px 8px; cursor: pointer; white-space: nowrap; }
+    .app-bar .co-seg button.on { background: #fff; color: #0060A0; }
+    @media (max-width: 390px) { .app-bar { gap: 6px; } .app-bar h1 { font-size: 16px; } .app-bar .co-seg button { padding: 5px 6px; } }
+    body.co-other .app-bar .co-seg button.on { color: #C2410C; }
+    body.co-other .co-tag, .co-tag { display: none !important; }
     .more-menu a.co-switch { font-weight: bold; color: #C2410C; border-top: 1px solid var(--border); }
     body.co-other .more-menu a.co-switch { color: #0060A0; }
     /* 日払いの一覧 */
@@ -318,6 +328,10 @@
     <span class="ab-stripe" aria-hidden="true"></span>
     <span class="ab-logo"><img src="icon.png" alt=""></span>
     <h1>出勤確認<span class="co-tag" id="coTag"></span></h1>
+    <div class="co-seg" id="coSeg" hidden>
+      <button type="button" id="coSelf" class="on">I・C・S</button>
+      <button type="button" id="coOther"></button>
+    </div>
     <button id="refreshBtn" class="refresh-btn" title="更新" aria-label="更新">⟳</button>
     <button id="moreBtn" class="more-btn" title="メニュー" aria-label="メニュー">⋮</button>
     <div id="moreMenu" class="more-menu" hidden>
@@ -1279,14 +1293,18 @@
     // ログインしていない端末は、データを読まずにログインの案内を出す
     //  他社に切り替えているときは、見られる人かを先に確かめてから読む（見られなければ自社に戻す）
     function setupCo(info) {
-      var link = document.getElementById('coLink');
+      var link = document.getElementById('coLink'), seg = document.getElementById('coSeg');
       if (!info || !info.allowed) {
-        link.hidden = true;
+        link.hidden = true; seg.hidden = true;
         if (CO) { try { sessionStorage.removeItem('coOther'); } catch (e) {} CO = ''; }
         return;
       }
       link.hidden = false;
       link.textContent = CO ? '自社（I・C警備保障）に戻す' : info.name + 'に切り替え';
+      seg.hidden = false;
+      document.getElementById('coOther').textContent = info.name;
+      document.getElementById('coSelf').classList.toggle('on', !CO);
+      document.getElementById('coOther').classList.toggle('on', !!CO);
       if (CO) {
         document.body.classList.add('co-other');
         document.getElementById('coTag').textContent = info.name;
@@ -1297,6 +1315,9 @@
       ev.preventDefault();
       setCo(!CO);
     });
+    // 今見ていない方を押したときだけ切り替える
+    document.getElementById('coSelf').addEventListener('click', function () { if (CO) setCo(false); });
+    document.getElementById('coOther').addEventListener('click', function () { if (!CO) setCo(true); });
     if (savedToken()) {
       var coInfo = jsonp({ action: 'otherInfo' }).catch(function () { return null; });
       if (CO) {
