@@ -608,8 +608,10 @@
             <div class="note">すでに入力がある日は書き換えません。時間がかかるときは、画面が自動で続きを書きます（この画面のまま待ってください）。</div>
             <div class="res" id="r3"></div></div><button class="btn" data-run="write">書き込む</button></div>
           <div class="step"><div class="sn">4</div><div class="sb"><div class="t">確認してほしいものを片付ける</div>
-            <div class="note">書き込みで出た「確認してほしいもの」を、この画面で1件ずつ片付けます。時刻の直し・出勤簿での上書き・氏名の決め直しは、勤怠管理表にそのまま書きます。片付けた行は全員で共有され、書き込みをやり直しても済のままです。</div>
-            <div class="res" id="r4"></div></div><button class="btn" id="kiReload">読み直す</button></div>
+            <div class="note">書き込みで出た「確認してほしいもの」を、この画面で1件ずつ片付けます。時刻の直し・出勤簿での上書き・氏名の決め直しは、勤怠管理表にそのまま書きます。片付けた行は全員で共有され、書き込みをやり直しても済のままです。<br>
+              「書き込む前に確かめる」は、出勤簿を読んで、書き込んだら出る「確認」を先に見せます（勤怠管理表には何も書きません）。出勤簿を直してから、もう一度押すと一覧が新しくなります。</div>
+            <div class="res" id="r4"></div></div>
+            <div style="display:flex;flex-direction:column;gap:6px"><button class="btn" id="kiCheck">書き込む前に確かめる</button><button class="btn" id="kiReload">書き込み結果を読み直す</button></div></div>
         </div>
       </div>
       <!-- 勤怠打刻の反映 -->
@@ -1886,6 +1888,17 @@
       }, function (m) { KI.loading = false; $('r4').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
     }
     $('kiReload').addEventListener('click', kiLoad);
+    // 書き込む前に確かめる：書き込みと同じ判断で「確認」を出す（勤怠管理表は変えない。勤怠書き込み.gs の adminKintaiCheck）
+    function kiCheck() {
+      var label = $('kwMonth').value;
+      if (!label || KI.loading) return;
+      KI.loading = true; KI.edit = null;
+      $('r4').innerHTML = '<div class="run">出勤簿を読んで、書き込んだらどうなるかを確かめています...（1〜2分）</div>';
+      call('adminKintaiCheck', [PIN, DEVICE, label], function (r) {
+        KI.loading = false; KI.data = r; kiRender();
+      }, function (m) { KI.loading = false; $('r4').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
+    }
+    $('kiCheck').addEventListener('click', kiCheck);
     // 「三井田」→ 勤怠管理表の「三井田 ○○」のように、名字が合うシートが1つだけなら先に選んでおく
     function kiGuess(name, names) {
       var k = String(name).replace(/[\s　]/g, ''), m = k.match(/^(.+?)[(（](.+?)[)）]$/);
@@ -1899,6 +1912,7 @@
       return same.length === 1 ? same[0] : hit.length === 1 ? hit[0] : '';
     }
     function kiActs(x, i) {
+      if (KI.data && KI.data.preview) return '<span class="note">出勤簿を直す</span>';   // 確かめただけ：まだ勤怠管理表に行がないので片付けない
       if (KI.busy[i]) return '<span class="busy">保存しています...</span>';
       if (x.done) return '<span class="doneby">✓ ' + esc(x.done.how) + '<br>' + esc(x.done.by) + ' ' + esc(x.done.at) + '</span> <button class="tbtn" data-ki="undo" data-i="' + i + '">済を外す</button>';
       var ed = KI.edit;
@@ -1925,6 +1939,20 @@
       if (!d) return;
       var open = '　<a href="' + esc(d.kintaiUrl || '#') + '" target="_blank" rel="noopener">勤怠管理表を開く ↗</a>';
       if (d.other) { $('r4').innerHTML = '<div class="note">「書き込み結果」シートは <b>' + esc(d.other) + '</b> の結果です。' + esc(d.label) + ' は、まだ「3」の書き込みをしていません。</div>'; return; }
+      if (d.preview) {   // 書き込む前に確かめた結果（まだ書き込んでいない）
+        var pv = '<div class="kihead"><span class="left">書き込む前に確かめました：確認 <b class="' + (d.list.length ? '' : 'zero') + '">' + d.list.length + '件</b></span>' +
+          '<span class="note">（' + esc(d.label) + '・' + esc(d.made) + '・<b>まだ書き込んでいません</b>。書き込むと ' + d.willWrite + ' 件書きます' +
+          (d.checked < d.people ? '。時間の都合で ' + d.checked + ' / ' + d.people + ' 人まで確かめました' : '') + '）</span>' + open + '</div>';
+        $('r4').innerHTML = pv + (d.list.length ?
+          '<table class="ki">' + d.list.map(function (x, i) {
+            var k = x.kind === 'check' ? 'k2' : 'k1';
+            return '<tr><td style="white-space:nowrap">' + esc(x.name) + '</td><td style="white-space:nowrap">' + esc(x.date) + ' ' + esc(x.shift) + '</td>' +
+              '<td><span class="kind ' + k + '">' + esc(KI_KIND[x.kind] || x.result) + '</span> ' + esc(x.msg) + '</td><td class="acts">' + kiActs(x, i) + '</td></tr>';
+          }).join('') + '</table>' +
+          '<div class="note" style="margin-top:6px">出勤簿を直したら、もう一度「書き込む前に確かめる」を押してください。よければ「3」の「書き込む」で書き込みます。</div>'
+          : '<div class="ok" style="margin-top:6px">確認してほしいものはありません。「3」の「書き込む」で書き込めます。</div>');
+        return;
+      }
       if (!d.list.length) { $('r4').innerHTML = d.made ? '<div class="ok">確認してほしいものはありません。' + open + '</div>' : '<div class="note">まだ「3」の書き込みをしていません。</div>'; return; }
       var idx = d.list.map(function (x, i) { return i; });
       idx.sort(function (a, b) { var x = d.list[a], y = d.list[b]; return (KI_ORDER[x.kind] - KI_ORDER[y.kind]) || (a - b); });
