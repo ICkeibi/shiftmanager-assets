@@ -3564,6 +3564,11 @@
         BL.init = true;
         $('blMonth').innerHTML = r.months.map(function (m) { return '<option value="' + esc(m.label) + '">' + esc(m.label) + '</option>'; }).join('');
         $('blMonth').selectedIndex = r.index;
+        // 請求書の月：毎月10日から当月、1〜9日は前の月（10日には前の月の請求書は出し終えているため）
+        var t = new Date(); if (t.getDate() < 10) t = new Date(t.getFullYear(), t.getMonth() - 1, 1);
+        var want = '令和' + (t.getFullYear() - 2018) + '年' + (t.getMonth() + 1) + '月';
+        var at = r.months.map(function (m) { return String(m.label).replace(/\s/g, ''); }).indexOf(want);
+        if (at >= 0) $('blMonth').selectedIndex = at;
         blLoadSaved();
       }, function (m) { $('blMsg').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
     }
@@ -3572,7 +3577,7 @@
     function blLoadSaved() {
       var label = blLabel();
       if (!label) return;
-      BL.data = null; BL.savedAt = 0; BL.changed = [];
+      BL.data = null; BL.savedAt = 0; BL.changed = []; BL.diff = null;
       $('blRun').textContent = '会社別の請求額を出す';
       $('blBody').innerHTML = '';
       $('blMsg').innerHTML = '<div class="msg run" style="background:var(--primary-bg);color:var(--primary)">前に計算した結果を読んでいます...</div>';
@@ -3614,9 +3619,52 @@
       return '<div style="font-size:13px;color:var(--text2);margin-bottom:8px">' + (fresh ? '今' : when + ' に') + '計算した結果です' +
         (fresh ? '（' + when + '。次に開いたときもすぐ出ます）' : '。出勤簿・単価・現場の振り分けを直したときは「最新にする」を押してください。') + '</div>' +
         (BL.changed && BL.changed.length
-          ? '<div class="unk" style="background:#fff3cd;color:#7a5a00;border-radius:8px;padding:8px 12px;margin-bottom:10px">⚠ 計算したあとに <b>' + esc(BL.changed.join('、')) + '</b> が直されています。印刷の前に「最新にする（出勤簿から計算し直す）」を押してください。</div>'
+          ? '<div class="unk" style="background:#fff3cd;color:#7a5a00;border-radius:8px;padding:8px 12px;margin-bottom:10px">⚠ 計算したあとに <b>' + esc(BL.changed.join('、')) + '</b> が直されています。印刷の前に「最新にする（出勤簿から計算し直す）」を押してください。' +
+            ' <button type="button" class="btn" data-bldiff="1" style="margin-left:6px;padding:3px 10px;font-size:12px">変わるところを見る</button></div>' +
+            '<div id="blDiff">' + blDiffHtml() + '</div>'
           : '');
     }
+    // 「変わるところを見る」：保存せずに計算し直して、今の結果と比べる（請求額.gs の adminBillingDiff）
+    function blDiffHtml() {
+      var d = BL.diff;
+      if (!d) return '';
+      if (d.loading) return '<div class="msg run" style="background:var(--primary-bg);color:var(--primary);margin-bottom:10px">出勤簿を読んで、変わるところを調べています...（1〜2分。まだ保存しません）</div>';
+      if (d.error) return '<div class="msg err" style="margin-bottom:10px">' + esc(d.error) + '</div>';
+      var yen = function (n) { return (n < 0 ? '−' : '＋') + '¥' + Math.abs(n).toLocaleString('ja-JP'); };
+      var cnt = function (x) { return x ? '日勤' + x.day + '・夜勤' + x.night + '（¥' + x.total.toLocaleString('ja-JP') + '）' : '（なし）'; };
+      var head = '<div style="font-weight:bold;margin-bottom:6px">「最新にする」を押すと変わるところ（' + esc(d.checkedAt) + ' に調べました。まだ保存していません）</div>';
+      var foot = '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
+        '<span>税込みの合計：¥' + d.before.toLocaleString('ja-JP') + ' → <b>¥' + d.after.toLocaleString('ja-JP') + '</b>（' + yen(d.after - d.before) + '）</span>' +
+        '<button type="button" class="btn main" data-blapply="1" style="padding:4px 12px;font-size:12px">この内容で最新にする</button>' +
+        '<button type="button" class="btn" data-bldiffx="1" style="padding:4px 12px;font-size:12px">閉じる（今のまま）</button></div>';
+      if (!d.items.length) return '<div style="border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:10px;background:#fff">' + head +
+        '<div>請求額・人数・残業は変わりません（出勤簿の直しは、請求に関係のないところでした）。</div>' + foot + '</div>';
+      var kind = { 'new': '<b style="color:#1e7e34">新しく出る</b>', gone: '<b style="color:#c00000">なくなる</b>', change: '<b>変わる</b>' };
+      var rows = d.items.map(function (x) {
+        var days = x.days.map(function (y) { return '<div style="font-size:12px;color:var(--text2)">' + esc(y.date) + '：' + esc(y.before) + ' → <b style="color:var(--text)">' + esc(y.after) + '</b></div>'; }).join('') +
+          (x.more ? '<div style="font-size:12px;color:var(--text2)">ほか ' + x.more + '日</div>' : '');
+        return '<tr><td style="white-space:nowrap;vertical-align:top;padding:4px 8px">' + esc(x.co) + '<br><span style="font-size:12px;color:var(--text2)">' + esc(x.site) + '</span></td>' +
+          '<td style="vertical-align:top;padding:4px 8px;white-space:nowrap">' + kind[x.kind] + '</td>' +
+          '<td style="vertical-align:top;padding:4px 8px">' + cnt(x.before) + ' → ' + cnt(x.after) + days + '</td>' +
+          '<td style="vertical-align:top;padding:4px 8px;white-space:nowrap;text-align:right;font-weight:bold;color:' + (x.money < 0 ? '#c00000' : x.money > 0 ? '#1e7e34' : 'inherit') + '">' + (x.money ? yen(x.money) : '') + '</td></tr>';
+      }).join('');
+      return '<div style="border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:10px;background:#fff">' + head +
+        '<div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:13px"><tr style="background:var(--bg)"><th style="text-align:left;padding:4px 8px">会社・現場</th><th style="text-align:left;padding:4px 8px"></th><th style="text-align:left;padding:4px 8px">今 → 最新にしたあと（日ごと）</th><th style="text-align:right;padding:4px 8px">税込み</th></tr>' + rows + '</table></div>' + foot + '</div>';
+    }
+    function blDiffDraw() { var el = $('blDiff'); if (el) el.innerHTML = blDiffHtml(); }
+    document.addEventListener('click', function (e) {
+      var t = e.target.closest && e.target.closest('[data-bldiff],[data-blapply],[data-bldiffx]');
+      if (!t) return;
+      if (t.hasAttribute('data-bldiffx')) { BL.diff = null; blDiffDraw(); return; }
+      if (t.hasAttribute('data-blapply')) { BL.diff = null; blDiffDraw(); $('blRun').click(); return; }
+      var label = blLabel();
+      if (!label || (BL.diff && BL.diff.loading)) return;
+      BL.diff = { loading: true }; blDiffDraw();
+      call('adminBillingDiff', [PIN, DEVICE, label], function (r) {
+        if (blLabel() !== label) return;
+        BL.diff = r.none ? { error: 'まだ計算した結果がないので、比べられません。「会社別の請求額を出す」を押してください。' } : r; blDiffDraw();
+      }, function (m) { BL.diff = { error: m }; blDiffDraw(); });
+    });
     // ホームの「対応が必要な処理」から、その会社の請求書の作成（締め日ごと）を探す
     function blDue(name) {
       var out = null;
