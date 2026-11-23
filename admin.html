@@ -398,7 +398,9 @@
   <div id="login" class="hidden">
     <h1>管理画面</h1>
     <p>月払いと同じ暗証番号でログインします。</p>
-    <input id="pin" type="password" autocomplete="off" placeholder="暗証番号">
+    <!-- Googleのパスワード管理に覚えさせるための名前（見えない。2026-11-24） -->
+    <input type="text" name="username" autocomplete="username" value="出勤確認の管理画面" tabindex="-1" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
+    <input id="pin" type="password" name="password" autocomplete="current-password" placeholder="暗証番号">
     <input id="code" class="hidden" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="確認コード（メールで届いた6けた）" style="margin-top:8px">
     <label><input id="remember" type="checkbox" checked> このパソコンで覚える（90日間）</label>
     <button class="go" id="loginBtn">ログイン</button>
@@ -3414,7 +3416,7 @@
       stAdmMode(true); ST.adm = null;
       $('stAdm').innerHTML = '<div class="panel" style="margin-top:6px;padding:14px 16px;border:2px solid var(--brand);max-width:520px"><b>管理者の設定を開く</b>' +
         '<p class="sub" style="margin:6px 0 10px">管理者を足す・止めるなどの大事な設定です。開くたびに、<b>自分の暗証番号</b>を入れ直します。変えた内容は、責任者のメールに届きます。</p>' +
-        '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap"><label>自分の暗証番号<br><input id="admOpenPin" type="password" autocomplete="current-password" maxlength="64" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"></label>' +
+        '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap"><input type="text" name="username" autocomplete="username" value="出勤確認の管理画面" tabindex="-1" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0"><label>自分の暗証番号<br><input id="admOpenPin" type="password" name="password" autocomplete="current-password" maxlength="64" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"></label>' +
         '<button type="button" class="btn main" data-admopen="1">開く</button></div></div>';
       var f = $('admOpenPin'); if (f) f.focus();
     }
@@ -3466,7 +3468,7 @@
         (act === 'add' ? '<label>名前<br><input id="admN" maxlength="30" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"></label>' : '') +
         (act === 'add' || act === 'pin' ? '<label>新しい暗証番号<br><input id="admP1" type="password" autocomplete="new-password" maxlength="20" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"></label><label>もう一度<br><input id="admP2" type="password" autocomplete="new-password" maxlength="20" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"></label>' : '') +
         (act === 'add' || act === 'mail' ? '<label>メールアドレス（確認コードの送り先）<br><input id="admM" type="email" autocomplete="off" maxlength="100" style="' + inp + ';min-width:240px"></label><label>もう一度<br><input id="admM2" type="email" autocomplete="off" maxlength="100" style="' + inp + ';min-width:240px"></label>' : '') +
-        '<label>自分の暗証番号<br><input id="admMe" type="password" autocomplete="current-password" maxlength="64" style="' + inp + '"></label>' +
+        '<input type="text" name="username" autocomplete="username" value="出勤確認の管理画面" tabindex="-1" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0"><label>自分の暗証番号<br><input id="admMe" type="password" name="password" autocomplete="current-password" maxlength="64" style="' + inp + '"></label>' +
         '<button type="button" class="btn main" data-admgo="' + act + '" data-n="' + esc(name || '') + '">' + (act === 'add' ? '足す' : act === 'pin' || act === 'mail' ? '変える' : act === 'stop' ? '止める' : act === 'nskOn' ? '見られるにする' : act === 'nskOff' ? '外す' : 'もどす') + '</button><button type="button" class="btn" data-admx>やめる</button></div>' +
         '<p class="sub" style="margin:8px 0 0">' + (act === 'nskOn' || act === 'nskOff' ? 'NSKは別の会社の数字です。見られるのは、ここで「見られる」にした人だけです。'
           : act === 'mail' ? '入れたメールに、ログインのときの確認コードが届きます。まちがえると届かないので、2回入れて確かめます。自分のメールは空にできません。'
