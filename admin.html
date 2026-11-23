@@ -4078,7 +4078,9 @@
           vals = [[v(x.q), 16], [v(dn), 16], [h(x.od), 16], [v(nn), 16, 'c', 'b'], [h(x.on), 16]];
         } else {
           add('d', dn); add('n', nn); add('o', (x.od || 0) + (x.on || 0));
-          var site = invLike && place && m.place ? m.place : place, cl = place ? clientOf(x) : '';
+          // 現場名：請求書の「施工場所」（後ろの（会社名）は取る。例：江戸川区北小岩2-4（常盤工業）→ 江戸川区北小岩2-4）。空なら町名
+          var mpl = String(m.place || '').replace(/\s*[（(][^（）()]*[)）]\s*$/, '').trim();
+          var site = place && mpl ? mpl : place, cl = place ? clientOf(x) : '';
           vals = [[v(dn), 16], [v(nn), 16, 'c', 'b', BLUE], [h((x.od || 0) + (x.on || 0)), 16, 'c', 'b'], [cl, fit(cl, 16, 5), 'c', 'b'], [site, fit(site, 16, 6), 'c', 'b']];
         }
         vals.forEach(function (t, k) { put(2 + k, R, t); });
