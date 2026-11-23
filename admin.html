@@ -4067,6 +4067,29 @@
         String(text || '').split('').forEach(function (ch) { u += /[ -~｡-ﾟ]/.test(ch) ? 0.6 : 1; });
         return u && u * size * g0.fz > w ? Math.max(7, Math.floor(w / u / g0.fz * 10) / 10) : size;
       };
+      // 住所をマスに入れる共通のきまり（どの会社・どの形の出面表も同じ。2026-11-23）
+      //  ① 字を小さくして入るなら、そのまま（元の大きさの75%まで）
+      //  ② 入らなければ、号 → 番地 → 丁目 → 区（市）の順に削る
+      //     例）江戸川区西小岩3-32-13 → 江戸川区西小岩3-32 → 江戸川区西小岩3 → 江戸川区西小岩 → 西小岩
+      //  ③ 最後まで削っても入らなければ、さらに字を小さくする（7ptまで）
+      //  「・」で区切った複数の住所は、1つずつ同じように削る
+      var fitAddr = function (text, size, col) {
+        var parts = String(text || '').split('・').map(function (p) { return p.replace(/\s*[（(][^（）()]*[)）]\s*$/, '').trim(); });
+        var steps = [
+          function (p) { return p.replace(/[-－‐ー−][0-9０-９]+$/, ''); },          // 号
+          function (p) { return p.replace(/[-－‐ー−][0-9０-９]+$/, ''); },          // 番地
+          function (p) { return p.replace(/[0-9０-９]+(丁目)?$/, ''); },             // 丁目
+          function (p) { return p.replace(/^.*?[都道府県]/, '').replace(/^.*?[区市郡](?=.)/, ''); }   // 区・市
+        ];
+        var t = parts.join('・'), min = size * 0.75;
+        if (fit(t, size, col) >= min) return [t, fit(t, size, col)];
+        for (var i = 0; i < steps.length; i++) {
+          parts = parts.map(function (p) { return steps[i](p) || p; });
+          t = parts.join('・');
+          if (fit(t, size, col) >= min) return [t, fit(t, size, col)];
+        }
+        return [t, fit(t, size, col)];
+      };
       // その現場の月の中で、場所が2つ以上あるか（まとめた現場＝都内各所など）
       var allPl = {};
       Object.keys(s.days || {}).forEach(function (k) { ((s.days[k].td || []).concat(s.days[k].tn || [])).forEach(function (p) { allPl[p] = 1; }); });
@@ -4120,7 +4143,8 @@
             }
             vals = [null, [v(dn), 14], [h(x.od), 14], [v(nn), 14], [h(x.on), 14, 'r', 'b'], [v(x.q), 14, 'c', 'b']];
           } else
-          vals = [[dn || nn ? (m.place || place) : '', 14], [v(dn), 14], [h(x.od), 14], [v(nn), 14], [h(x.on), 14, 'r', 'b'], [v(x.q), 14, 'c', 'b']];
+          var ap = dn || nn ? fitAddr(m.place || place, 14, 2) : ['', 14];
+          vals = [[ap[0], ap[1]], [v(dn), 14], [h(x.od), 14], [v(nn), 14], [h(x.on), 14, 'r', 'b'], [v(x.q), 14, 'c', 'b']];
         } else if (kind === 'kt') {
           add('d', dn); add('n', nn); add('od', x.od); add('on', x.on); add('q', x.q);
           vals = [[v(x.q), 16], [v(dn), 16], [h(x.od), 16], [v(nn), 16, 'c', 'b'], [h(x.on), 16]];
@@ -4128,8 +4152,10 @@
           add('d', dn); add('n', nn); add('o', (x.od || 0) + (x.on || 0));
           // 現場名：請求書の「施工場所」（後ろの（会社名）は取る。例：江戸川区北小岩2-4（常盤工業）→ 江戸川区北小岩2-4）。空なら町名
           var mpl = String(m.place || '').replace(/\s*[（(][^（）()]*[)）]\s*$/, '').trim();
-          var site = place && mpl ? mpl : place, cl = place ? clientOf(x) : '';
-          vals = [[v(dn), 16], [v(nn), 16, 'c', 'b', BLUE], [h((x.od || 0) + (x.on || 0)), 16, 'c', 'b'], [cl, fit(cl, 16, 5), 'c', 'b'], [site, fit(site, 16, 6), 'c', 'b']];
+          //  → その日の出勤簿の住所（番地まで）を優先。なければ施工場所、それもなければ町名
+          var site = place ? ((x.ad && x.ad.length) ? x.ad.join('・') : (mpl || place)) : '', cl = place ? clientOf(x) : '';
+          var sp = site ? fitAddr(site, 16, 6) : ['', 16];
+          vals = [[v(dn), 16], [v(nn), 16, 'c', 'b', BLUE], [h((x.od || 0) + (x.on || 0)), 16, 'c', 'b'], [cl, fit(cl, 16, 5), 'c', 'b'], [sp[0], sp[1], 'c', 'b']];
         }
         vals.forEach(function (t, k) { put(2 + k, R, t); });
       }
