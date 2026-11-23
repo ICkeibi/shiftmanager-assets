@@ -1284,7 +1284,15 @@
         var n = cnt[b.getAttribute('data-badge')] || 0;
         b.textContent = n; b.classList.toggle('hidden', !n);
       });
-      if (h.progress && !PG.picked) renderProgress(h.progress);
+      if (h.progress && !PG.picked) {
+        renderProgress(h.progress);
+        // ホームの進み具合の月も、10日から当月（1〜9日は前の月）
+        var want = monthWant('d10');
+        if (String(h.progress.label).replace(/\s/g, '') !== want && (h.progress.months || []).some(function (m) { return String(m).replace(/\s/g, '') === want; })) {
+          PG.picked = true;
+          call('adminProgress', [PIN, DEVICE, want], renderProgress, function () {});
+        }
+      }
       // 設定
       // 画面で直せるもの（設定ページ）は、押すと設定ページを開く（シートへのリンクは出さない＝シートを直接さわらせない）
       $('settings').innerHTML = (h.settings || []).map(function (s) {
@@ -1488,6 +1496,7 @@
     function wkLoad(refresh) {
       $('wkMsg').innerHTML = '';
       var mid = wkMonthId(), per = $('wkPeriod').value, seq = WK.seq = (WK.seq || 0) + 1;
+      WK.diff = null;
       var count = function () {
         $('wkBody').innerHTML = '<div class="loading">' + (refresh ? '出勤簿を読み直しています...（1分ほどかかることがあります）' : '出勤簿を読んでいます...') + '</div>';
         call('adminWeekly', [PIN, DEVICE, mid, per, !!refresh], function (r) {
@@ -1503,6 +1512,42 @@
         r.mid = mid; r.per = per; r.fresh = false; WK.data = r; wkRender();
       }, function () { if (seq === WK.seq) count(); });
     }
+    // 週払いの「変わるところを見る」
+    function wkDiffHtml() {
+      var d = WK.diff;
+      if (!d) return '';
+      if (d.loading) return '<div class="msg run" style="background:var(--primary-bg);color:var(--primary);margin-bottom:10px">出勤簿を読んで、変わるところを調べています...（1分ほど。まだ保存しません）</div>';
+      if (d.error) return '<div class="msg err" style="margin-bottom:10px">' + esc(d.error) + '</div>';
+      var cnt = function (x) { return x ? '日勤' + x.day + '・夜勤' + x.night : '（なし）'; };
+      var kind = { 'new': '<b style="color:#1e7e34">新しく出る</b>', gone: '<b style="color:#c00000">いなくなる</b>', change: '<b>変わる</b>' };
+      var head = '<div style="font-weight:bold;margin-bottom:6px">「最新にする」を押すと変わるところ（' + esc(d.checkedAt) + ' に調べました。まだ保存していません）</div>';
+      var foot = '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span>合計：' + d.before + ' → <b>' + d.after + '</b>（' + (d.after - d.before >= 0 ? '＋' : '−') + Math.abs(d.after - d.before) + '）</span>' +
+        '<button type="button" class="btn main" data-wkapply="1" style="padding:4px 12px;font-size:12px">この内容で最新にする</button>' +
+        '<button type="button" class="btn" data-wkdiffx="1" style="padding:4px 12px;font-size:12px">閉じる（今のまま）</button></div>';
+      var paidN = d.items.filter(function (x) { return x.paid; }).length;
+      var body = !d.items.length ? '<div>日勤・夜勤の回数は、だれも変わりません。</div>' :
+        (paidN ? '<div style="color:#c00000;font-weight:bold;margin-bottom:6px">⚠ 「済」にした人が ' + paidN + '人 変わります（赤い行）。払った金額を確かめてください。</div>' : '') +
+        '<div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:13px"><tr style="background:var(--bg)"><th style="text-align:left;padding:4px 8px">名前</th><th style="text-align:left;padding:4px 8px"></th><th style="text-align:left;padding:4px 8px">今 → 最新にしたあと</th><th style="text-align:left;padding:4px 8px">済</th></tr>' +
+        d.items.map(function (x) {
+          return '<tr' + (x.paid ? ' style="background:#fde8e8"' : '') + '><td style="padding:4px 8px;white-space:nowrap"><b>' + esc(x.name) + '</b></td><td style="padding:4px 8px;white-space:nowrap">' + kind[x.kind] + '</td>' +
+            '<td style="padding:4px 8px">' + cnt(x.before) + ' → <b>' + cnt(x.after) + '</b></td><td style="padding:4px 8px">' + (x.paid ? '<b style="color:#c00000">済</b>' : '') + '</td></tr>';
+        }).join('') + '</table></div>';
+      return '<div style="border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:10px;background:#fff">' + head + body + foot + '</div>';
+    }
+    function wkDiffDraw() { var el = $('wkDiff'); if (el) el.innerHTML = wkDiffHtml(); }
+    document.addEventListener('click', function (e) {
+      var t = e.target.closest && e.target.closest('[data-wkdiff],[data-wkapply],[data-wkdiffx]');
+      if (!t) return;
+      if (t.hasAttribute('data-wkdiffx')) { WK.diff = null; wkDiffDraw(); return; }
+      if (t.hasAttribute('data-wkapply')) { WK.diff = null; WK.detail = {}; wkLoad(true); return; }
+      if (WK.diff && WK.diff.loading) return;
+      var mid = wkMonthId(), per = $('wkPeriod').value;
+      WK.diff = { loading: true }; wkDiffDraw();
+      call('adminWeeklyDiff', [PIN, DEVICE, mid, per], function (r) {
+        if (mid !== wkMonthId() || per !== $('wkPeriod').value) return;
+        WK.diff = r.none ? { error: 'まだ数えた結果がないので、比べられません。「最新にする」を押してください。' } : r; wkDiffDraw();
+      }, function (m) { WK.diff = { error: m }; wkDiffDraw(); });
+    });
     function nkey(n) { return String(n || '').replace(/[\s　]/g, ''); }
     function normName(s) {
       return String(s || '').normalize('NFKC').replace(/[\s　]/g, '').toLowerCase()
@@ -1543,6 +1588,8 @@
       var unk = d.unknown && d.unknown.length ? '<details class="unk"><summary>⚠ 名簿にない名前 ' + d.unknown.length + '件（新しい人・表記の違い・入力ミスの可能性）</summary>' +
         d.unknown.map(function (u) { return '<div>' + esc(u.name) + '　<span style="opacity:.8">' + u.count + '回：' + esc(u.where.join('、')) + '</span></div>'; }).join('') + '</details>' : '';
       var note = d.at ? savedNote(d.at, d.changed, d.fresh, '数えた') : '';
+      // 出勤簿が直されていたら「変わるところを見る」（保存せずに数え直して比べる。守りと比べる.gs の adminWeeklyDiff）
+      if (d.changed && d.changed.length) note += '<div style="margin:-2px 0 8px"><button type="button" class="btn" data-wkdiff="1" style="padding:3px 10px;font-size:12px">変わるところを見る</button></div><div id="wkDiff">' + wkDiffHtml() + '</div>';
       d.fresh = false;
       var pct = weekly.length ? Math.round(paidN / weekly.length * 100) : 0;
       var kpi = function (cls, label, val, small) { return '<div class="blx-kpi ' + cls + '"><span>' + label + '</span><b>' + val + '</b>' + (small ? '<small>' + small + '</small>' : '') + '</div>'; };
@@ -1602,6 +1649,18 @@
       }, function (m) { c.disabled = false; c.checked = !on; wkErr('保存できませんでした：' + m); });
     });
 
+    // 最初に開く月の決まり（2026-11-24）
+    //  'd10'：10日〜月末は当月、1〜9日は前の月（ホーム・勤怠書き込み・請求書）
+    //  'prev'：いつも前の月（給与：月が変わってから前の月を締めるため。例 12/1 から 11月）
+    function monthWant(rule) {
+      var t = new Date();
+      if (rule === 'prev' || t.getDate() < 10) t = new Date(t.getFullYear(), t.getMonth() - 1, 1);
+      return '令和' + (t.getFullYear() - 2018) + '年' + (t.getMonth() + 1) + '月';
+    }
+    function monthIndex(labels, rule) {
+      var w = monthWant(rule);
+      return labels.map(function (l) { return String(l).replace(/\s/g, ''); }).indexOf(w);
+    }
     // ── 個人別集計・勤怠管理表への書き込み ──
     var KW = { init: false, busy: false };
     function kwOpen() {
@@ -1612,6 +1671,8 @@
           return '<option value="' + esc(m.label) + '">' + esc(m.label) + (m.hasKintai ? '' : '（勤怠管理表なし）') + '</option>';
         }).join('');
         $('kwMonth').selectedIndex = r.index;
+        var kwAt = monthIndex(r.months.map(function (m) { return m.label; }), 'd10');   // 10日から当月
+        if (kwAt >= 0) $('kwMonth').selectedIndex = kwAt;
         kiLoad();
         kwSaved();
       }, function (m) { $('kwMsg').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
@@ -2749,6 +2810,8 @@
           return '<option value="' + esc(m.label) + '">' + esc(m.label) + (m.hasKintai ? '' : '（勤怠管理表なし）') + '</option>';
         }).join('');
         $('slMonth').selectedIndex = r.index;
+        var slAt = monthIndex(r.months.map(function (m) { return m.label; }), 'prev');   // 給与はいつも前の月
+        if (slAt >= 0) $('slMonth').selectedIndex = slAt;
         slLateSaved();
       }, function (m) { $('s1').innerHTML = '<div class="msg err">' + esc(m) + '</div>'; });
     }
@@ -3329,7 +3392,8 @@
         });
         window.addEventListener('beforeunload', function (e) { if (stDirty()) { e.preventDefault(); e.returnValue = ''; } });
       }
-      if (!ST.data || ST.data.name !== ST.name) stLoad();
+      stOwnerTab();
+      if (!ST.data || ST.data.name !== ST.name || ST.name === '管理者') stLoad();
     }
     function stRow(r) { return ST.data.rows.filter(function (x) { return x.row === r; })[0]; }
     function stDirty() { return Object.keys(ST.edits).length + ST.adds.length + Object.keys(ST.dels).length > 0; }
@@ -3345,9 +3409,31 @@
       $('stAdm').classList.toggle('hidden', !on);
       Array.prototype.forEach.call(document.querySelectorAll('#pSettings .st-bar, #pSettings .st-wrap, #pSettings .st-wrap + .sub'), function (el) { el.classList.toggle('hidden', on); });
     }
+    // 「管理者」は責任者だけ。開くたびに自分の暗証番号を入れ直す（守りと比べる.gs の adminOwnerAdminsGet）
     function stAdmLoad() {
-      stAdmMode(true); $('stAdm').innerHTML = '<div class="loading" style="padding:12px 0">読み込んでいます…</div>';
-      call('adminAdminsGet', [PIN, DEVICE], function (r) { if (ST.name !== '管理者') return; ST.adm = r; stAdmDraw(''); }, function (e) { stMsg(e, 'err'); });
+      stAdmMode(true); ST.adm = null;
+      $('stAdm').innerHTML = '<div class="panel" style="margin-top:6px;padding:14px 16px;border:2px solid var(--brand);max-width:520px"><b>管理者の設定を開く</b>' +
+        '<p class="sub" style="margin:6px 0 10px">管理者を足す・止めるなどの大事な設定です。開くたびに、<b>自分の暗証番号</b>を入れ直します。変えた内容は、責任者のメールに届きます。</p>' +
+        '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap"><label>自分の暗証番号<br><input id="admOpenPin" type="password" autocomplete="current-password" maxlength="64" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"></label>' +
+        '<button type="button" class="btn main" data-admopen="1">開く</button></div></div>';
+      var f = $('admOpenPin'); if (f) f.focus();
+    }
+    function stAdmOpen() {
+      var pin = ($('admOpenPin') || {}).value || '';
+      if (!pin) { stMsg('自分の暗証番号を入れてください', 'err'); return; }
+      stMsg('');
+      $('stAdm').innerHTML = '<div class="loading" style="padding:12px 0">読み込んでいます…</div>';
+      call('adminOwnerAdminsGet', [PIN, DEVICE, pin], function (r) { if (ST.name !== '管理者') return; ST.adm = r; stAdmDraw(''); },
+        function (e) { stMsg(e, 'err'); if (ST.name === '管理者') stAdmLoad(); });
+    }
+    document.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('[data-admopen]')) stAdmOpen(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Enter' && e.target && e.target.id === 'admOpenPin') stAdmOpen(); });
+    // 責任者でない人には「管理者」のタブを出さない
+    function stOwnerTab() {
+      var tab = document.querySelector('#stTabs [data-st="管理者"]');
+      if (!tab || ST.ownerChecked) return;
+      ST.ownerChecked = true; tab.style.display = 'none';
+      call('adminOwnerIs', [PIN, DEVICE], function (r) { tab.style.display = r && r.owner ? '' : 'none'; if (!(r && r.owner) && ST.name === '管理者') { ST.name = '請求単価'; stLoad(); } }, function () {});
     }
     function stAdmDraw(form) {
       var r = ST.adm, h = '<div class="st-wrap" style="max-height:none"><table class="st-tbl"><thead><tr><th>名前</th><th>状態</th><th>暗証番号</th><th>確認コードの送り先</th><th>覚えている端末</th><th>NSK</th><th></th></tr></thead><tbody>' +
@@ -3406,7 +3492,7 @@
       if (act === 'add' && !p.name) { stMsg('名前を入れてください', 'err'); return; }
       if (!me) { stMsg('自分の暗証番号を入れてください', 'err'); return; }
       stMsg('処理しています…', 'run');
-      call('adminAdminsSave', [PIN, DEVICE, p], function (r) { ST.adm = r; stAdmDraw(''); stMsg(r.message || '変えました', 'ok'); }, function (e) { stMsg(e, 'err'); });
+      call('adminOwnerAdminsSave', [PIN, DEVICE, p], function (r) { ST.adm = r; stAdmDraw(''); stMsg(r.message || '変えました', 'ok'); }, function (e) { stMsg(e, 'err'); });
     }
     document.addEventListener('click', function (e) {
       if (!e.target.closest || !e.target.closest('#stAdm')) return;
