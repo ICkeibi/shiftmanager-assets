@@ -3994,6 +3994,10 @@
       // 得意先名（S2の形）：会社名から「株式会社」などを取ったもの
       //  長い名前は短くする（共同企業体 → JV）。それでもマスからはみ出すときは、文字を小さくする
       var client = String(c.name || '').replace(/[（(]株[)）]|株式会社|有限会社/g, '').replace(/共同企業体/g, 'JV').trim();
+      // 宛名が「株式会社S2」以外のS2の形（グランツ警備保障(株) あての仕事など）は、請求書に合わせる
+      //  得意先名＝請求書の会社名そのまま（(株)オープラス）、現場名＝請求書の「施工場所」（江東区辰巳1-7。空なら町名）
+      var invLike = kind === 's2' && !/S2/i.test(nz(atena).replace(/[Ａ-Ｚａ-ｚ０-９]/g, function (ch) { return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0); }));
+      if (invLike) client = String(c.name || '').trim();
       var fit = function (text, size, col) {
         var w = G.X(col + 1) - G.X(col) - 4, u = 0;
         String(text || '').split('').forEach(function (ch) { u += /[ -~｡-ﾟ]/.test(ch) ? 0.6 : 1; });
@@ -4058,7 +4062,8 @@
           vals = [[v(x.q), 16], [v(dn), 16], [h(x.od), 16], [v(nn), 16, 'c', 'b'], [h(x.on), 16]];
         } else {
           add('d', dn); add('n', nn); add('o', (x.od || 0) + (x.on || 0));
-          vals = [[v(dn), 16], [v(nn), 16, 'c', 'b', BLUE], [h((x.od || 0) + (x.on || 0)), 16, 'c', 'b'], [place ? client : '', fit(client, 16, 5), 'c', 'b'], [place, fit(place, 16, 6), 'c', 'b']];
+          var site = invLike && place && m.place ? m.place : place;
+          vals = [[v(dn), 16], [v(nn), 16, 'c', 'b', BLUE], [h((x.od || 0) + (x.on || 0)), 16, 'c', 'b'], [place ? client : '', fit(client, 16, 5), 'c', 'b'], [site, fit(site, 16, 6), 'c', 'b']];
         }
         vals.forEach(function (t, k) { put(2 + k, R, t); });
       }
