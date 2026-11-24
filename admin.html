@@ -4317,9 +4317,10 @@
               out += G.cell(2, 3, R, R + 1, '<div style="text-align:center;line-height:1.05">' + l1.h + '<br>' + l2.h + '</div>', 'c', 'c', 'font-size:' + f(sz) + ';white-space:nowrap');   // マスは横に並べる作りなので、2行は1つの箱に入れてから改行する
             }
             vals = [null, [v(dn), 14], [h(x.od), 14], [v(nn), 14], [h(x.on), 14, 'r', 'b'], [v(x.q), 14, 'c', 'b']];
-          } else
-          var ap = dn || nn ? fitAddr(m.place || place, 14, 2) : ['', 14];
-          vals = [[ap[0], ap[1]], [v(dn), 14], [h(x.od), 14], [v(nn), 14], [h(x.on), 14, 'r', 'b'], [v(x.q), 14, 'c', 'b']];
+          } else {
+            var ap = dn || nn ? fitAddr(m.place || place, 14, 2) : ['', 14];
+            vals = [[ap[0], ap[1]], [v(dn), 14], [h(x.od), 14], [v(nn), 14], [h(x.on), 14, 'r', 'b'], [v(x.q), 14, 'c', 'b']];
+          }
         } else if (kind === 'kt') {
           add('d', dn); add('n', nn); add('od', x.od); add('on', x.on); add('q', x.q);
           vals = [[v(x.q), 16], [v(dn), 16], [h(x.od), 16], [v(nn), 16, 'c', 'b'], [h(x.on), 16]];
