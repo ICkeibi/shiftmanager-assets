@@ -4177,7 +4177,15 @@
           var k = mm ? mm[1].trim() : '';
           if (k && !/^[株有]$/.test(k) && inner.indexOf(k) < 0) inner.push(k);
         });
-        if (inner.length) return inner.join('・');
+        var tidy = function (t) { return String(t).replace(/㈱/g, '(株)').replace(/㈲/g, '(有)').trim(); };
+        if (inner.length) return inner.map(tidy).join('・');
+        //  ② （ ）がなければ、出勤簿の現場名そのもの（例：中央工業・あすか創建）。宛名と同じ会社（例：エイサン警備）は出さない（2026-11-24）
+        var names = [];
+        (x.raw || []).forEach(function (t) {
+          var n = tidy(t), k = co(n), a = co(atena);
+          if (n && k && a.indexOf(k) < 0 && k.indexOf(a) < 0 && names.indexOf(n) < 0) names.push(n);
+        });
+        if (names.length) return names.join('・');
         return sameAsAtena ? '' : client;
       };
       var fit = function (text, size, col) {
