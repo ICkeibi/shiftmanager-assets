@@ -1049,11 +1049,12 @@
       } catch (e) {}
     }
     // 覚えた暗証番号を、欄に入れる（Chrome が「自動入力の前に確認」をしているときは、Windows の確認が出る）
-    function pwFill(el) {
+    //  then：番号が入ったら、そのまま続ける（指紋などの確認が済んだら「開く」を押さなくても開く）
+    function pwFill(el, then) {
       try {
         if (!el || el.value || !window.PasswordCredential || !navigator.credentials) return;
         navigator.credentials.get({ password: true, mediation: 'optional' }).then(function (c) {
-          if (c && c.password && !el.value) el.value = c.password;
+          if (c && c.password && !el.value) { el.value = c.password; if (then) then(); }
         }).catch(function () {});
       } catch (e) {}
     }
@@ -3440,6 +3441,8 @@
         '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap"><input type="text" name="username" autocomplete="username" value="出勤確認の管理画面" tabindex="-1" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0"><label>自分の暗証番号<br><input id="admOpenPin" type="password" name="password" autocomplete="current-password" maxlength="64" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"></label>' +
         '<button type="button" class="btn main" data-admopen="1">開く</button><button type="button" class="btn" data-admfill="1">覚えた番号を入れる</button></div></div>';
       var f = $('admOpenPin'); if (f) f.focus();
+      // 「管理者」を開いたら、すぐ覚えた番号を聞く（指紋などの確認が済んだら、そのまま開く）
+      if (f && !ST.admAsked) { ST.admAsked = true; pwFill(f, stAdmOpen); }
     }
     function stAdmOpen() {
       var pin = ($('admOpenPin') || {}).value || '';
@@ -3451,7 +3454,7 @@
     }
     document.addEventListener('click', function (e) {
       if (e.target.closest && e.target.closest('[data-admopen]')) stAdmOpen();
-      if (e.target.closest && e.target.closest('[data-admfill]')) pwFill($('admOpenPin'));
+      if (e.target.closest && e.target.closest('[data-admfill]')) pwFill($('admOpenPin'), stAdmOpen);
     });
     document.addEventListener('keydown', function (e) { if (e.key === 'Enter' && e.target && e.target.id === 'admOpenPin') stAdmOpen(); });
     // 責任者でない人には「管理者」のタブを出さない
@@ -3529,6 +3532,7 @@
     function stLoad() {
       stReset(); stMsg(''); ST.ord = null; stOrdDraw();
       if (ST.name === '管理者') { ST.data = { name: '管理者' }; stAdmLoad(); return; }
+      ST.admAsked = false;   // ほかの表に移ったら、次に「管理者」を開いたときも指紋などで聞く
       stAdmMode(false); $('stTbl').tBodies[0].innerHTML = '<tr><td><div class="loading" style="padding:16px 12px">読み込んでいます…</div></td></tr>';
       var name = ST.name;
       call('adminSettingGet', [PIN, DEVICE, name], function (r) { if (name !== ST.name) return; ST.data = r; $('stNote').textContent = r.note || ''; stDraw(); },
