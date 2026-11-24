@@ -1037,6 +1037,24 @@
     // 確認コード：暗証番号が合うと、管理者のメールに6けたのコードが届く。コードを入れてもう一度「ログイン」
     var CODE_FOR = '';
     function codeReset() { CODE_FOR = ''; $('code').value = ''; $('code').classList.add('hidden'); $('pin').disabled = false; }
+    // Googleのパスワード管理（Chrome）に、暗証番号を覚えさせる（2026-11-24）
+    //  ・入力欄を見て自動で覚えるのは、ページが変わらないこの画面では働かないことがあるので、はっきり「覚えて」と頼む
+    //  ・名前は「出勤確認の管理画面」（見えない名前の欄と同じ）。Chrome が「保存しますか？」と聞くので「保存」を押す
+    function pwSave(pin) {
+      try {
+        if (!pin || !window.PasswordCredential || !navigator.credentials) return;
+        navigator.credentials.store(new PasswordCredential({ id: '出勤確認の管理画面', password: String(pin), name: '出勤確認の管理画面' })).catch(function () {});
+      } catch (e) {}
+    }
+    // 覚えた暗証番号を、欄に入れる（Chrome が「自動入力の前に確認」をしているときは、Windows の確認が出る）
+    function pwFill(el) {
+      try {
+        if (!el || el.value || !window.PasswordCredential || !navigator.credentials) return;
+        navigator.credentials.get({ password: true, mediation: 'optional' }).then(function (c) {
+          if (c && c.password && !el.value) el.value = c.password;
+        }).catch(function () {});
+      } catch (e) {}
+    }
     function login(cred, quiet) {
       if (!cred) { showLogin(''); return; }
       var code = '';
@@ -1053,6 +1071,7 @@
           return;
         }
         codeReset();
+        if (String(cred).indexOf('t:') !== 0) pwSave(cred);   // 暗証番号で入ったときは、Googleのパスワード管理に覚えさせる
         PIN = res.token || cred;
         if (res.token && res.keep) setToken(res.token);   // 覚えないときの印（12時間）は保存しない
         $('pin').value = '';
@@ -3417,7 +3436,7 @@
       $('stAdm').innerHTML = '<div class="panel" style="margin-top:6px;padding:14px 16px;border:2px solid var(--brand);max-width:520px"><b>管理者の設定を開く</b>' +
         '<p class="sub" style="margin:6px 0 10px">管理者を足す・止めるなどの大事な設定です。開くたびに、<b>自分の暗証番号</b>を入れ直します。変えた内容は、責任者のメールに届きます。</p>' +
         '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap"><input type="text" name="username" autocomplete="username" value="出勤確認の管理画面" tabindex="-1" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0"><label>自分の暗証番号<br><input id="admOpenPin" type="password" name="password" autocomplete="current-password" maxlength="64" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"></label>' +
-        '<button type="button" class="btn main" data-admopen="1">開く</button></div></div>';
+        '<button type="button" class="btn main" data-admopen="1">開く</button><button type="button" class="btn" data-admfill="1">覚えた番号を入れる</button></div></div>';
       var f = $('admOpenPin'); if (f) f.focus();
     }
     function stAdmOpen() {
@@ -3425,10 +3444,13 @@
       if (!pin) { stMsg('自分の暗証番号を入れてください', 'err'); return; }
       stMsg('');
       $('stAdm').innerHTML = '<div class="loading" style="padding:12px 0">読み込んでいます…</div>';
-      call('adminOwnerAdminsGet', [PIN, DEVICE, pin], function (r) { if (ST.name !== '管理者') return; ST.adm = r; stAdmDraw(''); },
+      call('adminOwnerAdminsGet', [PIN, DEVICE, pin], function (r) { pwSave(pin); if (ST.name !== '管理者') return; ST.adm = r; stAdmDraw(''); },
         function (e) { stMsg(e, 'err'); if (ST.name === '管理者') stAdmLoad(); });
     }
-    document.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('[data-admopen]')) stAdmOpen(); });
+    document.addEventListener('click', function (e) {
+      if (e.target.closest && e.target.closest('[data-admopen]')) stAdmOpen();
+      if (e.target.closest && e.target.closest('[data-admfill]')) pwFill($('admOpenPin'));
+    });
     document.addEventListener('keydown', function (e) { if (e.key === 'Enter' && e.target && e.target.id === 'admOpenPin') stAdmOpen(); });
     // 責任者でない人には「管理者」のタブを出さない
     function stOwnerTab() {
