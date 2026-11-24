@@ -1043,7 +1043,9 @@
     function pwSave(pin) {
       try {
         if (!pin || !window.PasswordCredential || !navigator.credentials) return;
-        navigator.credentials.store(new PasswordCredential({ id: '出勤確認の管理画面', password: String(pin), name: '出勤確認の管理画面' })).catch(function () {});
+        // iconURL：Chrome の「ログイン」の小窓に出る絵（鍵の絵の代わりに、会社のアイコン）
+        navigator.credentials.store(new PasswordCredential({ id: '出勤確認の管理画面', password: String(pin), name: '出勤確認の管理画面',
+          iconURL: new URL('icon.png', location.href).href })).catch(function () {});
       } catch (e) {}
     }
     // 覚えた暗証番号を、欄に入れる（Chrome が「自動入力の前に確認」をしているときは、Windows の確認が出る）
