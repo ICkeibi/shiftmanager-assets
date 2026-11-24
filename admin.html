@@ -4496,6 +4496,26 @@
     //  ・金額は現場ごとに消費税10%（切り捨て）を足した税込み（請求書と同じ）
     //  ・行が多い月は、文字を小さくして1枚に収める
     var BL_OUR_COMPANY = 'I・C警備保障株式会社';
+    // 売上累計表の月の色（Excel の月の色と同じ RGB）。1〜12月
+    var BL_MONTH_RGB = [null, [157, 18, 41], [204, 200, 129], [253, 217, 193], [220, 174, 99], [102, 46, 81], [86, 130, 103],
+      [223, 201, 190], [207, 107, 131], [32, 51, 93], [141, 134, 167], [220, 78, 76], [238, 239, 246]];
+    //  mc＝月の色、mt＝その上の文字（白か黒）、mrule＝見出しの下の線（明るすぎる月は紺）、
+    //  mdark＝合計の行（月の色の色合いのまま暗くした色）、mdt＝その上の文字
+    function blMonthColor(m) {
+      var c = BL_MONTH_RGB[m] || [31, 42, 51];
+      var lum = function (x) { return 0.299 * x[0] + 0.587 * x[1] + 0.114 * x[2]; };
+      var rgb = function (x) { return 'rgb(' + x.join(',') + ')'; };
+      var r = c[0] / 255, g = c[1] / 255, b = c[2] / 255, mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, h = 0, s = 0;
+      if (mx !== mn) { var d = mx - mn; s = l > .5 ? d / (2 - mx - mn) : d / (mx + mn);
+        h = (mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4) / 6; }
+      var dl = l > .5 ? .30 : l * .55, ds = Math.min(s, .55), dk;
+      if (!ds) { var v = Math.round(dl * 255); dk = [v, v, v]; }
+      else { var q = dl < .5 ? dl * (1 + ds) : dl + ds - dl * ds, p = 2 * dl - q;
+        var f = function (t) { if (t < 0) t += 1; if (t > 1) t -= 1; return t < 1 / 6 ? p + (q - p) * 6 * t : t < 1 / 2 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; };
+        dk = [f(h + 1 / 3), f(h), f(h - 1 / 3)].map(function (x) { return Math.round(x * 255); }); }
+      var L = lum(c);
+      return { mc: rgb(c), mt: L > 150 ? '#1f2a33' : '#fff', mrule: L > 190 ? '#1f2a33' : rgb(c), mdark: rgb(dk), mdt: lum(dk) > 150 ? '#1f2a33' : '#fff' };
+    }
     function blPrint(r, view) {
       // 見出しは「令和8年10月分」（年は r.ym「2026-10」から。無いときは名前の「2026年」か、今の年）
       var m = String(r.label).match(/(\d+)月/), ymM = String(r.ym || '').match(/^(\d{4})-(\d{1,2})/);
@@ -4505,51 +4525,98 @@
       var title = mo ? '令和' + (yy - 2018) + '年' + mo + '月分' : r.label;
       var num = function (n) { return Math.round(n).toLocaleString('ja-JP'); };
       var ppl = function (n) { return (Math.round(n * 10) / 10).toLocaleString('ja-JP'); };
-      var body = '', rowsN = 0, sum = { day: 0, night: 0, yen: 0 };
-      r.companies.forEach(function (c) {
-        c.sites.forEach(function (s, i) {
+      // 2026-11-25 デザイン刷新（決算書風・月の色）。週払いの表と見分けがつくように
+      //  ・会社ごとに線で区切る。現場が2つ以上の会社は、会社の行に小計を太字で出し、その下に現場を並べる
+      //  ・割合＝売上合計の中の割合（0円は「−」）。0円の現場はオレンジの ⚠ で知らせる
+      //  ・月の色は Excel と同じ12色（左上の四角・見出しの下の線・合計の行）
+      var sum = { day: 0, night: 0, yen: 0 }, coN = 0, zeroN = 0;
+      var list = r.companies.map(function (c) {
+        var t = { day: 0, night: 0, yen: 0 };
+        var sites = c.sites.map(function (s) {
           var inc = s.total + Math.floor(s.total * 0.1);
-          sum.day += s.day; sum.night += s.night; sum.yen += inc; rowsN++;
-          body += '<tr class="' + (i === 0 ? 'co' : '') + '"><td class="c">' + (i === 0 ? esc(c.disp || c.name) : '') + '</td><td>' + esc(s.name) + '</td>' +
-            '<td class="n">' + ppl(s.day) + '</td><td class="n">' + ppl(s.night) + '</td><td class="n">' + num(inc) + '</td></tr>';
+          t.day += s.day; t.night += s.night; t.yen += inc; if (!inc) zeroN++;
+          return { name: s.name, day: s.day, night: s.night, yen: inc };
+        });
+        sum.day += t.day; sum.night += t.night; sum.yen += t.yen; if (sites.length) coN++;
+        return { name: c.disp || c.name, sites: sites, t: t };
+      });
+      var pct = function (v) { return (!v || !sum.yen) ? '−' : (v / sum.yen * 100).toFixed(1) + '%'; };
+      var yenTd = function (v) { return '<td class="n yen' + (v ? '' : ' zero') + '">' + num(v) + '</td>'; };
+      var body = '';
+      list.forEach(function (c) {
+        var n = c.sites.length; if (!n) return;
+        if (n === 1) {
+          var s = c.sites[0];
+          body += '<tr class="co"><td class="c">' + esc(c.name) + '<span class="s">' + esc(s.name) + '</span></td><td class="n">' + ppl(s.day) + '</td><td class="n">' + ppl(s.night) + '</td><td class="n">' + pct(s.yen) + '</td>' + yenTd(s.yen) + '</tr>';
+          return;
+        }
+        body += '<tr class="grp"><td class="c">' + esc(c.name) + '<span class="s">' + n + '現場</span></td><td class="n">' + ppl(c.t.day) + '</td><td class="n">' + ppl(c.t.night) + '</td><td class="n">' + pct(c.t.yen) + '</td><td class="n yen">' + num(c.t.yen) + '</td></tr>';
+        c.sites.forEach(function (s, i) {
+          body += '<tr class="site' + (i === n - 1 ? ' endgrp' : '') + '"><td class="c">' + esc(s.name) + '</td><td class="n">' + ppl(s.day) + '</td><td class="n">' + ppl(s.night) + '</td><td class="n"></td>' + yenTd(s.yen) + '</tr>';
         });
       });
-      // A4縦（297mm − 上下の余白）に、見出し＋行＋計・合計が収まる文字の大きさ
-      var fs = Math.max(6.5, Math.min(12, 680 / (rowsN + 6) / 1.95));
-      // 色は会社のアイコン（青 #0060A0・緑 #40A040）に合わせる。背景色も印刷されるようにする
+      var mv = blMonthColor(mo);
+      var zeroMsg = zeroN ? '⚠ 金額が0円の現場が ' + zeroN + ' か所あります（オレンジの数字）。単価を確かめてください。' : '';
       var icon = new URL('icon.png', location.href).href;
       var html = '<!doctype html><html><head><meta charset="utf-8"><title>' + esc(title) + ' 売上累計表</title><style>' +
         '@page { size: A4 portrait; margin: 0; }' +   // 余白0：ブラウザの日時・アドレスが出ないように。余白は .page の内側
-
         '* { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
-        'body { margin: 0; font-family: "Yu Gothic", "Meiryo", sans-serif; font-size: ' + fs.toFixed(1) + 'pt; color: #1b2a36; }' +
+        'body { margin: 0; font-family: "Yu Gothic", "YuGothic", "Meiryo", sans-serif; color: #1f2a33; }' +
         '.bar { display: flex; gap: 8px; padding: 10px; background: #e6f0f8; } .bar button { font: inherit; font-size: 14px; padding: 6px 16px; cursor: pointer; background: #0060A0; color: #fff; border: 0; border-radius: 6px; }' +
-        '.page { width: 190mm; margin: 0 auto; padding-top: 4mm; }' +
-        '.head { display: flex; justify-content: space-between; align-items: center; padding-bottom: 2mm; margin-bottom: 3mm; border-bottom: 3px solid #40A040; }' +
-        '.head h1 { font-size: 1.6em; margin: 0; color: #0060A0; letter-spacing: .05em; }' +
-        '.co-name { display: flex; align-items: center; gap: .5em; font-size: 1.05em; font-weight: bold; color: #0060A0; }' +
-        '.co-name img { height: 2.4em; width: auto; }' +
-        'table { width: 100%; border-collapse: collapse; table-layout: fixed; }' +
-        'th, td { border: 1px solid #9db8cf; padding: .35em .5em; overflow-wrap: anywhere; }' +
-        'th { background: #0060A0; color: #fff; font-weight: bold; border-color: #0060A0; }' +
-        'td.n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }' +
-        'td.c { background: #eef7ee; color: #2f7d30; font-weight: bold; }' +
-        'tr.co td { border-top: 1.6px solid #0060A0; }' +
-        'tr.sum td { font-weight: bold; border-top: 2px solid #0060A0; background: #e6f0f8; color: #0060A0; }' +
-        'tr.sum.all td { background: #40A040; color: #fff; border-color: #40A040; }' +
-        '@media print { .bar { display: none; } .page { width: 210mm; padding: 12mm 10mm; } }' +
-        '</style></head><body><div class="bar"><button onclick="window.print()">印刷する</button><span style="font-size:13px;align-self:center">A4縦・1枚に収まるように文字の大きさを合わせています。印刷の画面で「余白：デフォルト」「倍率：100%」のままにしてください。</span></div>' +
-        '<div class="page"><div class="head"><h1>' + esc(title) + '　売上累計表</h1>' +
-        '<div class="co-name"><img src="' + esc(icon) + '" alt="" onerror="this.style.display=\'none\'"><span>' + esc(BL_OUR_COMPANY) + '</span></div></div>' +
-        '<table><colgroup><col style="width:28%"><col style="width:33%"><col style="width:11%"><col style="width:11%"><col style="width:17%"></colgroup>' +
-        '<thead><tr><th>会社名</th><th>現場名</th><th>日勤<br>【人数】</th><th>夜勤<br>【人数】</th><th>金額</th></tr></thead><tbody>' + body +
-        '<tr class="sum"><td></td><td>計</td><td class="n">' + ppl(sum.day) + '</td><td class="n">' + ppl(sum.night) + '</td><td class="n">' + num(sum.yen) + '</td></tr>' +
-        '<tr class="sum all"><td></td><td>合計</td><td class="n" colspan="2" style="text-align:center">' + ppl(sum.day + sum.night) + '</td><td></td></tr>' +
-        '</tbody></table></div>' +
-        // 印刷の幅（190mm）で測って、高さが A4 の印刷範囲（約270mm）に収まるまで文字を小さくする
-        '<script>(function(){var p=document.querySelector(".page"),b=document.body,fs=12;p.style.width="190mm";' +
-        'var mm=function(){return p.scrollHeight*25.4/96;};b.style.fontSize=fs+"pt";' +
-        'while(mm()>262&&fs>6){fs-=0.25;b.style.fontSize=fs+"pt";}p.style.width="";})();<\/script>' +
+        '.page { --ink: #1f2a33; --mute: #7a8691; --col: #f3f4f5; --mc: ' + mv.mc + '; --mt: ' + mv.mt + '; --mrule: ' + mv.mrule + '; --mdark: ' + mv.mdark + '; --mdt: ' + mv.mdt + ';' +
+        ' width: 210mm; margin: 0 auto; padding: 12mm 13mm 10mm; font-size: 11pt; }' +
+        '.top { display: grid; grid-template-columns: 1fr auto; align-items: end; padding-bottom: 4mm; border-bottom: 1mm solid var(--mrule); }' +
+        '.big { display: flex; align-items: flex-end; gap: 4mm; }' +
+        '.mbox { background: var(--mc); color: var(--mt); width: 25mm; height: 25mm; display: flex; flex-direction: column; justify-content: center; align-items: center; border-radius: 1.2mm; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }' +
+        '.mbox b { font-family: "Segoe UI", "Yu Gothic", sans-serif; font-weight: 300; font-size: 4.2em; line-height: .9; letter-spacing: -.02em; }' +
+        '.mbox small { font-size: .85em; font-weight: bold; letter-spacing: .2em; margin-top: .2em; }' +
+        '.tt .yy { font-size: .9em; color: var(--mute); letter-spacing: .15em; }' +
+        '.tt h1 { margin: .15em 0 0; font-size: 1.9em; font-weight: bold; letter-spacing: .3em; color: var(--ink); line-height: 1; }' +
+        '.tt .en { margin-top: .5em; font-size: .72em; letter-spacing: .35em; color: var(--mute); font-family: "Segoe UI", sans-serif; }' +
+        '.rt { text-align: right; }' +
+        '.rt .nm { display: flex; align-items: center; justify-content: flex-end; gap: .4em; font-weight: bold; font-size: .95em; }' +
+        '.rt img { height: 1.9em; width: auto; }' +
+        '.rt .total { margin-top: 2.5mm; font-size: .8em; color: var(--mute); letter-spacing: .1em; }' +
+        '.rt .total b { display: block; font-size: 2.6em; color: var(--ink); letter-spacing: 0; font-family: "Segoe UI", "Yu Gothic", sans-serif; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.05; }' +
+        '.rt .total b small { font-size: .4em; margin-left: .15em; font-weight: bold; }' +
+        '.kp { display: flex; gap: 8mm; margin: 2.5mm 0 3mm; font-size: .85em; color: var(--mute); }' +
+        '.kp b { color: var(--ink); font-size: 1.15em; margin-left: .35em; font-variant-numeric: tabular-nums; }' +
+        'table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 1mm; }' +
+        'td, th { overflow-wrap: anywhere; }' +
+        'th { font-size: .78em; color: var(--mute); font-weight: bold; letter-spacing: .1em; padding: .4em .6em; text-align: left; border-bottom: 1px solid var(--ink); }' +
+        'td { padding: .26em .6em; line-height: 1.3; }' +
+        '.n { text-align: right !important; white-space: nowrap; font-variant-numeric: tabular-nums; }' +
+        'td.yen, th.yen { background: var(--col); }' +
+        'tr.co td { padding-top: .45em; padding-bottom: .45em; border-top: 1px solid #9aa6b0; }' +
+        'tbody tr:first-child td { border-top: 0; }' +
+        'tr.co td.c, tr.grp td.c { font-weight: bold; }' +
+        'td.c .s { color: var(--mute); font-weight: normal; margin-left: .8em; font-size: .92em; }' +
+        'tr.grp td { font-weight: bold; padding-top: .45em; border-top: 1px solid #9aa6b0; border-bottom: 1px dotted #c3ccd4; }' +
+        'tr.site td { font-size: .95em; }' +
+        'tr.site td.c { padding-left: 1.8em; color: #3c4954; }' +
+        'tr.site td.c::before { content: ""; display: inline-block; width: .45em; height: .45em; border-radius: 50%; background: #b9c4ce; margin-right: .55em; vertical-align: .12em; }' +
+        'tr.endgrp td { padding-bottom: .45em; }' +
+        'td.zero { color: #d9772b !important; font-weight: bold; } td.zero::before { content: "⚠ "; font-size: .85em; }' +
+        'tr.tot td { background: var(--mdark); color: var(--mdt); font-weight: bold; padding: .55em .6em; }' +
+        'tr.tot td.yen { background: var(--mc); color: var(--mt); font-size: 1.12em; }' +
+        '.note { margin-top: 2.5mm; font-size: .78em; display: flex; justify-content: space-between; color: var(--mute); }' +
+        '.note .warn { color: #c96a1e; }' +
+        '@media print { .bar { display: none; } .page { margin: 0; height: 296mm; overflow: hidden; } }' +
+        '</style></head><body><div class="bar"><button onclick="window.print()">印刷する</button><span style="font-size:13px;align-self:center">A4縦・1枚に収まるように文字の大きさを合わせています。印刷の画面で「倍率：100%」のままにしてください。</span></div>' +
+        '<div class="page"><div class="top"><div class="big">' +
+        (mo ? '<div class="mbox"><b>' + mo + '</b><small>月分</small></div>' : '') +
+        '<div class="tt"><div class="yy">' + esc(mo ? '令和' + (yy - 2018) + '年' : title) + '</div><h1>売上累計表</h1><div class="en">MONTHLY SALES REPORT</div></div></div>' +
+        '<div class="rt"><div class="nm"><img src="' + esc(icon) + '" alt="" onerror="this.style.display=\'none\'"><span>' + esc(BL_OUR_COMPANY) + '</span></div>' +
+        '<div class="total">売上合計（税込み）<b>' + num(sum.yen) + '<small>円</small></b></div></div></div>' +
+        '<div class="kp"><span>日勤<b>' + ppl(sum.day) + '</b> 人</span><span>夜勤<b>' + ppl(sum.night) + '</b> 人</span><span>人数の合計<b>' + ppl(sum.day + sum.night) + '</b> 人</span><span>取引先<b>' + coN + '</b> 社</span></div>' +
+        '<table><colgroup><col style="width:51%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:19%"></colgroup>' +
+        '<thead><tr><th>取引先・現場</th><th class="n">日勤（人）</th><th class="n">夜勤（人）</th><th class="n">割合</th><th class="n yen">金額（円）</th></tr></thead><tbody>' + body +
+        '<tr class="tot"><td>合計</td><td class="n">' + ppl(sum.day) + '</td><td class="n">' + ppl(sum.night) + '</td><td class="n">' + (sum.yen ? '100%' : '−') + '</td><td class="n yen">' + num(sum.yen) + '</td></tr></tbody></table>' +
+        '<div class="note"><span class="warn">' + esc(zeroMsg) + '</span><span>金額はすべて税込み（消費税10%）</span></div></div>' +
+        // A4（297mm）の1枚に収まるまで文字を小さくする（.page の高さで測る）
+        '<script>(function(){var p=document.querySelector(".page"),fs=11;' +
+        'var mm=function(){return p.scrollHeight*25.4/96;};p.style.fontSize=fs+"pt";' +
+        'while(mm()>294&&fs>6){fs-=0.25;p.style.fontSize=fs+"pt";}})();<\/script>' +
         '</body></html>';
       if (view) { docView({ title: title + '　売上累計表', build: function () { return { html: html, labels: ['売上累計表'] }; } }); return; }
       var w = window.open('', '_blank');
