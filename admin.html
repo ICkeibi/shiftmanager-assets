@@ -4099,7 +4099,7 @@
         // 四角い枠（二重線などに使う）
         box: function (x, y, w, h, lw, color) { L.push('<rect x="' + r2(x) + '" y="' + r2(y) + '" width="' + r2(w) + '" height="' + r2(h) + '" fill="none" stroke="' + (color || '#000') + '" stroke-width="' + lw + '"/>'); return ''; },
         // ページの大きさ（pt）の絵にして返す。ページの最後に足す
-        svg: function (W, H) { return '<svg class="xsvg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' + L.join('') + '</svg>'; },
+        svg: function (W, H) { return '<svg class="xsvg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" shape-rendering="crispEdges">' + L.join('') + '</svg>'; },
         fz: function (n) { return pt(n * g.fz); },
         fg: function (n) { return pt(n * (g.fg || g.fz)); },
         // セル（c1列〜c2列の手前、r1行〜r2行の手前）に文字を置く。a＝横（l/c/r）、v＝縦（t/c/b）
@@ -4109,8 +4109,57 @@
         }
       };
     }
-    function dzPage(c, s, m) {
-      var hol = {}, hasHol = (c.rates || {}).hDay != null || (c.rates || {}).hNight != null;
+    // 請求書・出面表の組み分け（2026-11-24）
+    //  ・出面表の形が S2 で現場が2つ以上の会社は、得意先ごとに現場をまとめて1組にする
+    //    得意先＝出勤簿の現場名の（ ）の中。なければ現場名そのもの（宛名と同じ会社名は除く）
+    //  ・まとめた組は、日ごとの人数・残業を足し、請求の明細（数量）も足す。施工場所は「・」で並べる
+    //  ・それ以外の会社は、今までどおり現場ごと
+    function invGroups(c, ci) {
+      var plain = c.sites.map(function (s, si) { return { s: s, m: invMetaOf(ci, si) }; });
+      var isS2 = /S2/i.test(String(c.dz || '').replace(/[Ａ-Ｚａ-ｚ０-９]/g, function (ch) { return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0); }));
+      if (!isS2 || c.sites.length < 2) return plain;
+      var co = function (t) { return String(t || '').replace(/[（(][株有][)）]|株式会社|有限会社|[㈱㈲\s　]/g, ''); };
+      var tidy = function (t) { return String(t).replace(/㈱/g, '(株)').replace(/㈲/g, '(有)').trim(); };
+      var atena = co((plain[0].m && plain[0].m.atena) || invAtena(c, null));
+      var keyOf = function (s) {
+        var raws = [];
+        Object.keys(s.days || {}).forEach(function (k) { (s.days[k].raw || []).forEach(function (r) { if (raws.indexOf(r) < 0) raws.push(r); }); });
+        for (var i = 0; i < raws.length; i++) {
+          var mm = String(raws[i]).replace(/[\s　]+$/, '').match(/[（(]([^（）()]+)[)）]$/);
+          if (mm && !/^[株有]$/.test(mm[1].trim())) return tidy(mm[1]);
+        }
+        for (var j = 0; j < raws.length; j++) { var k2 = co(raws[j]); if (k2 && atena.indexOf(k2) < 0 && k2.indexOf(atena) < 0) return tidy(raws[j]); }
+        return s.name;
+      };
+      var groups = [], byKey = {}, uniq = function (a, v) { if (v && a.indexOf(v) < 0) a.push(v); };
+      plain.forEach(function (p) {
+        var k = keyOf(p.s);
+        if (!byKey[k]) { byKey[k] = { key: k, list: [] }; groups.push(byKey[k]); }
+        byKey[k].list.push(p);
+      });
+      return groups.map(function (g) {
+        if (g.list.length === 1) return g.list[0];
+        var days = {}, lines = {}, order = [], places = [];
+        g.list.forEach(function (p) {
+          var s = p.s, place = String((p.m || {}).place || '').replace(/\s*[（(][^（）()]*[)）]\s*$/, '').trim();
+          uniq(places, place || s.name);
+          (s.lines || []).forEach(function (l) {
+            if (!lines[l.label]) { lines[l.label] = { label: l.label, qty: 0, unit: l.unit, yen: 0 }; order.push(l.label); }
+            lines[l.label].qty += Number(l.qty) || 0; lines[l.label].yen += Number(l.yen) || 0;
+          });
+          Object.keys(s.days || {}).forEach(function (k) {
+            var x = s.days[k], y = days[k] = days[k] || { d: 0, n: 0, hd: 0, hn: 0, od: 0, on: 0, pd: 0, pn: 0, q: 0, t: [], td: [], tn: [], raw: [], ad: [] };
+            ['d', 'n', 'hd', 'hn', 'od', 'on', 'pd', 'pn', 'q'].forEach(function (f) { y[f] += Number(x[f]) || 0; });
+            ['t', 'td', 'tn', 'raw'].forEach(function (f) { (x[f] || []).forEach(function (v) { uniq(y[f], v); }); });
+            if (x.ad && x.ad.length) x.ad.forEach(function (v) { uniq(y.ad, v); }); else uniq(y.ad, place || s.name);
+          });
+        });
+        var sum = function (f) { return g.list.reduce(function (t, p) { return t + (Number(p.s[f]) || 0); }, 0); };
+        var s = { name: g.key, day: sum('day'), night: sum('night'), total: sum('total'), lines: order.map(function (k) { return lines[k]; }), days: days };
+        return { s: s, m: Object.assign({}, g.list[0].m || {}, { place: places.join('・') }) };
+      });
+    }
+    function dzPage(c, s, m) {      var hol = {}, hasHol = (c.rates || {}).hDay != null || (c.rates || {}).hNight != null;
       (BL.data.hol || []).forEach(function (k) { hol[k] = true; });
       var h = function (min) { return min ? String(Math.round(min / 60 * 100) / 100) : ''; };
       var v = function (n) { return n ? String(Math.round(n * 100) / 100) : ''; };
@@ -4306,8 +4355,9 @@
       var icon = new URL('icon.png', location.href).href, pages = '', labels = [];
       cis.forEach(function (ci) {
         var c = BL.data.companies[ci];
-        c.sites.forEach(function (s, si) {
-          var m = invMetaOf(ci, si), rows = invRows(c, s);
+        // 出面表の形が S2 の会社は、得意先ごとに請求書・出面表を1枚にまとめる（例：グランツ → 大峰建設・あすか創建・中央工業の3組。2026-11-24）
+        invGroups(c, ci).forEach(function (gp) {
+          var s = gp.s, m = gp.m, rows = invRows(c, s);
           if (mode === 'dz') { pages += dzPage(c, s, m); labels.push(c.name + '｜' + s.name + '｜出面表'); return; }
           labels.push(c.name + '｜' + s.name + '｜請求書');
           if (mode === 'both') labels.push(c.name + '｜' + s.name + '｜出面表');
