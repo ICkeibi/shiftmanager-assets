@@ -1033,6 +1033,8 @@
     function showLogin(msg) {
       $('app').classList.add('hidden'); $('login').classList.remove('hidden');
       $('loginMsg').textContent = msg || ''; (CODE_FOR ? $('code') : $('pin')).focus();
+      // 覚えた暗証番号があれば、すぐ聞く。指紋などの確認が済んだら、そのままログイン（ページを開いて1回だけ。2026-11-24）
+      if (!CODE_FOR && !window.LOGIN_ASKED) { window.LOGIN_ASKED = true; pwFill($('pin'), function () { login($('pin').value); }); }
     }
     // 確認コード：暗証番号が合うと、管理者のメールに6けたのコードが届く。コードを入れてもう一度「ログイン」
     var CODE_FOR = '';
