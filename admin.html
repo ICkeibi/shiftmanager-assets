@@ -4222,6 +4222,7 @@
       var w = 0;
       (text + tail).split('').forEach(function (ch) { w += /[ -~｡-ﾟ]/.test(ch) ? 0.6 : 1; });
       if (w <= 31) return text + tail;
+      if (/共同企業体/.test(name)) return invPlaceS2(places, name.replace(/共同企業体/g, 'JV'));   // 長いときは、まず JV に短くする
       var tokyo = kus.every(function (k) { return /区$/.test(k) && !/[県市]/.test(k); });
       return (tokyo ? '都内各所' : kus[0] + by[kus[0]][0] + ' ほか') + tail;
     }
@@ -4255,8 +4256,10 @@
           // 現場が1つだけの請求書も、S2あてなら施工場所の後ろに（得意先）を付ける。もう（ ）があるもの・得意先が分からないものは、そのまま（2026-11-25）
           var p1 = g.list[0], pl = String((p1.m || {}).place || '').trim();
           if (!toS2 || !pl || g.key === p1.s.name || /[)）]$/.test(pl) || pl.indexOf(g.key) >= 0) return p1;
-          if (pl.length + g.key.length > 29) pl = pl.replace(/[0-9０-９][0-9０-９\-－‐ー−]*$/, '') || pl;   // 長いときは番地を取る
-          return { s: p1.s, si: p1.si, m: Object.assign({}, p1.m, { place: pl + '（' + g.key + '）' }) };
+          var k1 = g.key;
+          if (pl.length + k1.length > 29) k1 = k1.replace(/共同企業体/g, 'JV');   // 長いときは、まず JV に短くする
+          if (pl.length + k1.length > 29) pl = pl.replace(/[0-9０-９][0-9０-９\-－‐ー−]*$/, '') || pl;   // 長いときは番地を取る
+          return { s: p1.s, si: p1.si, m: Object.assign({}, p1.m, { place: pl + '（' + k1 + '）' }) };
         }
         var days = {}, lines = {}, order = [], places = [];
         g.list.forEach(function (p) {
@@ -4450,6 +4453,7 @@
           var mpl = String(m.place || '').replace(/\s*[（(][^（）()]*[)）]\s*$/, '').trim();
           //  → その日の出勤簿の住所（番地まで）を優先。なければ施工場所、それもなければ町名
           var site = place ? ((x.ad && x.ad.length) ? x.ad.join('・') : (mpl || place)) : '', cl = place ? clientOf(x) : '';
+          if (cl && fit(cl, 16, 5) < 12) cl = cl.replace(/共同企業体/g, 'JV');   // 字が小さくて見にくいとき（元の75%より下）だけ JV にする（2026-11-25）
           var sp = site ? fitAddr(site, 16, 6) : ['', 16];
           vals = [[v(dn), 16], [v(nn), 16, 'c', 'b', BLUE], [h((x.od || 0) + (x.on || 0)), 16, 'c', 'b'], [cl, fit(cl, 16, 5), 'c', 'b'], [sp[0], sp[1], 'c', 'b']];
         }
