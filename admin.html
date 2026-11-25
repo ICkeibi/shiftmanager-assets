@@ -4191,7 +4191,13 @@
         h: function (r, c1, c2, w, color) { return line(X(c1) - w / 2, Y(r) - w / 2, X(c2) - X(c1) + w, w, color); },
         v: function (c, r1, r2_, w, color) { return line(X(c) - w / 2, Y(r1) - w / 2, w, Y(r2_) - Y(r1) + w, color); },
         // 四角い枠（二重線などに使う）
-        box: function (x, y, w, h, lw, color) { L.push('<rect x="' + r2(x) + '" y="' + r2(y) + '" width="' + r2(w) + '" height="' + r2(h) + '" fill="none" stroke="' + (color || '#000') + '" stroke-width="' + lw + '"/>'); return ''; },
+        //  塗った四角4本で引く（線（stroke）で引くと、印刷で細く・うすくなる。2026-11-25）
+        box: function (x, y, w, h, lw, color) {
+          var k = lw / 2;
+          line(x - k, y - k, w + lw, lw, color); line(x - k, y + h - k, w + lw, lw, color);
+          line(x - k, y - k, lw, h + lw, color); line(x + w - k, y - k, lw, h + lw, color);
+          return '';
+        },
         // ページの大きさ（pt）の絵にして返す。ページの最後に足す
         svg: function (W, H) { return '<svg class="xsvg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" shape-rendering="crispEdges">' + L.join('') + '</svg>'; },
         fz: function (n) { return pt(n * g.fz); },
@@ -4563,7 +4569,7 @@
           // まわりの二重線（A列の左・N列の右・1行目の上・30行目の下）
           var fx = G.X(0), fy = G.Y(0), fw = G.X(14) - fx, fh = G.Y(30) - fy;
           // まわりの二重線（黒のまま。外側と内側の2本）
-          o += G.box(fx - 0.7, fy - 0.7, fw + 1.4, fh + 1.4, 0.7) + G.box(fx + 0.7, fy + 0.7, fw - 1.4, fh - 1.4, 0.7);
+          o += G.box(fx - 0.9, fy - 0.9, fw + 1.8, fh + 1.8, 0.9) + G.box(fx + 0.9, fy + 0.9, fw - 1.8, fh - 1.8, 0.9);   // 紙でうすく見えたので、0.7 → 0.9pt の黒にした（2026-11-25）
           pages += '<div class="pg">' + o + G.svg(841.89, 595) + '</div>';   // 297mm × 209.9mm
           if (mode === 'both') pages += dzPage(c, s, m);
         });
