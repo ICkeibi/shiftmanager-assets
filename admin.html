@@ -4208,6 +4208,23 @@
     //    得意先＝出勤簿の現場名の（ ）の中。なければ現場名そのもの（宛名と同じ会社名は除く）
     //  ・まとめた組は、日ごとの人数・残業を足し、請求の明細（数量）も足す。施工場所は「・」で並べる
     //  ・それ以外の会社は、今までどおり現場ごと
+    // まとめた請求書（宛名が株式会社S2）の施工場所：同じ区は1回だけ書き、番地を取り、後ろに（得意先）を付ける（2026-11-25）
+    //  例：千代田区岩本町・神田多町・神田須田町（竹内工務店）。長くて右の会社名にぶつかるときは 都内各所（竹内工務店）
+    function invPlaceS2(places, name) {
+      var tail = name ? '（' + name + '）' : '', kus = [], by = {}, uniq = function (a, v) { if (a.indexOf(v) < 0) a.push(v); };
+      if (places.length < 2) return (places[0] || '') + tail;
+      places.forEach(function (p) {
+        var t = String(p).replace(/[0-9０-９].*$/, '').trim() || String(p), mm = t.match(/^(.+?[区市])(.+)$/), ku = mm ? mm[1] : '';
+        if (!by[ku]) { by[ku] = []; kus.push(ku); }
+        uniq(by[ku], mm ? mm[2] : t);
+      });
+      var text = kus.map(function (k) { return k + by[k].join('・'); }).join('・');
+      var w = 0;
+      (text + tail).split('').forEach(function (ch) { w += /[ -~｡-ﾟ]/.test(ch) ? 0.6 : 1; });
+      if (w <= 31) return text + tail;
+      var tokyo = kus.every(function (k) { return /区$/.test(k) && !/[県市]/.test(k); });
+      return (tokyo ? '都内各所' : kus[0] + by[kus[0]][0] + ' ほか') + tail;
+    }
     function invGroups(c, ci) {
       var plain = invOrder(c).map(function (si) { return { s: c.sites[si], m: invMetaOf(ci, si), si: si }; });   // 並べ替えた順
       var first = function (list) { return list.reduce(function (a, b) { return b.si < a.si ? b : a; }); };   // 宛名・工事件名を使う現場は、並べ替えても今までと同じ
@@ -4216,6 +4233,7 @@
       var co = function (t) { return String(t || '').replace(/[（(][株有][)）]|株式会社|有限会社|[㈱㈲\s　]/g, ''); };
       var tidy = function (t) { return String(t).replace(/㈱/g, '(株)').replace(/㈲/g, '(有)').trim(); };
       var atena = co((first(plain).m && first(plain).m.atena) || invAtena(c, null));
+      var toS2 = /^S2$/i.test(atena.replace(/[Ａ-Ｚａ-ｚ０-９]/g, function (ch) { return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0); }));
       var keyOf = function (s) {
         var raws = [];
         Object.keys(s.days || {}).forEach(function (k) { (s.days[k].raw || []).forEach(function (r) { if (raws.indexOf(r) < 0) raws.push(r); }); });
@@ -4251,7 +4269,7 @@
         });
         var sum = function (f) { return g.list.reduce(function (t, p) { return t + (Number(p.s[f]) || 0); }, 0); };
         var s = { name: g.key, day: sum('day'), night: sum('night'), total: sum('total'), lines: order.map(function (k) { return lines[k]; }), days: days };
-        return { s: s, m: Object.assign({}, first(g.list).m || {}, { place: places.join('・') }) };
+        return { s: s, m: Object.assign({}, first(g.list).m || {}, { place: toS2 ? invPlaceS2(places, g.key) : places.join('・') }) };
       });
     }
     function dzPage(c, s, m) {      var hol = {}, hasHol = (c.rates || {}).hDay != null || (c.rates || {}).hNight != null;
