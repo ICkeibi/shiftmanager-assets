@@ -4311,10 +4311,11 @@
       // その日の得意先名（宛名が株式会社S2以外のS2の形）：
       //  ① 出勤簿の現場名の後ろに（ ）があれば、その中（例：エイサン警備(○○建設) → ○○建設）
       //  ② なければ請求書の会社名。ただし会社名が宛名と同じ（例：エイサン警備 → 宛名もエイサン警備保障）なら空欄
-      var co = function (t) { return String(t || '').replace(/[（(][株有][)）]|株式会社|有限会社|[㈱㈲\s　]/g, ''); };
+      var co = function (t) { return String(t || '').replace(/[Ａ-Ｚａ-ｚ０-９]/g, function (ch) { return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0); }).replace(/[（(][株有][)）]|株式会社|有限会社|[㈱㈲\s　]/g, ''); };
       var sameAsAtena = co(c.name) && (co(atena).indexOf(co(c.name)) >= 0 || co(c.name).indexOf(co(atena)) >= 0);
       var clientOf = function (x) {
-        if (!invLike) return client;
+        // 請求先も宛名も株式会社S2のときは、グランツと同じ出し方（出勤簿の現場名から。2026-11-25）。竹内工務店 → S2あて などは、今までどおり請求先の名前
+        if (!invLike && !(kind === 's2' && sameAsAtena)) return client;
         var inner = [];
         (x.raw || []).forEach(function (t) {
           var mm = String(t).replace(/[\s　]+$/, '').match(/[（(]([^（）()]+)[)）]$/);
