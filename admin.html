@@ -4229,7 +4229,7 @@
       var plain = invOrder(c).map(function (si) { return { s: c.sites[si], m: invMetaOf(ci, si), si: si }; });   // 並べ替えた順
       var first = function (list) { return list.reduce(function (a, b) { return b.si < a.si ? b : a; }); };   // 宛名・工事件名を使う現場は、並べ替えても今までと同じ
       var isS2 = /S2/i.test(String(c.dz || '').replace(/[Ａ-Ｚａ-ｚ０-９]/g, function (ch) { return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0); }));
-      if (!isS2 || c.sites.length < 2) return plain;
+      if (!isS2) return plain;
       var co = function (t) { return String(t || '').replace(/[（(][株有][)）]|株式会社|有限会社|[㈱㈲\s　]/g, ''); };
       var tidy = function (t) { return String(t).replace(/㈱/g, '(株)').replace(/㈲/g, '(有)').trim(); };
       var atena = co((first(plain).m && first(plain).m.atena) || invAtena(c, null));
@@ -4251,7 +4251,13 @@
         byKey[k].list.push(p);
       });
       return groups.map(function (g) {
-        if (g.list.length === 1) return g.list[0];
+        if (g.list.length === 1) {
+          // 現場が1つだけの請求書も、S2あてなら施工場所の後ろに（得意先）を付ける。もう（ ）があるもの・得意先が分からないものは、そのまま（2026-11-25）
+          var p1 = g.list[0], pl = String((p1.m || {}).place || '').trim();
+          if (!toS2 || !pl || g.key === p1.s.name || /[)）]$/.test(pl) || pl.indexOf(g.key) >= 0) return p1;
+          if (pl.length + g.key.length > 29) pl = pl.replace(/[0-9０-９][0-9０-９\-－‐ー−]*$/, '') || pl;   // 長いときは番地を取る
+          return { s: p1.s, si: p1.si, m: Object.assign({}, p1.m, { place: pl + '（' + g.key + '）' }) };
+        }
         var days = {}, lines = {}, order = [], places = [];
         g.list.forEach(function (p) {
           var s = p.s, place = String((p.m || {}).place || '').replace(/\s*[（(][^（）()]*[)）]\s*$/, '').trim();
