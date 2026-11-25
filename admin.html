@@ -3968,6 +3968,12 @@
         return { name: x[0], unit: u, qty: n, yen: yenN };
       });
     }
+    // 現場の順番（「↕ 並べ替え」で保存した順。順番のない現場は、そのあとに今までの順）。返すのは sites の番号
+    //  ・BL.data の sites そのものは並べ替えない（請求額の一覧・売上累計表・金額は変わらない）
+    function invOrder(c) {
+      var pos = function (si) { var p = (c.sites[si].meta || {}).pos; return typeof p === 'number' && p >= 0 ? p : 99999; };
+      return c.sites.map(function (s, si) { return si; }).sort(function (a, b) { return pos(a) - pos(b) || a - b; });
+    }
     function invMetaOf(ci, si) {
       var s = BL.data.companies[ci].sites[si], m = s.meta || {};
       var box = document.querySelector('#invBox [data-site="' + si + '"]');
@@ -3982,8 +3988,8 @@
         return '<label style="display:flex;flex-direction:column;font-size:12px;color:var(--text2);' + (wide ? 'grid-column:span 2' : '') + '">' + label +
           '<input data-k="' + k + '" value="' + esc(val || '') + '" style="font:inherit;font-size:14px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--text)"></label>';
       };
-      var cards = c.sites.map(function (s, si) {
-        var m = s.meta || {}, rows = invRows(c, s), sub = rows.reduce(function (t, x) { return t + x.yen; }, 0), tax = Math.floor(sub * 0.1);
+      var cards = invOrder(c).map(function (si) {
+        var s = c.sites[si], m = s.meta || {}, rows = invRows(c, s), sub = rows.reduce(function (t, x) { return t + x.yen; }, 0), tax = Math.floor(sub * 0.1);
         return '<div class="step" style="display:block" data-co="' + ci + '" data-site="' + si + '">' +
           '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px"><b>' + esc(s.name) + '</b><span>請求額（税込）<b>' + yen(sub + tax) + '</b>' +
           (sub !== s.total ? ' <span style="color:var(--over)">（請求集計 ' + yen(s.total) + ' と違います）</span>' : '') + '</span></div>' +
@@ -3999,14 +4005,97 @@
       }).join('');
       $('invBox').innerHTML = '<div style="margin-top:16px;border-top:2px solid var(--line);padding-top:12px">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h3 style="margin:0">' + esc(c.name) + '　請求書（' + esc(invDate(c)) + '・現場ごとにA4横1枚）</h3>' +
-        '<div class="noprint"><button class="btn main" id="invPrint">保存して印刷（請求書＋出面表）</button> <button class="btn" id="invPrintI">請求書だけ</button> <button class="btn" id="invPrintD">出面表だけ</button> <button class="btn" id="invSave">保存</button> <button class="btn" id="invClose">閉じる</button></div></div>' +
-        '<div id="invMsg" style="margin-top:6px"></div><div class="steps" style="margin-top:8px">' + cards + '</div></div>';
+        '<div class="noprint">' + (c.sites.length > 1 ? '<button type="button" class="btn" id="invOrdBtn" title="請求書・出面表の現場の並びを変えます">↕ 並べ替え</button> ' : '') + '<button class="btn main" id="invPrint">保存して印刷（請求書＋出面表）</button> <button class="btn" id="invPrintI">請求書だけ</button> <button class="btn" id="invPrintD">出面表だけ</button> <button class="btn" id="invSave">保存</button> <button class="btn" id="invClose">閉じる</button></div></div>' +
+        '<div id="invOrd" class="noprint"></div><div id="invMsg" style="margin-top:6px"></div><div class="steps" style="margin-top:8px">' + cards + '</div></div>';
       $('invBox').scrollIntoView({ behavior: 'smooth', block: 'start' });
       $('invClose').addEventListener('click', function () { $('invBox').innerHTML = ''; });
+      if ($('invOrdBtn')) $('invOrdBtn').addEventListener('click', function () { invOrdOpen(ci); });
       $('invSave').addEventListener('click', function () { invSave(ci, null); });
       $('invPrint').addEventListener('click', function () { invSave(ci, function () { invPrint([ci], 'both'); }); });
       $('invPrintI').addEventListener('click', function () { invSave(ci, function () { invPrint([ci], 'inv'); }); });
       $('invPrintD').addEventListener('click', function () { invSave(ci, function () { invPrint([ci], 'dz'); }); });
+    }
+    // ── 現場の並べ替え（会社ごと。保存先は「請求書の現場順」シート。請求額.gs の adminInvoiceOrder）──
+    function invOrdOpen(ci) {
+      var c = BL.data.companies[ci], box = $('invOrd'), msg = $('invMsg');
+      var say = function (t, kind) {
+        var k = kind === 'run' ? 'primary' : kind;
+        msg.innerHTML = '<div style="background:var(--' + k + '-bg);color:var(--' + k + ');border-radius:8px;padding:6px 10px">' + esc(t) + '</div>';
+      };
+      if (box.innerHTML) return;
+      if (c.sites.some(function (s) { return typeof (s.meta || {}).pos !== 'number'; })) {
+        say('並べ替えの準備がまだです。出勤確認の「請求額.gs」を新しくして「新バージョン」でデプロイしたあと、この画面を開き直してください。', 'warn'); return;
+      }
+      if (Array.prototype.some.call(document.querySelectorAll('#invBox [data-site] input'), function (x) { return x.value !== x.defaultValue; })) {
+        say('先に「保存」を押してください（書きかけのところがあります）。そのあとで並べ替えられます。', 'warn'); return;
+      }
+      msg.innerHTML = '';
+      var o = invOrder(c), drag = null, busy = false;
+      var move = function (from, to) { if (to > from) to--; o.splice(to, 0, o.splice(from, 1)[0]); draw(); };
+      var draw = function () {
+        var old = box.querySelector('ol'), top = old ? old.scrollTop : 0;
+        box.innerHTML = '<div class="panel" style="padding:12px 16px;margin:8px 0;border:2px solid var(--brand)">' +
+          '<b>' + esc(c.name) + 'の現場の並び順</b><div style="font-size:13px;color:var(--text2);margin-top:4px">左の ≡ をつまんで上下に動かすか、↑↓で1つずつ動かして「この順で保存」。上から順に、請求書・出面表が印刷されます。次の月からも同じ順です。</div>' +
+          '<ol style="list-style:none;margin:8px 0;padding:0;max-height:60vh;overflow:auto">' + o.map(function (si, i) {
+            var s = c.sites[si];
+            return '<li draggable="true" data-oi="' + i + '" style="display:flex;align-items:center;gap:8px;padding:5px 4px;border-top:2px solid var(--line);border-bottom:2px solid transparent">' +
+              '<span style="width:26px;text-align:right;color:var(--text2)">' + (i + 1) + '</span>' +
+              '<span title="つまんで上下に動かす" style="width:30px;text-align:center;cursor:grab;color:var(--text3);font-size:18px;user-select:none">≡</span>' +
+              '<b style="flex:0 1 240px;min-width:0">' + esc(s.name) + '</b><span style="flex:1;min-width:0;font-size:13px;color:var(--text2)">' + esc((s.meta || {}).place || '') + '</span>' +
+              '<button type="button" class="btn" data-ou="' + i + '" style="padding:2px 10px"' + (i ? '' : ' disabled') + '>↑</button>' +
+              '<button type="button" class="btn" data-od="' + i + '" style="padding:2px 10px"' + (i < o.length - 1 ? '' : ' disabled') + '>↓</button></li>';
+          }).join('') + '</ol><button type="button" class="btn main" data-os="1">この順で保存</button> <button type="button" class="btn" data-ox="1">やめる</button></div>';
+        box.querySelector('ol').scrollTop = top;
+      };
+      var liOf = function (e) { return e.target.closest && e.target.closest('li[data-oi]'); };
+      var after = function (li, e) { var b = li.getBoundingClientRect(); return e.clientY > b.top + b.height / 2; };
+      box.ondragstart = function (e) {
+        var li = liOf(e); if (!li || busy) { e.preventDefault(); return; }
+        drag = Number(li.getAttribute('data-oi')); li.style.opacity = '.4';
+        try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(drag)); } catch (x) {}
+      };
+      box.ondragover = function (e) {
+        if (drag === null) return;
+        e.preventDefault();
+        var list = box.querySelector('ol'), r = list.getBoundingClientRect(), li = liOf(e);
+        if (e.clientY < r.top + 40) list.scrollTop -= 12; else if (e.clientY > r.bottom - 40) list.scrollTop += 12;
+        Array.prototype.forEach.call(list.children, function (x) { x.style.borderTopColor = 'var(--line)'; x.style.borderBottomColor = 'transparent'; });
+        if (li) li.style[after(li, e) ? 'borderBottomColor' : 'borderTopColor'] = 'var(--brand)';
+      };
+      box.ondrop = function (e) {
+        if (drag === null) return;
+        e.preventDefault();
+        var li = liOf(e), from = drag; drag = null;
+        if (!li) { draw(); return; }
+        move(from, Number(li.getAttribute('data-oi')) + (after(li, e) ? 1 : 0));
+      };
+      box.ondragend = function () { if (drag !== null) { drag = null; draw(); } };
+      box.onclick = function (e) {
+        var t = e.target, u = t.getAttribute('data-ou'), dn = t.getAttribute('data-od');
+        if (busy) return;
+        if (u !== null) { if (+u > 0) move(+u, +u - 1); return; }
+        if (dn !== null) { if (+dn < o.length - 1) move(+dn, +dn + 2); return; }
+        if (t.getAttribute('data-ox')) { box.innerHTML = ''; msg.innerHTML = ''; return; }
+        if (!t.getAttribute('data-os')) return;
+        // 一覧を開いたあとに書きかけたものがあれば、消さないように先に保存してもらう
+        if (Array.prototype.some.call(document.querySelectorAll('#invBox [data-site] input'), function (x) { return x.value !== x.defaultValue; })) {
+          say('先に、右上の「保存」を押してください（書きかけのところがあります）。', 'warn'); return;
+        }
+        busy = true; t.disabled = true; say('並び順を保存しています…', 'run');
+        var inputs = document.querySelectorAll('#invBox [data-site] input');
+        Array.prototype.forEach.call(inputs, function (x) { x.readOnly = true; });
+        call('adminInvoiceOrder', [PIN, DEVICE, c.name, o.map(function (si) { return c.sites[si].name; })], function (r) {
+          c.sites.forEach(function (s) { s.meta.pos = r.pos[s.name]; });
+          if (!box.isConnected) return;
+          invEdit(ci);
+          $('invMsg').innerHTML = '<div style="background:var(--ok-bg);color:var(--ok);border-radius:8px;padding:6px 10px">現場の並び順を保存しました。次の月からもこの順で出ます。</div>';
+        }, function (err) {
+          busy = false; t.disabled = false;
+          Array.prototype.forEach.call(inputs, function (x) { x.readOnly = false; });
+          say(/使えない操作/.test(String(err)) ? '出勤確認の「管理画面.gs」に adminInvoiceOrder を足して、「新バージョン」でデプロイしてください。' : String(err), 'over');
+        });
+      };
+      draw();
     }
     // 直した現場だけ「請求書の項目」シートに保存する（1つずつ順に）
     function invSave(ci, then) {
@@ -4027,7 +4116,12 @@
           return;
         }
         var t = todo[i++], s = c.sites[t.si];
-        call('adminInvoiceSave', [PIN, DEVICE, c.name, s.name, t.m], function (m) { s.meta = m; next(); },
+        call('adminInvoiceSave', [PIN, DEVICE, c.name, s.name, t.m], function (m) {
+          s.meta = m;
+          var bx = document.querySelector('#invBox [data-co="' + ci + '"][data-site="' + t.si + '"]');
+          if (bx) ['title', 'place', 'term', 'outline', 'atena'].forEach(function (k) { bx.querySelector('[data-k="' + k + '"]').defaultValue = t.m[k] || ''; });
+          next();
+        },
           function (e) { msg.innerHTML = '<div class="msg err">' + esc(e) + '</div>'; });
       })();
     }
@@ -4115,12 +4209,13 @@
     //  ・まとめた組は、日ごとの人数・残業を足し、請求の明細（数量）も足す。施工場所は「・」で並べる
     //  ・それ以外の会社は、今までどおり現場ごと
     function invGroups(c, ci) {
-      var plain = c.sites.map(function (s, si) { return { s: s, m: invMetaOf(ci, si) }; });
+      var plain = invOrder(c).map(function (si) { return { s: c.sites[si], m: invMetaOf(ci, si), si: si }; });   // 並べ替えた順
+      var first = function (list) { return list.reduce(function (a, b) { return b.si < a.si ? b : a; }); };   // 宛名・工事件名を使う現場は、並べ替えても今までと同じ
       var isS2 = /S2/i.test(String(c.dz || '').replace(/[Ａ-Ｚａ-ｚ０-９]/g, function (ch) { return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0); }));
       if (!isS2 || c.sites.length < 2) return plain;
       var co = function (t) { return String(t || '').replace(/[（(][株有][)）]|株式会社|有限会社|[㈱㈲\s　]/g, ''); };
       var tidy = function (t) { return String(t).replace(/㈱/g, '(株)').replace(/㈲/g, '(有)').trim(); };
-      var atena = co((plain[0].m && plain[0].m.atena) || invAtena(c, null));
+      var atena = co((first(plain).m && first(plain).m.atena) || invAtena(c, null));
       var keyOf = function (s) {
         var raws = [];
         Object.keys(s.days || {}).forEach(function (k) { (s.days[k].raw || []).forEach(function (r) { if (raws.indexOf(r) < 0) raws.push(r); }); });
@@ -4156,7 +4251,7 @@
         });
         var sum = function (f) { return g.list.reduce(function (t, p) { return t + (Number(p.s[f]) || 0); }, 0); };
         var s = { name: g.key, day: sum('day'), night: sum('night'), total: sum('total'), lines: order.map(function (k) { return lines[k]; }), days: days };
-        return { s: s, m: Object.assign({}, g.list[0].m || {}, { place: places.join('・') }) };
+        return { s: s, m: Object.assign({}, first(g.list).m || {}, { place: places.join('・') }) };
       });
     }
     function dzPage(c, s, m) {      var hol = {}, hasHol = (c.rates || {}).hDay != null || (c.rates || {}).hNight != null;
