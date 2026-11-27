@@ -4137,7 +4137,9 @@
     function dzDates(c) {
       var ym = String(BL.data.ym || '').split('-').map(Number), y = ym[0], m = ym[1], out = [];
       if (!y || !m) return out;
-      var from = c.close >= 1 && c.close <= 28 ? new Date(y, m - 2, c.close + 1) : new Date(y, m - 1, 1);
+      // はじまり：前の月の締め日の次の日（前の月が月末締めなら1日）。closePrev がない古い計算は、今月と同じ締め日とみなす
+      var cp = c.closePrev != null ? c.closePrev : c.close;
+      var from = cp >= 1 && cp <= 28 ? new Date(y, m - 2, cp + 1) : new Date(y, m - 1, 1);
       var to = c.close >= 1 && c.close <= 28 ? new Date(y, m - 1, c.close) : new Date(y, m, 0);
       for (var d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) out.push(new Date(d));
       return out;
