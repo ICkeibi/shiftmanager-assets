@@ -1713,7 +1713,7 @@
       $('r2').innerHTML = (at ? savedNote(at, changed, fresh, '作った') : '') +
         '<div class="ok">' + esc(r.label) + '：' + r.rows + ' 勤務を読み取りました。「' + esc(r.sheets[0]) + '」「' + esc(r.sheets[1]) + '」シートで確認できます。' +
         (r.checks ? '　読めなかった書き込みや名前が <b>' + r.checks + '件</b>（「' + esc(r.sheets[2]) + '」シート）' : '') + '</div>' +
-        (r.checks ? '<details style="margin-top:6px"><summary>読めなかったもの（' + r.checks + '件）</summary>' + issueTable(r.checkList, ['日付', '昼夜', '現場', '書き込み', '内容']) + '</details>' : '');
+        (r.checks ? '<details class="kifin"><summary>読めなかったもの（' + r.checks + '件）<span class="hint">押すと一覧が開きます</span></summary>' + issueTable(r.checkList, ['日付', '昼夜', '現場', '書き込み', '内容']) + '</details>' : '');
     }
     // 2「出勤簿から個人別一覧を作る」：前に作った結果と個人別集計を、作り直さずにすぐ出す（ページを開いたとき・月を選んだとき）
     function kwSaved() {
@@ -2197,8 +2197,8 @@
         dkBusy(false);
         $('d3').innerHTML = '<div class="ok">反映しました：<b>' + r.written + '件</b>（' + r.total + '人）。うち出勤簿の時刻から書き換えた日 <b>' + r.changed + '件</b>。' +
           '　<a href="' + esc(r.kintaiUrl) + '" target="_blank" rel="noopener">勤怠管理表を開く ↗</a></div>' +
-          (r.changed ? '<details style="margin-top:6px"><summary>書き換えた日（' + r.changed + '件）</summary>' + issueTable(r.changedList, ['氏名', '日付', '昼夜', '結果', '内容']) + '</details>' : '') +
-          (r.issues ? '<details style="margin-top:6px" open><summary>確認してほしいもの（' + r.issues + '件）</summary>' + issueTable(r.issueList, ['氏名', '日付', '昼夜', '結果', '内容']) + '</details>' : '');
+          (r.changed ? '<details class="kifin"><summary>書き換えた日（' + r.changed + '件）<span class="hint">押すと一覧が開きます</span></summary>' + issueTable(r.changedList, ['氏名', '日付', '昼夜', '結果', '内容']) + '</details>' : '') +
+          (r.issues ? '<details class="kifin" open><summary>確認してほしいもの（' + r.issues + '件）<span class="hint">押すと閉じます</span></summary>' + issueTable(r.issueList, ['氏名', '日付', '昼夜', '結果', '内容']) + '</details>' : '');
       }, function (m) { dkBusy(false); $('d3').innerHTML = '<div class="msg err">' + esc(m) + '<br>もう一度「反映する」を押すと、続きから書きます。</div>'; });
     }
 
